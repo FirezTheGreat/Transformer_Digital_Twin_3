@@ -1,0 +1,100 @@
+# ==========================================
+# 1. Python Build, Cache & Bytecode
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# ==========================================
+# 2. Testing & Static Analysis Caches
+# ==========================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# ==========================================
+# 3. Python Virtual Environments
+# ==========================================
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# 4. Frontend Dependencies & Build Outputs
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+frontend/dist/
+frontend/.vite/
+
+# ==========================================
+# 5. Environment Variables & Secrets
+# ==========================================
+.env
+.env.*
+!.env.example
+
+# ==========================================
+# 6. IDE, Editors & Tooling
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.code-workspace
+
+# ==========================================
+# 7. Operating System Metadata
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ==========================================
+# 8. Runtime Logs & Generated Artifacts
+# ==========================================
+*.log
+logs/
+generated_reports/
+*.sqlite
+*.duckdb
+*.duckdb.wal
+
+# ==========================================
+# 9. Large Datasets & Generated Data Partitions
+# ==========================================
+# Ignore downloaded raw dataset files while preserving directory structure
+data/tripura_raw/*
+!data/tripura_raw/.gitkeep
+
+# Ignore processed partition batches and large temporal parquet stores
+data/processed/*
+!data/processed/.gitkeep
+

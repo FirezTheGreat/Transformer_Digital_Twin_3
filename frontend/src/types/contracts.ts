@@ -43,7 +43,7 @@ export interface CanonicalEvent {
   event_id: string;
   asset_id: string;
   event_time_utc: string; // ISO 8601 UTC
-  received_time_utc: string; // ISO 8601 UTC
+  received_time_utc?: string | null; // ISO 8601 UTC or null for historical telemetry without native receive time
   source: SourceRef;
   measurements: Measurement[];
   event_quality_flags: string[];

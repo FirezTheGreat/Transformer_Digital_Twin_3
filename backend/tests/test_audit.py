@@ -83,7 +83,7 @@ def test_markdown_report_generation(raw_data_dir: Path, tmp_path: Path) -> None:
     assert out_md.exists()
     content = out_md.read_text(encoding="utf-8")
     assert "# Tripura Distribution Transformer Dataset — Schema & Physical Integrity Audit" in content
-    assert "PROMOTION FEASIBILITY VERDICT: PASS" in content
+    assert "PREREQUISITE DATA-VOLUME & CALIBRATION FEASIBILITY: PASS" in content
     assert "CurrentVoltage.csv" in content
     assert "Overview.csv" in content
     assert "Unresolved Questions" in content

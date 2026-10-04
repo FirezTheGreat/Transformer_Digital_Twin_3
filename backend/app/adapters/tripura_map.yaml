@@ -31,7 +31,7 @@ sources:
         canonical_name: winding_temp_alarm_contact
         unit: dimensionless
         domain: thermal
-        dtype: float64
+        dtype: int
         status: mapped
         description: Binary winding temperature alarm/trip contact (0=Normal, 1=Alarm). Not a continuous PT100 reading.
       OLI:
@@ -46,21 +46,21 @@ sources:
         canonical_name: oil_temp_alarm_flag
         unit: dimensionless
         domain: thermal
-        dtype: float64
+        dtype: int
         status: mapped
         description: Discrete oil overtemperature alarm contact (0=Normal, 1=Alarm)
       OTI_T:
         canonical_name: oil_temp_trip_flag
         unit: dimensionless
         domain: thermal
-        dtype: float64
+        dtype: int
         status: mapped
         description: Discrete oil overtemperature trip contact (0=Normal, 1=Trip)
       MOG_A:
         canonical_name: magnetic_oil_gauge_alarm_flag
         unit: dimensionless
         domain: oil_protection
-        dtype: float64
+        dtype: int
         status: mapped
         description: Magnetic oil gauge low level alarm contact (0=Normal, 1=Alarm)
 

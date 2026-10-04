@@ -7,7 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class CapabilityTier(str, Enum):
-    """Hierarchical operational capability tiers."""
+    """Hierarchical operational capability tiers.
+    
+    Tiers:
+    - C0: Data Integrity & Ingestion
+    - C1: Electrical Balance & Power Quality
+    - C2: Descriptive Thermal Monitoring (requires continuous temperature signal with verified units, e.g. top-oil temperature; discrete contacts like WTI cannot satisfy C2 alone)
+    - C3: Predictive Thermal Modeling & Scenario Projection (requires promoted grey-box ODE model)
+    - C4: Thermal Exposure & Equivalent Ageing (requires supportable hot-spot estimate and declared insulation class)
+    """
     C0_INTEGRITY = "C0"
     C1_ELECTRICAL = "C1"
     C2_THERMAL_DESCRIPTIVE = "C2"

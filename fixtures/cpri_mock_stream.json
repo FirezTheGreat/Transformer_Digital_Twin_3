@@ -1,0 +1,52 @@
+{
+  "dataset_description": "Synthetic CPRI mock SCADA stream fixture for multi-source adapter isolation testing. NOT real telemetry.",
+  "is_synthetic": true,
+  "asset_id": "CPRI_MOCK_TX_01",
+  "records": [
+    {
+      "timestamp": "2026-04-01T08:00:00Z",
+      "v_r": 230.5,
+      "v_y": 231.0,
+      "v_b": 229.8,
+      "i_r": 45.2,
+      "i_y": 48.0,
+      "i_b": 42.1,
+      "top_oil_degc": 42.5,
+      "ambient_degc": 26.0,
+      "active_kw": 31.2,
+      "reactive_kvar": 4.8,
+      "pf_3ph": 0.98,
+      "freq": 50.02
+    },
+    {
+      "timestamp": "2026-04-01T08:15:00Z",
+      "v_r": 230.1,
+      "v_y": 230.8,
+      "v_b": 229.5,
+      "i_r": 50.5,
+      "i_y": 52.1,
+      "i_b": 47.3,
+      "top_oil_degc": 43.1,
+      "ambient_degc": 26.5,
+      "active_kw": 34.5,
+      "reactive_kvar": 5.2,
+      "pf_3ph": 0.98,
+      "freq": 49.98
+    },
+    {
+      "timestamp": "2026-04-01T08:30:00Z",
+      "v_r": 229.8,
+      "v_y": 230.2,
+      "v_b": 229.0,
+      "i_r": 55.0,
+      "i_y": 56.4,
+      "i_b": 51.8,
+      "top_oil_degc": 43.8,
+      "ambient_degc": 27.0,
+      "active_kw": 38.0,
+      "reactive_kvar": 5.9,
+      "pf_3ph": 0.98,
+      "freq": 50.00
+    }
+  ]
+}

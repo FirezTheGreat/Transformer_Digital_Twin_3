@@ -178,6 +178,7 @@ class TripuraChronologicalPartitioner:
             "Transformer Nameplate Capacity: Actual rated kVA is not provided in raw telemetry; relative load index in Phase 4 must reference declared AssetProfile rating or frozen fit partition max.",
             "WTI Semantics: WTI is confirmed as binary contact status; direct winding hot-spot tracking is disabled.",
             "Temperature Integer Quantization: OTI/ATI are recorded in 1.0 deg C increments.",
+            "Conflicting Duplicate Timestamps: 677 timestamps in the merged dataset have conflicting source records (623 Fit, 31 Calib, 23 Test); deterministic keep='first' offline partition construction does NOT declare the first record physically correct, and these records must be tracked for conflict eligibility during Phase 4 model fitting.",
         ]
 
         assumptions = [
@@ -186,8 +187,9 @@ class TripuraChronologicalPartitioner:
         ]
 
         implications = [
-            "Thermal Grey-Box Model (beta0, beta1, tau) calibration is FEASIBLE on the Fit partition.",
-            "Conformal uncertainty band calibration is FEASIBLE on the Calibration partition using 3,544 valid origins.",
+            "Thermal Grey-Box Model (beta0, beta1, tau) data-volume and sampling prerequisites are SATISFIED for calibration in Phase 4.",
+            "Actual model calibration, parameter fitting, validation, and promotion remain strictly PENDING Phase 4.",
+            "Conformal uncertainty band calibration prerequisites are SATISFIED on the Calibration partition using 3,544 valid origins.",
             "Holdout evaluation is STRICTLY PRESERVED on the untouched Test partition without data leakage.",
         ]
 

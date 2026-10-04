@@ -452,12 +452,12 @@ class TripuraDatasetAuditor:
         md.append("")
         if report.thermal_feasibility and report.thermal_feasibility.feasible_for_greybox_calibration:
             md.append("> [!NOTE]")
-            md.append("> **PROMOTION FEASIBILITY VERDICT: PASS**  ")
-            md.append("> The Tripura dataset contains credible three-phase electrical telemetry, usable ambient temperature (ATI), top-oil temperature (OTI), and load driver channels (KVA / currents). It meets all criteria for chronological 60/20/20 partitioning, first-order differential thermal model calibration, and multi-domain condition monitoring.")
+            md.append("> **PREREQUISITE DATA-VOLUME & CALIBRATION FEASIBILITY: PASS**  ")
+            md.append("> The Tripura dataset satisfies prerequisite criteria (valid sample count >= 500, calendar span >= 7 days, continuous 2-hour calibration origins >= 30, and dynamic load variation) to attempt first-order grey-box thermal calibration in Phase 4. Thermal model parameter fitting, validation, and holdout promotion remain strictly pending Phase 4. C3 predictive capability remains pending model promotion. C4 thermal exposure is unavailable unless supportable hot-spot semantics and verified insulation class are established.")
         else:
             md.append("> [!WARNING]")
-            md.append("> **PROMOTION FEASIBILITY VERDICT: FAIL / CONDITIONAL**  ")
-            md.append("> Required thermal or electrical signals are insufficient.")
+            md.append("> **PREREQUISITE CALIBRATION FEASIBILITY: FAIL / CONDITIONAL**  ")
+            md.append("> Required thermal or electrical prerequisite signals are insufficient.")
         md.append("")
         md.append("---")
         md.append("")

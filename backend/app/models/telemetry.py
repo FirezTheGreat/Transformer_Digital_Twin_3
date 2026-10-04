@@ -68,7 +68,7 @@ class CanonicalEvent(BaseModel):
     event_id: str = Field(..., description="Stable deterministic event UUID v5 or source-derived ID")
     asset_id: str = Field(..., description="Transformer asset identifier")
     event_time_utc: datetime = Field(..., description="Physical timestamp when the event occurred in UTC")
-    received_time_utc: datetime = Field(..., description="Ingest timestamp when the event reached the twin in UTC")
+    received_time_utc: datetime | None = Field(default=None, description="Ingest timestamp when the event reached the twin in UTC, or None if historical telemetry without native receive timestamp")
     source: SourceRef = Field(..., description="Provenance information")
     measurements: list[Measurement] = Field(..., min_length=1, description="List of canonical measurements")
     event_quality_flags: list[str] = Field(default_factory=list, description="Envelope-level quality flags")

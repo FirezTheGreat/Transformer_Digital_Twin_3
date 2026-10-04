@@ -1,0 +1,358 @@
+# Tripura Distribution Transformer Telemetry Mapping Configuration
+# Phase 1, Substep 1.2 Declarative Adapter Schema
+# Version: locked for Phase 1 development
+dataset_name: tripura_distribution_transformer
+source: Kaggle / sreshta140/ai-transformer-monitoring
+nominal_sampling_interval_minutes: 15.0
+timestamp_column: DeviceTimeStamp
+timestamp_format: "%Y-%m-%dT%H:%M"
+
+sources:
+  Overview.csv:
+    description: Thermal and discrete condition monitoring indicators
+    mappings:
+      OTI:
+        canonical_name: top_oil_temperature
+        unit: Cel
+        domain: thermal
+        dtype: float64
+        physical_bounds: [0.0, 120.0]
+        status: mapped
+        description: Top-oil temperature indicator (integer-quantized Celsius)
+      ATI:
+        canonical_name: ambient_temperature
+        unit: Cel
+        domain: thermal
+        dtype: float64
+        physical_bounds: [0.0, 55.0]
+        status: mapped
+        description: Ambient temperature indicator (integer-quantized Celsius)
+      WTI:
+        canonical_name: winding_temp_alarm_contact
+        unit: dimensionless
+        domain: thermal
+        dtype: float64
+        status: mapped
+        description: Binary winding temperature alarm/trip contact (0=Normal, 1=Alarm). Not a continuous PT100 reading.
+      OLI:
+        canonical_name: oil_level_pct
+        unit: "%"
+        domain: oil_protection
+        dtype: float64
+        physical_bounds: [0.0, 100.0]
+        status: mapped
+        description: Oil level indicator percentage
+      OTI_A:
+        canonical_name: oil_temp_alarm_flag
+        unit: dimensionless
+        domain: thermal
+        dtype: float64
+        status: mapped
+        description: Discrete oil overtemperature alarm contact (0=Normal, 1=Alarm)
+      OTI_T:
+        canonical_name: oil_temp_trip_flag
+        unit: dimensionless
+        domain: thermal
+        dtype: float64
+        status: mapped
+        description: Discrete oil overtemperature trip contact (0=Normal, 1=Trip)
+      MOG_A:
+        canonical_name: magnetic_oil_gauge_alarm_flag
+        unit: dimensionless
+        domain: oil_protection
+        dtype: float64
+        status: mapped
+        description: Magnetic oil gauge low level alarm contact (0=Normal, 1=Alarm)
+
+  CurrentVoltage.csv:
+    description: Three-phase and line-to-line electrical telemetry
+    mappings:
+      VL1:
+        canonical_name: voltage_v1
+        unit: V
+        domain: voltage_pf_freq
+        dtype: float64
+        physical_bounds: [0.0, 300.0]
+        status: mapped
+        description: Phase L1-to-neutral RMS voltage
+      VL2:
+        canonical_name: voltage_v2
+        unit: V
+        domain: voltage_pf_freq
+        dtype: float64
+        physical_bounds: [0.0, 300.0]
+        status: mapped
+        description: Phase L2-to-neutral RMS voltage
+      VL3:
+        canonical_name: voltage_v3
+        unit: V
+        domain: voltage_pf_freq
+        dtype: float64
+        physical_bounds: [0.0, 300.0]
+        status: mapped
+        description: Phase L3-to-neutral RMS voltage
+      IL1:
+        canonical_name: current_i1
+        unit: A
+        domain: loading
+        dtype: float64
+        physical_bounds: [0.0, 500.0]
+        status: mapped
+        description: Phase L1 RMS current
+      IL2:
+        canonical_name: current_i2
+        unit: A
+        domain: loading
+        dtype: float64
+        physical_bounds: [0.0, 500.0]
+        status: mapped
+        description: Phase L2 RMS current
+      IL3:
+        canonical_name: current_i3
+        unit: A
+        domain: loading
+        dtype: float64
+        physical_bounds: [0.0, 500.0]
+        status: mapped
+        description: Phase L3 RMS current
+      VL12:
+        canonical_name: voltage_v12
+        unit: V
+        domain: voltage_pf_freq
+        dtype: float64
+        physical_bounds: [0.0, 500.0]
+        status: mapped
+        description: Line-to-line L1-L2 RMS voltage
+      VL23:
+        canonical_name: voltage_v23
+        unit: V
+        domain: voltage_pf_freq
+        dtype: float64
+        physical_bounds: [0.0, 500.0]
+        status: mapped
+        description: Line-to-line L2-L3 RMS voltage
+      VL31:
+        canonical_name: voltage_v31
+        unit: V
+        domain: voltage_pf_freq
+        dtype: float64
+        physical_bounds: [0.0, 500.0]
+        status: mapped
+        description: Line-to-line L3-L1 RMS voltage
+      INUT:
+        canonical_name: neutral_current
+        unit: A
+        domain: phase_neutral
+        dtype: float64
+        physical_bounds: [0.0, 300.0]
+        status: mapped
+        description: Neutral conductor return current
+
+  Power.csv:
+    description: Phase-segregated power components
+    mappings:
+      WL1:
+        canonical_name: active_power_l1
+        unit: kW
+        domain: loading
+        dtype: float64
+        status: mapped
+      WL2:
+        canonical_name: active_power_l2
+        unit: kW
+        domain: loading
+        dtype: float64
+        status: mapped
+      WL3:
+        canonical_name: active_power_l3
+        unit: kW
+        domain: loading
+        dtype: float64
+        status: mapped
+      VAL1:
+        canonical_name: apparent_power_l1
+        unit: kVA
+        domain: loading
+        dtype: float64
+        status: mapped
+      VAL2:
+        canonical_name: apparent_power_l2
+        unit: kVA
+        domain: loading
+        dtype: float64
+        status: mapped
+      VAL3:
+        canonical_name: apparent_power_l3
+        unit: kVA
+        domain: loading
+        dtype: float64
+        status: mapped
+      RVAL1:
+        canonical_name: reactive_power_l1
+        unit: kvar
+        domain: loading
+        dtype: float64
+        status: mapped
+      RVAL2:
+        canonical_name: reactive_power_l2
+        unit: kvar
+        domain: loading
+        dtype: float64
+        status: mapped
+      RVAL3:
+        canonical_name: reactive_power_l3
+        unit: kvar
+        domain: loading
+        dtype: float64
+        status: unresolved_channel
+        notes: Measured near zero (max 0.02 kvar); potential single-phase reactive metering or missing transducer channel.
+
+  PowerFactor.csv:
+    description: Power factor, frequency, and harmonic distortion
+    mappings:
+      PFL1:
+        canonical_name: power_factor_l1
+        unit: dimensionless
+        domain: voltage_pf_freq
+        dtype: float64
+        status: mapped
+      PFL2:
+        canonical_name: power_factor_l2
+        unit: dimensionless
+        domain: voltage_pf_freq
+        dtype: float64
+        status: mapped
+      PFL3:
+        canonical_name: power_factor_l3
+        unit: dimensionless
+        domain: voltage_pf_freq
+        dtype: float64
+        status: mapped
+      Avg_PF:
+        canonical_name: power_factor_avg
+        unit: dimensionless
+        domain: voltage_pf_freq
+        dtype: float64
+        status: mapped
+      Sum_PF:
+        canonical_name: sum_pf_raw
+        unit: dimensionless
+        domain: voltage_pf_freq
+        dtype: float64
+        status: unresolved_channel
+        notes: Unscaled angle representation or vendor aggregate with negative values down to -164.4.
+      FRQ:
+        canonical_name: frequency
+        unit: Hz
+        domain: voltage_pf_freq
+        dtype: float64
+        physical_bounds: [45.0, 55.0]
+        status: mapped
+      THDVL1:
+        canonical_name: thd_voltage_l1
+        unit: "%"
+        domain: voltage_pf_freq
+        dtype: float64
+        status: mapped
+      THDVL2:
+        canonical_name: thd_voltage_l2
+        unit: "%"
+        domain: voltage_pf_freq
+        dtype: float64
+        status: mapped
+      THDVL3:
+        canonical_name: thd_voltage_l3
+        unit: "%"
+        domain: voltage_pf_freq
+        dtype: float64
+        status: mapped
+      THDIL1:
+        canonical_name: thd_current_l1
+        unit: "%"
+        domain: loading
+        dtype: float64
+        status: mapped
+      THDIL2:
+        canonical_name: thd_current_l2
+        unit: "%"
+        domain: loading
+        dtype: float64
+        status: mapped
+      THDIL3:
+        canonical_name: thd_current_l3
+        unit: "%"
+        domain: loading
+        dtype: float64
+        status: mapped
+      MDIL1:
+        canonical_name: max_demand_current_l1
+        unit: A
+        domain: loading
+        dtype: float64
+        status: mapped
+      MDIL2:
+        canonical_name: max_demand_current_l2
+        unit: A
+        domain: loading
+        dtype: float64
+        status: mapped
+      MDIL3:
+        canonical_name: max_demand_current_l3
+        unit: A
+        domain: loading
+        dtype: float64
+        status: mapped
+
+  TotalPower.csv:
+    description: Aggregate active/reactive/apparent power and energy
+    mappings:
+      KW:
+        canonical_name: active_power_total
+        unit: kW
+        domain: loading
+        dtype: float64
+        status: mapped
+      KVA:
+        canonical_name: apparent_power_total
+        unit: kVA
+        domain: loading
+        dtype: float64
+        status: mapped
+        description: Key load driver for thermal modeling
+      KVAR:
+        canonical_name: reactive_power_total
+        unit: kvar
+        domain: loading
+        dtype: float64
+        status: mapped
+      KWH:
+        canonical_name: energy_active_total
+        unit: kWh
+        domain: loading
+        dtype: float64
+        status: mapped
+      KWH_I:
+        canonical_name: energy_active_interval
+        unit: kWh
+        domain: loading
+        dtype: float64
+        status: unresolved_channel
+        notes: Contains anomalous negative interval energy values (-54.5 kWh).
+      KVARH:
+        canonical_name: energy_reactive_total
+        unit: kvarh
+        domain: loading
+        dtype: float64
+        status: mapped
+      MPD:
+        canonical_name: max_active_power_demand
+        unit: kW
+        domain: loading
+        dtype: float64
+        status: mapped
+      MKVAD:
+        canonical_name: max_apparent_power_demand
+        unit: kVA
+        domain: loading
+        dtype: float64
+        status: mapped

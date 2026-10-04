@@ -1,0 +1,201 @@
+{
+  "fixture_id": "fixture_direct_protection_trip",
+  "category": "direct_protection_trip",
+  "description": "Deterministic static regression fixture simulating an instantaneous discrete protection trip event (OTI_T trip contact active, low oil alarm MOG_A active, phase currents drop to zero from breaker trip), testing decisive single-domain critical escalation and immediate emergency recommendation without waiting for statistical multi-sample corroboration.",
+  "is_synthetic": true,
+  "target_asset_id": "TX_MOCK_STATIC_01",
+  "expected_behavior": {
+    "detection_target": "DIRECT_PROTECTION_TRIP / DECISIVE_EVENT",
+    "expected_severity": "CRITICAL",
+    "quarantine_measurement": false,
+    "capability_impact": "Directly forces Episode FSM to CRITICAL state, triggers immediate operator dispatch recommendation, and records decisive domain evidence."
+  },
+  "events": [
+    {
+      "schema_version": "1.0.0",
+      "event_id": "evt_trip_001_pre",
+      "asset_id": "TX_MOCK_STATIC_01",
+      "event_time_utc": "2026-03-01T10:00:00Z",
+      "received_time_utc": "2026-03-01T10:00:02Z",
+      "source": {
+        "system": "static_fixture_generator",
+        "adapter_id": "fixture_trip_adapter",
+        "source_record_id": "row_pre_trip",
+        "source_uri": "fixtures/fixture_direct_protection_trip.json",
+        "raw_sha256": "4444555566667777888899990000111122223333444455556666777788889999"
+      },
+      "measurements": [
+        {
+          "signal_id": "voltage_v1",
+          "phase": "L1",
+          "value": 240.2,
+          "value_type": "float",
+          "unit_ucum": "V",
+          "original_name": "VL1",
+          "original_value": "240.2",
+          "original_unit": "V",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "current_i1",
+          "phase": "L1",
+          "value": 72.5,
+          "value_type": "float",
+          "unit_ucum": "A",
+          "original_name": "IL1",
+          "original_value": "72.5",
+          "original_unit": "A",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "top_oil_temperature",
+          "phase": null,
+          "value": 52.0,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "OTI",
+          "original_value": "52.0",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "oil_temp_trip_flag",
+          "phase": null,
+          "value": 0,
+          "value_type": "int",
+          "unit_ucum": "1",
+          "original_name": "OTI_T",
+          "original_value": "0",
+          "original_unit": "dimensionless",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "magnetic_oil_gauge_alarm_flag",
+          "phase": null,
+          "value": 0,
+          "value_type": "int",
+          "unit_ucum": "1",
+          "original_name": "MOG_A",
+          "original_value": "0",
+          "original_unit": "dimensionless",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        }
+      ],
+      "event_quality_flags": [],
+      "mapping_version": "1.0.0"
+    },
+    {
+      "schema_version": "1.0.0",
+      "event_id": "evt_trip_002_trip",
+      "asset_id": "TX_MOCK_STATIC_01",
+      "event_time_utc": "2026-03-01T10:15:00Z",
+      "received_time_utc": "2026-03-01T10:15:02Z",
+      "source": {
+        "system": "static_fixture_generator",
+        "adapter_id": "fixture_trip_adapter",
+        "source_record_id": "row_trip_event",
+        "source_uri": "fixtures/fixture_direct_protection_trip.json",
+        "raw_sha256": "5555666677778888999900001111222233334444555566667777888899990000"
+      },
+      "measurements": [
+        {
+          "signal_id": "voltage_v1",
+          "phase": "L1",
+          "value": 0.0,
+          "value_type": "float",
+          "unit_ucum": "V",
+          "original_name": "VL1",
+          "original_value": "0.0",
+          "original_unit": "V",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "current_i1",
+          "phase": "L1",
+          "value": 0.0,
+          "value_type": "float",
+          "unit_ucum": "A",
+          "original_name": "IL1",
+          "original_value": "0.0",
+          "original_unit": "A",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "top_oil_temperature",
+          "phase": null,
+          "value": 98.0,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "OTI",
+          "original_value": "98.0",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "GOOD",
+            "flags": ["DIRECT_PROTECTION_ACTIVE"],
+            "source_code": "CRITICAL_EXCEEDANCE"
+          }
+        },
+        {
+          "signal_id": "oil_temp_trip_flag",
+          "phase": null,
+          "value": 1,
+          "value_type": "int",
+          "unit_ucum": "1",
+          "original_name": "OTI_T",
+          "original_value": "1",
+          "original_unit": "dimensionless",
+          "quality": {
+            "severity": "GOOD",
+            "flags": ["DIRECT_TRIP_ACTIVE"],
+            "source_code": "TRIP_CONTACT_CLOSED"
+          }
+        },
+        {
+          "signal_id": "magnetic_oil_gauge_alarm_flag",
+          "phase": null,
+          "value": 1,
+          "value_type": "int",
+          "unit_ucum": "1",
+          "original_name": "MOG_A",
+          "original_value": "1",
+          "original_unit": "dimensionless",
+          "quality": {
+            "severity": "GOOD",
+            "flags": ["OIL_LEVEL_CRITICAL"],
+            "source_code": "MOG_ALARM_CLOSED"
+          }
+        }
+      ],
+      "event_quality_flags": ["DIRECT_PROTECTION_TRIP"],
+      "mapping_version": "1.0.0"
+    }
+  ]
+}

@@ -1,0 +1,141 @@
+{
+  "fixture_id": "fixture_conflicting_duplicates",
+  "category": "conflicting_duplicates",
+  "description": "Deterministic static regression fixture simulating two concurrent/conflicting telemetry records for the same asset and event timestamp with contradictory measurement values, testing quarantine and conflict flagging without silent keep-first dropping.",
+  "is_synthetic": true,
+  "target_asset_id": "TX_MOCK_STATIC_01",
+  "expected_behavior": {
+    "detection_target": "CONFLICT / DUPLICATE_CONFLICT",
+    "expected_severity": "BAD",
+    "quarantine_measurement": true,
+    "capability_impact": "Prevents conflicting records from corrupting state transition, flags CONFLICT in event envelope, and requires provenance audit retention."
+  },
+  "events": [
+    {
+      "schema_version": "1.0.0",
+      "event_id": "evt_conflict_001_primary",
+      "asset_id": "TX_MOCK_STATIC_01",
+      "event_time_utc": "2026-03-01T10:00:00Z",
+      "received_time_utc": "2026-03-01T10:00:02Z",
+      "source": {
+        "system": "scada_channel_a",
+        "adapter_id": "tripura_stream_adapter",
+        "source_record_id": "frame_1001",
+        "source_uri": "fixtures/fixture_conflicting_duplicates.json#frame_1001",
+        "raw_sha256": "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
+      },
+      "measurements": [
+        {
+          "signal_id": "voltage_v1",
+          "phase": "L1",
+          "value": 241.5,
+          "value_type": "float",
+          "unit_ucum": "V",
+          "original_name": "VL1",
+          "original_value": "241.5",
+          "original_unit": "V",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "current_i1",
+          "phase": "L1",
+          "value": 65.0,
+          "value_type": "float",
+          "unit_ucum": "A",
+          "original_name": "IL1",
+          "original_value": "65.0",
+          "original_unit": "A",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "top_oil_temperature",
+          "phase": null,
+          "value": 42.0,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "OTI",
+          "original_value": "42.0",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        }
+      ],
+      "event_quality_flags": [],
+      "mapping_version": "1.0.0"
+    },
+    {
+      "schema_version": "1.0.0",
+      "event_id": "evt_conflict_001_secondary",
+      "asset_id": "TX_MOCK_STATIC_01",
+      "event_time_utc": "2026-03-01T10:00:00Z",
+      "received_time_utc": "2026-03-01T10:00:05Z",
+      "source": {
+        "system": "scada_channel_b",
+        "adapter_id": "tripura_stream_adapter",
+        "source_record_id": "frame_1002",
+        "source_uri": "fixtures/fixture_conflicting_duplicates.json#frame_1002",
+        "raw_sha256": "999988887777666655554444333322221111ffffedcba9876543210fedcba987"
+      },
+      "measurements": [
+        {
+          "signal_id": "voltage_v1",
+          "phase": "L1",
+          "value": 205.0,
+          "value_type": "float",
+          "unit_ucum": "V",
+          "original_name": "VL1",
+          "original_value": "205.0",
+          "original_unit": "V",
+          "quality": {
+            "severity": "BAD",
+            "flags": ["CONFLICT"],
+            "source_code": "CONCURRENT_DISCREPANCY"
+          }
+        },
+        {
+          "signal_id": "current_i1",
+          "phase": "L1",
+          "value": 120.0,
+          "value_type": "float",
+          "unit_ucum": "A",
+          "original_name": "IL1",
+          "original_value": "120.0",
+          "original_unit": "A",
+          "quality": {
+            "severity": "BAD",
+            "flags": ["CONFLICT"],
+            "source_code": "CONCURRENT_DISCREPANCY"
+          }
+        },
+        {
+          "signal_id": "top_oil_temperature",
+          "phase": null,
+          "value": 55.0,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "OTI",
+          "original_value": "55.0",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "BAD",
+            "flags": ["CONFLICT"],
+            "source_code": "CONCURRENT_DISCREPANCY"
+          }
+        }
+      ],
+      "event_quality_flags": ["CONFLICT", "QUARANTINED"],
+      "mapping_version": "1.0.0"
+    }
+  ]
+}

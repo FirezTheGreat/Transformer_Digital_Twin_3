@@ -1,0 +1,159 @@
+{
+  "fixture_id": "fixture_timestamp_gaps",
+  "category": "timestamp_gaps",
+  "description": "Deterministic static regression fixture simulating an unnotified 4-hour monitoring gap between 15-minute telemetry intervals, testing cadence monitoring, stale timer trip, and warm-up restart without silent data imputation.",
+  "is_synthetic": true,
+  "target_asset_id": "TX_MOCK_STATIC_01",
+  "expected_behavior": {
+    "detection_target": "GAP_BEFORE / HARD_STALE_EXCEEDED",
+    "expected_severity": "UNCERTAIN",
+    "quarantine_measurement": false,
+    "capability_impact": "Terminates continuous thermal residual sequence, withholds stale OTHI during gap, and starts max(4 samples, tau) warm-up on recovery without interpolating missing values."
+  },
+  "events": [
+    {
+      "schema_version": "1.0.0",
+      "event_id": "evt_gap_001",
+      "asset_id": "TX_MOCK_STATIC_01",
+      "event_time_utc": "2026-03-01T10:00:00Z",
+      "received_time_utc": "2026-03-01T10:00:02Z",
+      "source": {
+        "system": "static_fixture_generator",
+        "adapter_id": "fixture_gap_adapter",
+        "source_record_id": "row_001",
+        "source_uri": "fixtures/fixture_timestamp_gaps.json",
+        "raw_sha256": "a1b2c3d4e5f60123456789abcdef0123456789abcdef0123456789abcdef0123"
+      },
+      "measurements": [
+        {
+          "signal_id": "top_oil_temperature",
+          "phase": null,
+          "value": 45.0,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "OTI",
+          "original_value": "45.0",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "ambient_temperature",
+          "phase": null,
+          "value": 28.0,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "ATI",
+          "original_value": "28.0",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        }
+      ],
+      "event_quality_flags": [],
+      "mapping_version": "1.0.0"
+    },
+    {
+      "schema_version": "1.0.0",
+      "event_id": "evt_gap_002",
+      "asset_id": "TX_MOCK_STATIC_01",
+      "event_time_utc": "2026-03-01T10:15:00Z",
+      "received_time_utc": "2026-03-01T10:15:02Z",
+      "source": {
+        "system": "static_fixture_generator",
+        "adapter_id": "fixture_gap_adapter",
+        "source_record_id": "row_002",
+        "source_uri": "fixtures/fixture_timestamp_gaps.json",
+        "raw_sha256": "b2c3d4e5f6a10123456789abcdef0123456789abcdef0123456789abcdef0123"
+      },
+      "measurements": [
+        {
+          "signal_id": "top_oil_temperature",
+          "phase": null,
+          "value": 45.5,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "OTI",
+          "original_value": "45.5",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "ambient_temperature",
+          "phase": null,
+          "value": 28.2,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "ATI",
+          "original_value": "28.2",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        }
+      ],
+      "event_quality_flags": [],
+      "mapping_version": "1.0.0"
+    },
+    {
+      "schema_version": "1.0.0",
+      "event_id": "evt_gap_003",
+      "asset_id": "TX_MOCK_STATIC_01",
+      "event_time_utc": "2026-03-01T14:15:00Z",
+      "received_time_utc": "2026-03-01T14:15:02Z",
+      "source": {
+        "system": "static_fixture_generator",
+        "adapter_id": "fixture_gap_adapter",
+        "source_record_id": "row_003",
+        "source_uri": "fixtures/fixture_timestamp_gaps.json",
+        "raw_sha256": "c3d4e5f6a1b20123456789abcdef0123456789abcdef0123456789abcdef0123"
+      },
+      "measurements": [
+        {
+          "signal_id": "top_oil_temperature",
+          "phase": null,
+          "value": 48.0,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "OTI",
+          "original_value": "48.0",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "UNCERTAIN",
+            "flags": ["GAP_BEFORE"],
+            "source_code": "TELEMETRY_RESUMED"
+          }
+        },
+        {
+          "signal_id": "ambient_temperature",
+          "phase": null,
+          "value": 31.0,
+          "value_type": "float",
+          "unit_ucum": "Cel",
+          "original_name": "ATI",
+          "original_value": "31.0",
+          "original_unit": "degC",
+          "quality": {
+            "severity": "UNCERTAIN",
+            "flags": ["GAP_BEFORE"],
+            "source_code": "TELEMETRY_RESUMED"
+          }
+        }
+      ],
+      "event_quality_flags": ["GAP_BEFORE", "REINITIALIZE_WARMUP"],
+      "mapping_version": "1.0.0"
+    }
+  ]
+}

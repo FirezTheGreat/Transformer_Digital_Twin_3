@@ -1,0 +1,78 @@
+{
+  "fixture_id": "fixture_scale_error",
+  "category": "scale_error",
+  "description": "Deterministic static regression fixture simulating a telemetry transducer scale/gain error (Phase L1 voltage recorded in kilovolts instead of volts, producing 0.240 instead of 240.0 V).",
+  "is_synthetic": true,
+  "target_asset_id": "TX_MOCK_STATIC_01",
+  "expected_behavior": {
+    "detection_target": "OUT_OF_RANGE / SCALE_ERROR",
+    "expected_severity": "BAD",
+    "quarantine_measurement": true,
+    "capability_impact": "Disables voltage imbalance (%VUB) and triggers C0 data quality warning without fabricating a physical grid fault."
+  },
+  "events": [
+    {
+      "schema_version": "1.0.0",
+      "event_id": "evt_scale_err_001",
+      "asset_id": "TX_MOCK_STATIC_01",
+      "event_time_utc": "2026-03-01T10:00:00Z",
+      "received_time_utc": "2026-03-01T10:00:02Z",
+      "source": {
+        "system": "static_fixture_generator",
+        "adapter_id": "fixture_scale_adapter",
+        "source_record_id": "row_001",
+        "source_uri": "fixtures/fixture_scale_error.json",
+        "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "measurements": [
+        {
+          "signal_id": "voltage_v1",
+          "phase": "L1",
+          "value": 0.24,
+          "value_type": "float",
+          "unit_ucum": "V",
+          "original_name": "VL1",
+          "original_value": "0.240",
+          "original_unit": "kV",
+          "quality": {
+            "severity": "BAD",
+            "flags": ["OUT_OF_RANGE", "SCALE_ERROR"],
+            "source_code": "SCALE_MISMATCH"
+          }
+        },
+        {
+          "signal_id": "voltage_v2",
+          "phase": "L2",
+          "value": 240.1,
+          "value_type": "float",
+          "unit_ucum": "V",
+          "original_name": "VL2",
+          "original_value": "240.1",
+          "original_unit": "V",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        },
+        {
+          "signal_id": "voltage_v3",
+          "phase": "L3",
+          "value": 239.8,
+          "value_type": "float",
+          "unit_ucum": "V",
+          "original_name": "VL3",
+          "original_value": "239.8",
+          "original_unit": "V",
+          "quality": {
+            "severity": "GOOD",
+            "flags": [],
+            "source_code": null
+          }
+        }
+      ],
+      "event_quality_flags": ["CONTAINS_BAD_MEASUREMENT"],
+      "mapping_version": "1.0.0"
+    }
+  ]
+}

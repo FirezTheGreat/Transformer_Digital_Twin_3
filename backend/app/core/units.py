@@ -38,6 +38,21 @@ except pint.errors.RedefinitionError:
     pass
 
 try:
+    ureg.define("varh = var * hour = VARh")
+except pint.errors.RedefinitionError:
+    pass
+
+try:
+    ureg.define("kvarh = 1000 * varh = kVARh")
+except pint.errors.RedefinitionError:
+    pass
+
+try:
+    ureg.define("Mvarh = 1000000 * varh = MVARh")
+except pint.errors.RedefinitionError:
+    pass
+
+try:
     ureg.define("Cel = degC = celsius")
 except pint.errors.RedefinitionError:
     pass
@@ -76,6 +91,13 @@ UCUM_CANONICAL_MAP: dict[str, str] = {
     "va": "VA",
     "kva": "kVA",
     "mva": "MVA",
+    # Energy
+    "wh": "Wh",
+    "kwh": "kWh",
+    "mwh": "MWh",
+    "varh": "varh",
+    "kvarh": "kvarh",
+    "mvarh": "Mvarh",
     # Frequency
     "hz": "Hz",
     "hertz": "Hz",

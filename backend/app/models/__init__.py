@@ -50,6 +50,12 @@ from app.models.twin_state import (
 from app.models.fact_bundle import (
     FactBundle,
 )
+from app.models.scenario import (
+    ScenarioProjectionResult,
+    ScenarioProjectionStep,
+    ScenarioRequest,
+    ThermalTrustState,
+)
 
 __all__ = [
     # Telemetry
@@ -93,4 +99,9 @@ __all__ = [
     "TwinState",
     # FactBundle
     "FactBundle",
+    # Scenario
+    "ScenarioRequest",
+    "ScenarioProjectionStep",
+    "ScenarioProjectionResult",
+    "ThermalTrustState",
 ]

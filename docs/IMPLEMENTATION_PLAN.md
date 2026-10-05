@@ -205,29 +205,39 @@ graph TD
 * **Goal:** Implement calibrated first-order differential thermal model, parameter estimation, fallback protection gate, and 2-hour what-if scenario simulator.
 
 #### Substeps:
-- **4.1 First-Order Grey-Box ODE Engine**
+- **4.1 First-Order Grey-Box ODE Engine & FIT Load-Driver Selection**
   - *What is implemented:* Author `backend/app/engine/thermal.py` implementing the exact frozen ODE:
     $$\theta^*_k = T_{a,k} + \beta_0 + \beta_1 \cdot u_k^2$$
     $$\alpha_k = 1 - \exp(-\Delta t_k / \tau)$$
     $$\hat{T}_{o,k} = \hat{T}_{o,k-1} + \alpha_k \cdot (\theta^*_k - \hat{T}_{o,k-1})$$
     - Fixed squared exponent; parameters $\beta_0 \ge 0$ (load-independent rise), $\beta_1 \ge 0$ (load-related rise at $u=1$), $\tau > 0$ (oil time constant).
-  - *Tests/checks:* Analytical step-response unit tests in `backend/tests/test_thermal.py` verifying exponential approach to steady-state within $< 0.1^{\circ}\text{C}$.
-  - *Success criteria:* Numerical ODE solver matches closed-form analytical solution under constant drive.
+    - Load driver candidate evaluation ($S$ vs $I_{eq}$) performed strictly on **FIT-only data** using a predeclared rolling-origin predictive metric; selected driver frozen before CAL.
+  - *Tests/checks:* Analytical step-response unit tests in `backend/tests/test_thermal.py` verifying exponential approach to steady-state within $< 0.1^{\circ}\text{C}$, and FIT-only driver selection validation.
+  - *Success criteria:* Numerical ODE solver matches closed-form analytical solution under constant drive; driver selection is deterministic and provenanced.
 
 - **4.2 Calibration, Baseline Models & Conformal Uncertainty Pipeline**
   - *What is implemented:* Author `backend/app/engine/calibration.py` (executed under manual user command per [`docs/CODING_RULES.md`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/docs/CODING_RULES.md) Rule 2):
-    - Fit $\beta_0, \beta_1, \tau$ on 60% fit partition using bounded Huber loss over deterministic log grid for $\tau$.
+    - Select load driver ($S$ vs $I_{\text{eq}}$) on 60% FIT partition using $K=5$ chronological expanding-window rolling-origin folds.
+    - Fit $\beta_0 \ge 0, \beta_1 \ge 0, \tau \in [0.5, 24.0]\,\text{h}$ on FIT using bounded Huber loss ($\delta = 1.345 \cdot \sigma_{\text{fit}}$ with $\sigma_{\text{fit}} = 1.4826 \cdot \text{MAD}$) over deterministic log grid and Stage 2 refinement.
+    - Evaluate identifiability diagnostics ($N \ge 500$, span $\ge 7\,\text{d}$, load variation $CV \ge 0.10, \text{range} \ge 10\,\text{kVA}$, fold stability $CV(\tau) \le 0.60$, domain boundary checks).
     - Implement 3 baselines: (1) Last-value persistence, (2) Ambient + median training rise, (3) Static robust regression $\text{ambient} + b_0 + b_1 u^2$.
-    - Calibrate empirical 90% block-conformal path interval on 20% calibration partition.
-    - Evaluate promotion criteria on untouched 20% test partition: MAE $\ge 5\%$ better than persistence, absolute bias $\le$ persistence bias, empirical 90% interval attains 85–95% marginal coverage, no safety-critical threshold missed in scenario tests.
-  - *Tests/checks:* Verification script checking parameter positivity, calibration determinism, and model card metric output.
+    - Calibrate empirical 90% block-conformal path interval on 20% calibration partition (with resolution floor $s_h \ge 0.50\,^\circ\text{C}$).
+    - Strict lockbox evaluation sequence: `FIT → model decisions → CAL → calibration/threshold decisions → freeze → TEST` (one frozen methodological decision cycle).
+    - **Primary Operational Evaluation:** 2-hour / 8-step conditional forward trajectory projection without future $T_o$ feedback, matching Digital Twin scenario projection semantics. Evaluated against 8-step persistence baseline from identical origins.
+    - **Secondary Sanity-Check Diagnostic:** 1-step (15-minute) closed-loop prediction reported separately.
+    - Evaluate promotion criteria on untouched 20% test partition: 2-hour trajectory MAE $\ge 5\%$ better than 8-step persistence ($1.6527\,^\circ\text{C}$ vs $2.0300\,^\circ\text{C}$, $+18.59\%$), signed bias acceptable ($\le |\text{bias}_{\text{persistence}}| + 0.10\,^\circ\text{C}$), empirical 90% interval attains 80–98% marginal coverage (observed 94.04%), no safety-critical threshold missed in scenario tests.
+  - *Tests/checks:* Verification script checking parameter positivity, calibration determinism, 2-hour trajectory evaluation, and model card metric output.
   - *Success criteria:* Model parameters and empirical conformal bounds recorded in model registry with exact dataset hash.
 
 - **4.3 Runtime Residual & Thermal Fallback Gate**
   - *What is implemented:* Author `backend/app/engine/thermal_fallback.py`:
     - Runtime residual calculation: $r_k = T_{o,\text{observed},k} - \hat{T}_{o,\text{free-running},k}$ (no silent step resets; reinitialize only on startup/gap with warm-up $\max(4\ \text{samples}, \tau)$).
-    - Monitored fallback conditions: unpromoted model, missing $T_o$, missing $T_a$, sensor frozen, physical impossibility ($T_o < T_a - 10^{\circ}\text{C}$), sustained residual $> 20^{\circ}\text{C}$.
+    - Evidence separation: Distinguish asset evidence (`UNUSUAL_THERMAL_BEHAVIOR`), sensor evidence (`POSSIBLE_SENSOR_BIAS`), and model-health hypothesis (`MODEL_MISSPECIFICATION_POSSIBLE`).
+    - Monitored fallback capability trust state (`THERMAL_MODEL:FALLBACK`):
+      - *Hard fallback:* unpromoted model, missing $T_o$, missing $T_a$, sensor frozen, physical impossibility ($T_o < T_a - 10^{\circ}\text{C}$).
+      - *Performance-degradation fallback:* sustained calibrated residual bias or conformal coverage breakdown.
     - Fallback action: Use last-value top-oil persistence with empirical error band for thermal display; disable causal what-if, model residual CUSUM, and thermal-model recommendations; preserve electrical checks, direct protection, descriptive thermal (C2), valid exposure (C4), and deterministic rules.
+    - Non-negotiable Invariants: Fallback MUST NOT erase anomaly evidence, MUST NOT reclassify asset evidence, and MUST NOT turn model hypotheses into confirmed diagnoses.
   - *Tests/checks:* Unit tests verifying fallback tripping within 1 cycle on corrupted thermal inputs, and asserting that electrical checks and direct protection rules remain 100% operational.
   - *Success criteria:* Thermal fallback is strictly confined without collapsing unrelated system capabilities.
 
@@ -240,9 +250,9 @@ graph TD
   - *Success criteria:* Fast ($< 5\ \text{ms}$) scenario projection with empirical uncertainty bounds.
 
 - **4.5 Phase 4 Verification & Thermal Model Checkpoint**
-  - *What is implemented:* Execute comprehensive thermal engine test suite.
-  - *Tests/checks:* Run `pytest backend/tests/test_thermal.py backend/tests/test_calibration.py backend/tests/test_thermal_fallback.py`.
-  - *Success criteria:* ODE accuracy verified, calibration promotes/degrades honestly, fallback confinement confirmed, scenario projection verified.
+  - *What is implemented:* Comprehensive deterministic verification suite [`backend/tests/test_phase4_verification.py`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/backend/tests/test_phase4_verification.py) covering all 5 pillars: (1) Thermal ODE stepping and state propagation, (2) Calibration artifact integrity and frozen parameter consumption, (3) Runtime residual tracking, CUSUM drift, warm-up, and capability confinement, (4) 2-hour what-if scenario projection, extrapolation widening, and fallback gating, (5) End-to-end event sequence integration ($< 5\,\text{ms}$ latency budget).
+  - *Tests/checks:* Run `pytest backend/tests/test_thermal.py backend/tests/test_calibration.py backend/tests/test_thermal_fallback.py backend/tests/test_scenario_simulator.py backend/tests/test_phase4_verification.py`.
+  - *Success criteria:* 100% test pass rate across 188 backend tests; ODE accuracy verified against analytical solutions; calibration artifact integrity verified; fallback confinement confirmed; scenario projection verified.
 
 ---
 

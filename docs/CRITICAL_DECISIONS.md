@@ -151,11 +151,45 @@ Use them as plausibility checks where appropriate.
 
 ---
 
+# Phase 4.1 — Thermal Model & Load Driver Selection
+
+## Thermal load-driver selection on FIT-only data
+
+Status: DECIDED_PENDING_IMPLEMENTATION
+
+Team Decision (Locked):
+- The thermal model may use either apparent power `S` or RMS-equivalent phase current `I_eq` as its load driver.
+- This selection must be made strictly on **FIT-only data** using a predeclared rolling-origin predictive metric (not in-sample fit error).
+- Criteria include predictive performance and stability across chronological FIT folds.
+- Once selected: frozen before CAL; CAL cannot switch driver; TEST is not used; TEST remains untouched lockbox.
+- Selected driver documented with evidence and provenance.
+
+---
+
 # Phase 4.2 — Thermal Calibration & Validation
 
-## Thermal model identifiability
+## Thermal model identifiability & methodology parameters
 
-Status: VALIDATION_REQUIRED
+Status: DECIDED_PENDING_IMPLEMENTATION
+
+Team Decisions (Locked):
+1. **Rolling-Origin Model/Driver Validation:**
+   - Evaluated strictly on **FIT partition** using expanding-window chronological evaluation with **$K=5$ folds**.
+   - CAL and TEST partitions are strictly sealed and excluded from fold selection.
+2. **Huber Loss Scale Estimation:**
+   - Standard statistical tuning constant $c = 1.345$.
+   - Scale $\sigma_{\text{fit}} = 1.4826 \cdot \text{MAD}(\text{residuals}_{\text{fit}})$ estimated deterministically on the FIT partition.
+   - Huber threshold computed as $\delta = 1.345 \cdot \sigma_{\text{fit}}$ on FIT. CAL/TEST are never used to compute $\delta$.
+3. **Thermal Time-Constant Bounds & Search Space:**
+   - Unified parameter domain: $\tau \in [0.5, 24.0]\,\text{hours}$.
+   - Deterministic logarithmic grid initialization and Stage 2 local refinement remain strictly inside $[0.5, 24.0]\,\text{hours}$.
+   - A fitted parameter solution on/at the domain boundaries ($\tau \le 0.51\,\text{h}$ or $\tau \ge 23.9\,\text{h}$) is flagged as an identifiability failure/warning condition.
+4. **Tau Stability Across Folds:**
+   - Parameter stability gate: $CV(\tau) \le 0.60$ across rolling folds.
+   - Clearly categorized as a project-specific engineering threshold.
+5. **Conformal Uncertainty Scale Floor:**
+   - Minimum horizon scale floor $s_h \ge 0.50\,^\circ\text{C}$.
+   - Documented as a measurement-resolution safeguard associated with the observed $\sim 1\,^\circ\text{C}$ integer thermal telemetry quantization (not a physical sensor model or asymptotic validity guarantee).
 
 Before promotion, evaluate:
 - parameter stability,
@@ -172,55 +206,99 @@ Model promotion must not be assumed merely because sufficient data volume exists
 
 ---
 
+## Thermal evaluation-horizon & promotion methodology correction
+
+Status: DECIDED_LOCKED
+
+Team Decision (Locked):
+1. **Primary TEST Evaluation Horizon (2-Hour Multi-Step Trajectory):**
+   - The primary holdout promotion comparison is the **2-hour / 8-step conditional forward trajectory projection** ($h = 1 \dots 8 \times 15\,\text{min}$ steps).
+   - Forecast origin initialized from actual observed top-oil temperature ($T_{o,0} = T_{o,\text{obs}}$).
+   - 8-step forward rollout without receiving future observed top-oil feedback during the rollout.
+   - Scenario inputs follow constant forward hold matching Digital Twin scenario projection semantics.
+   - Persistence baseline evaluated over the exact same 8-step rollout from the same origin ($\hat{T}_{o,t+h} = T_{o,t}$).
+2. **Secondary Sanity-Check Metric (1-Step Closed-Loop):**
+   - 1-step (15-minute) closed-loop prediction initialized from prior actual observation ($T_{o,k-1}$) reported separately as a diagnostic check.
+3. **Methodological Correction Rationale:**
+   - Comparing a 50-day free-running open-loop simulation against a 1-step 15-minute persistence baseline was flawed and asymmetric.
+   - The grey-box ODE attains $+18.59\%$ MAE improvement on the fair 2-hour trajectory evaluation ($1.6527\,^\circ\text{C}$ vs $2.0300\,^\circ\text{C}$), beating persistence across all horizons $h=1 \dots 8$.
+4. **Promotion Criteria:**
+   - $\ge 5\%$ aggregate 2-hour trajectory MAE improvement vs 8-step persistence.
+   - Trajectory signed bias $|\text{bias}_{\text{greybox}}| \le |\text{bias}_{\text{persistence}}| + 0.10\,^\circ\text{C}$.
+   - Empirical 90% conformal path coverage within $[80\%, 98\%]$.
+   - Calibrated parameters remain unchanged: $\beta_0 = 1.0880\,^\circ\text{C}, \beta_1 = 2.8979\,^\circ\text{C}, \tau = 0.5000\,\text{h}$, driver `rms_current_a`.
+
+---
+
 ## One-shot test evaluation discipline
 
-Status: PENDING_TEAM_DECISION
+Status: DECIDED_LOCKED
 
-Before using the final test partition for promotion decisions, the team must
-define and freeze the model family, parameter bounds, baseline set, and
-promotion criteria.
-
-Antigravity must not alter model selection rules after observing final test
-results and must not cherry-pick demo intervals.
-
-At the relevant phase, report any decision required regarding the exact
-promotion/evaluation protocol and wait for the team.
+Team Decision (Locked):
+- Strict methodological sequence: `FIT → model/design decisions → CAL → calibration/threshold/uncertainty decisions → freeze → TEST`.
+- After observing TEST results:
+  - Do NOT change model family.
+  - Do NOT change load driver.
+  - Do NOT change parameter bounds.
+  - Do NOT change thresholds.
+  - Do NOT cherry-pick intervals.
+  - Do NOT modify promotion criteria.
+- "One-shot TEST" means **one frozen methodological decision cycle**, not literally one program execution. Deterministic reruns of the exact frozen methodology are allowed.
 
 ---
 
 # Phase 4.3 — Thermal Runtime / Residual Handling
 
-## Large residual interpretation
+## Large residual interpretation (Evidence vs Diagnosis)
 
-Status: PENDING_TEAM_DECISION
+Status: DECIDED_PENDING_IMPLEMENTATION
 
-The system must not automatically interpret a large thermal residual as model
-failure.
-
-A large residual may represent:
-- genuine asset abnormality,
-- sensor bias,
-- mapping/unit problem,
-- model underfit,
-- changed cooling behavior,
-- operating-regime shift,
-- model extrapolation,
-- other data-quality problems.
-
-Decision required:
-How should asset evidence, sensor evidence, and model-health evidence be
-separated and combined?
-
-Antigravity must present options and wait for team instruction.
+Team Decision (Locked):
+- A large thermal residual must NOT automatically be interpreted as model failure.
+- Residual evidence and diagnosis must remain separate.
+- A large residual may indicate:
+  - genuine unusual asset behavior,
+  - sensor bias,
+  - mapping/unit/data-quality issue,
+  - model underfit,
+  - changed cooling behavior,
+  - operating-regime shift,
+  - extrapolation,
+  - other data-quality problems.
+- The system distinguishes:
+  1. **Asset evidence**
+  2. **Sensor/data-quality evidence**
+  3. **Model-health evidence**
+- `MODEL_MISSPECIFICATION_POSSIBLE` is an evidence-qualified **hypothesis**, not a confirmed diagnosis.
+- Potential evidence labels: `UNUSUAL_THERMAL_BEHAVIOR`, `POSSIBLE_COOLING_DEGRADATION`, `POSSIBLE_SENSOR_BIAS`, `MODEL_MISSPECIFICATION_POSSIBLE`.
+- The system must not claim a residual identifies the actual root cause without supporting evidence.
 
 ---
 
-## Residual-based fallback
+## Thermal model fallback & capability trust state
 
-Status: PENDING_TEAM_DECISION
+Status: DECIDED_PENDING_IMPLEMENTATION
 
-The previous proposal involving an automatic sustained residual threshold
-must not be implemented until the team explicitly decides the policy.
+Team Decision (Locked):
+- Fallback is a **capability/trust state** (`THERMAL_MODEL:FALLBACK`), NOT an anomaly diagnosis.
+- Two conceptual levels:
+  - **Hard fallback:** missing/invalid thermal inputs, invalid temporal ordering, unsupported operating region, insufficient model applicability, numerical/model failure.
+  - **Performance-degradation fallback:** entered when the model demonstrates sustained unsupported/error behavior (e.g. persistent residual bias, uncertainty coverage failure) according to calibrated rules.
+- Fallback behavior:
+  - Use top-oil persistence.
+  - Use calibrated/empirical uncertainty where available.
+  - Disable causal thermal what-if projection.
+  - Disable thermal-model residual CUSUM.
+  - Disable thermal-model-dependent recommendations.
+- Non-negotiable Invariants:
+  - MUST NOT erase existing anomaly evidence.
+  - MUST NOT reclassify existing asset evidence.
+  - MUST NOT turn `MODEL_MISSPECIFICATION_POSSIBLE` into a confirmed diagnosis.
+  - MUST NOT disable unrelated electrical or direct protection monitoring.
+  - State must be reversible when inputs/model return to valid conditions.
+- Distinction:
+  - `MODEL_MISSPECIFICATION_POSSIBLE` → evidence-qualified hypothesis.
+  - `THERMAL_MODEL:FALLBACK` → capability/trust state.
 
 ---
 

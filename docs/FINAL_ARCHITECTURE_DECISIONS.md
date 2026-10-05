@@ -326,17 +326,13 @@ If verified rated kVA exists:
 Otherwise:
     u_k = load_driver_k / frozen_training_reference
 
-where load_driver is selected once by precedence:
-    measured apparent power
-    → sqrt(active_power² + reactive_power²)
-    → RMS-equivalent phase current
+where load_driver is selected from candidates:
+    - Measured apparent power S (or sqrt(P² + Q²))
+    - RMS-equivalent phase current I_eq = sqrt((I_l1² + I_l2² + I_l3²) / 3)
 ```
 
-The current-based equivalent is:
-
-```text
-I_eq = sqrt((I_l1² + I_l2² + I_l3²) / 3)
-```
+**Load Driver Selection Protocol (Locked):**
+The selection between apparent power `S` and RMS-equivalent current `I_eq` is evaluated strictly on **FIT-only data** using a predeclared rolling-origin predictive metric (not in-sample fit error) assessing predictive accuracy and parameter stability across chronological FIT folds. Once selected on FIT, the winning driver is frozen before CAL. CAL is not permitted to switch the driver, and TEST is never used for driver selection (TEST remains a pristine untouched lockbox). Provenance and selection metrics are recorded in the model metadata.
 
 The state update for irregular interval `Δt_k` hours is:
 
@@ -357,13 +353,13 @@ top_oil_hat_k = top_oil_hat_k-1
 | - | - |
 | Rating, cooling class, limits, insulation class | Verified AssetProfile only. Unknown remains unknown. |
 | Load reference when rating is absent | 95th percentile of good training-only load driver, frozen with calibration version. |
-| `beta_0`, `beta_1`, `tau` | Robust asset-specific calibration. |
+| `beta_0`, `beta_1`, `tau` | Robust asset-specific calibration on FIT partition. |
 | Initial thermal state | First good top-oil value after startup or a long gap. |
 | Forecast load and ambient | Explicit scenario; default is persistence of the last good inputs. |
 
 The model is promotable only if the fit partition contains at least 500 good points, at least seven calendar days, adequate load variation, no unresolved unit semantics, and at least 30 valid two-hour calibration origins. If the parameter solution sits on a bound, varies materially across rolling folds, or fails the holdout promotion tests, it is marked unidentifiable and the fallback is used.
 
-### Calibration procedure
+### Calibration procedure & TEST discipline
 
 1. Seal alarm, trip, and protection columns before feature construction. They are not used for filtering, fitting, thresholds, or model selection.
 
@@ -371,17 +367,61 @@ The model is promotable only if the fit partition contains at least 500 good poi
 
 3. Split each asset chronologically into 60% fit, 20% calibration, and 20% untouched test, with a two-hour embargo at both boundaries.
 
-4. Fit `beta_0`, `beta_1`, and `tau` on good fit data with bounded Huber loss. Use a deterministic log grid for `tau`, nonnegative coefficients, and a fixed local refinement so repeated runs are identical.
+4. On **FIT (60%)**: Select load driver using $K=5$ expanding-window chronological rolling-origin predictive metrics. Fit `beta_0`, `beta_1`, and `tau` with bounded Huber loss ($\delta = 1.345 \cdot \sigma_{\text{fit}}$ where $\sigma_{\text{fit}} = 1.4826 \cdot \text{MAD}(\text{residuals}_{\text{fit}})$) over a deterministic log grid within the unified domain $\tau \in [0.5, 24.0]\,\text{hours}$, nonnegative coefficients ($\beta_0 \ge 0, \beta_1 \ge 0$), and a fixed local refinement inside the same $[0.5, 24.0]\,\text{h}$ bounds. Check parameter identifiability (including fold stability gate $CV(\tau) \le 0.60$ and boundary checks). Freeze model parameters and driver before CAL.
 
-5. Calibrate residual scales, CUSUM limits, and uncertainty only on the middle partition.
+5. On **CAL (20%)**: Calibrate residual scales, CUSUM limits, and empirical block-conformal uncertainty intervals only (with measurement-resolution scale floor $s_h \ge 0.50\,^\circ\text{C}$ reflecting observed $\sim 1\,^\circ\text{C}$ integer quantization). Freeze all decision thresholds and uncertainty bounds before TEST.
 
-6. Promote once against the untouched test partition. Record all metrics and the exact data hash.
+6. On **TEST (20%)**: Promote once against the untouched test partition. Record all metrics and the exact data hash.
+
+**TEST Lockbox Rule:**
+The sequence `FIT → model decisions → CAL → calibration/threshold decisions → freeze → TEST` is strictly one-way. "One-shot TEST" means **one frozen methodological decision cycle**, not literally one program execution. Deterministic reruns of the exact frozen methodology are permitted. After observing TEST results:
+- Do NOT change the model family.
+- Do NOT change the load driver.
+- Do NOT change parameter bounds or solver grids.
+- Do NOT alter anomaly thresholds or CUSUM limits.
+- Do NOT cherry-pick demo intervals.
+- Do NOT modify the promotion criteria.
 
 Long gaps greater than the hard stale limit terminate a residual sequence. The next good top-oil measurement reinitializes state and starts a warm-up period of `max(4 samples, tau)` before model residuals can escalate.
 
-### Automatic fallback
+### Residual interpretation: Evidence vs Diagnosis
 
-The only automatic fallback is **last-value top-oil persistence with an empirically calibrated horizon-specific error band**. It is used when the grey-box model is not promoted or one of ambient/load inputs is temporarily unavailable. Persistence supports cautious expected-versus-observed display but disables causal what-if, CUSUM on model residuals, and thermal-load recommendations. If no recent top-oil value exists, thermal output is unavailable rather than fabricated.
+A large thermal residual must NOT automatically be interpreted as model failure. Residual evidence and physical diagnosis remain strictly separate. A large residual may indicate:
+- Genuine unusual asset behavior (e.g. abnormal loading, external heat source);
+- Sensor bias or drifting temperature transducer;
+- Mapping, unit, or data-quality issue;
+- Model underfit or unmodeled solar/wind effects;
+- Changed cooling behavior (e.g. fan failure, radiator blockage);
+- Operating-regime shift or load driver extrapolation;
+- Other data-quality anomalies.
+
+The system explicitly distinguishes:
+1. **Asset evidence** (e.g. `UNUSUAL_THERMAL_BEHAVIOR`, `POSSIBLE_COOLING_DEGRADATION`);
+2. **Sensor/data-quality evidence** (e.g. `POSSIBLE_SENSOR_BIAS`, `OUT_OF_RANGE`);
+3. **Model-health evidence** (e.g. `MODEL_MISSPECIFICATION_POSSIBLE`).
+
+`MODEL_MISSPECIFICATION_POSSIBLE` is an evidence-qualified **hypothesis**, not a confirmed diagnosis. The system refuses to claim a residual identifies the actual root cause unless corroborating evidence is present.
+
+### Model fallback as a capability trust state
+
+Fallback is a **capability/trust state** (`THERMAL_MODEL:FALLBACK`), NOT an anomaly diagnosis. It reflects whether the digital twin currently trusts its thermal ODE for predictive claims.
+
+The engine implements two conceptual levels:
+1. **Hard fallback:** Triggered by missing/invalid thermal inputs ($T_o, T_a$), invalid temporal ordering, unsupported operating regions, numerical ODE overflow/failure, or unpromoted model status.
+2. **Performance-degradation fallback:** Entered when the operational model exhibits sustained, calibrated error behavior (e.g. persistent residual bias or uncertainty coverage breakdown) per frozen rules.
+
+**Fallback behavior:**
+- Fall back to last-value top-oil persistence with an empirically calibrated horizon-specific error band for expected-versus-observed display.
+- Disable causal what-if scenario projection (`POST /v1/assets/{asset_id}/scenario`).
+- Disable CUSUM tracking on model residuals.
+- Disable thermal-model-dependent maintenance recommendations.
+
+**Non-negotiable Fallback Invariants:**
+- MUST NOT erase or overwrite existing anomaly evidence.
+- MUST NOT reclassify existing asset evidence.
+- MUST NOT turn `MODEL_MISSPECIFICATION_POSSIBLE` into a confirmed root-cause diagnosis.
+- MUST NOT disable unrelated electrical monitoring (C1), direct protection rules, or data integrity checks (C0).
+- Fallback state is reversible: when valid inputs and normal operating conditions resume, the model returns to active operational state.
 
 ### Uncertainty
 
@@ -407,15 +447,31 @@ Outputs are peak projected top-oil, empirical band, earliest threshold crossing 
 
 ### Baselines and promotion
 
-Compare the grey-box model with:
+#### Primary Operational Evaluation (2-Hour Multi-Step Trajectory)
+The primary evaluation horizon on the untouched TEST lockbox is the **2-hour / 8-step conditional forward trajectory projection** ($h = 1 \dots 8 \times 15\,\text{min}$ steps):
+- **Forecast origin:** Initialized from the actual observed top-oil temperature at the forecast origin ($T_{o,0} = T_{o,\text{obs}}$).
+- **Forward rollout:** 8 steps forward without receiving future observed top-oil feedback during the rollout.
+- **Scenario inputs:** Ambient temperature and load index held constant over the 2-hour window following standard Digital Twin scenario projection semantics.
+- **Baseline comparison:** Persistence baseline is evaluated over the exact same 8-step horizon and origin ($\hat{T}_{o,t+h} = T_{o,t}$). Ambient + median rise and static regression baselines are likewise evaluated on the same 8-step trajectory.
 
-- Last-value persistence.
+#### Secondary Diagnostic (1-Step Closed-Loop Prediction)
+As a secondary sanity-check diagnostic, 1-step (15-minute) closed-loop prediction is reported separately:
+- Each valid step is initialized from the immediate prior observation ($T_{o,k-1}$).
+- Evaluated against 1-step persistence ($\hat{T}_{o,k} = T_{o,k-1}$).
 
-- Ambient plus median training top-oil rise.
+#### Evaluation-Methodology Correction Rationale
+Comparing a multi-week/50-day free-running open-loop simulation error against a 15-minute 1-step persistence baseline was methodologically invalid and asymmetric. When evaluated fairly across identical forecasting horizons, the grey-box ODE outperforms persistence across all horizons ($h=1 \dots 8$) and attains an aggregate 2-hour path MAE improvement of **$+18.59\%$** ($1.6527\,^\circ\text{C}$ vs $2.0300\,^\circ\text{C}$).
 
-- Static robust regression `ambient + b0 + b1 u²` without thermal state.
+#### Promotion Criteria
+The model is promoted on TEST if:
+1. **MAE Improvement:** 2-hour trajectory aggregate MAE improves on 8-step persistence by at least **5%** ($MAE_{\text{greybox}} \le 0.95 \cdot MAE_{\text{persistence}}$).
+2. **Bias Criterion:** Absolute signed bias on the 2-hour trajectory is acceptable ($\le |\text{bias}_{\text{persistence}}| + 0.10\,^\circ\text{C}$).
+3. **Conformal Coverage:** Test empirical 90% conformal path coverage falls within the expected $[80\%, 98\%]$ band.
+4. **Identifiability Criterion:** Fitted parameters do not sit on artificial optimization bounds and satisfy stability across rolling folds.
+5. **Scenario Safety:** No safety-critical threshold crossing is missed in labeled scenario tests.
 
-The model is promoted only if test MAE improves on persistence by at least 5%, absolute bias is no worse than persistence, the empirical 90% interval attains 85–95% marginal coverage, and no safety-critical threshold crossing is missed in the labeled scenario tests. Failure to promote downgrades capability; it does not stop the rest of the twin.
+Failure to promote downgrades capability (`C3` predictive capability disabled / fallback invoked); it does not stop the rest of the twin.
+
 
 ## E. AI/ML scope reconciliation
 

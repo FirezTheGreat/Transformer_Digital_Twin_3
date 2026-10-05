@@ -122,9 +122,21 @@ class StorageEngine:
             transform_version VARCHAR NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS twin_checkpoints (
+            checkpoint_id VARCHAR PRIMARY KEY,
+            asset_id VARCHAR NOT NULL,
+            state_time_utc TIMESTAMP NOT NULL,
+            last_processed_event_id VARCHAR NOT NULL,
+            state_sequence BIGINT NOT NULL,
+            state_json VARCHAR NOT NULL,
+            state_hash VARCHAR NOT NULL,
+            created_at_utc TIMESTAMP NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_events_asset_time ON canonical_events(asset_id, event_time_utc);
         CREATE INDEX IF NOT EXISTS idx_meas_asset_sig_time ON canonical_measurements(asset_id, signal_id, event_time_utc);
         CREATE INDEX IF NOT EXISTS idx_meas_event_id ON canonical_measurements(event_id);
+        CREATE INDEX IF NOT EXISTS idx_checkpoints_asset_time ON twin_checkpoints(asset_id, state_time_utc DESC);
         """)
 
     def insert_raw_frames(self, frames: Sequence[RawTelemetryFrame]) -> int:
@@ -749,6 +761,109 @@ class StorageEngine:
         count = self._con.execute(f"SELECT count(*) FROM {table_name}").fetchone()
         return int(count[0]) if count else 0
 
+    def insert_checkpoint(
+        self,
+        checkpoint_id: str,
+        asset_id: str,
+        state_time_utc: datetime,
+        last_processed_event_id: str,
+        state_sequence: int,
+        state_json: str,
+        state_hash: str,
+        created_at_utc: datetime | None = None,
+    ) -> None:
+        """Insert a twin state checkpoint record."""
+        now_naive = _to_naive_utc(created_at_utc or datetime.now(timezone.utc))
+        state_time_naive = _to_naive_utc(state_time_utc)
+        self._con.execute(
+            """
+            INSERT OR REPLACE INTO twin_checkpoints
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                checkpoint_id,
+                asset_id,
+                state_time_naive,
+                last_processed_event_id,
+                state_sequence,
+                state_json,
+                state_hash,
+                now_naive,
+            ],
+        )
+
+    def get_latest_checkpoint(self, asset_id: str) -> dict[str, Any] | None:
+        """Get the most recent checkpoint record for an asset."""
+        res = self._con.execute(
+            """
+            SELECT
+                checkpoint_id,
+                asset_id,
+                state_time_utc,
+                last_processed_event_id,
+                state_sequence,
+                state_json,
+                state_hash,
+                created_at_utc
+            FROM twin_checkpoints
+            WHERE asset_id = ?
+            ORDER BY state_sequence DESC, state_time_utc DESC
+            LIMIT 1
+            """,
+            [asset_id],
+        ).fetchone()
+        if not res:
+            return None
+        return {
+            "checkpoint_id": res[0],
+            "asset_id": res[1],
+            "state_time_utc": _ensure_utc(res[2]),
+            "last_processed_event_id": res[3],
+            "state_sequence": res[4],
+            "state_json": res[5],
+            "state_hash": res[6],
+            "created_at_utc": _ensure_utc(res[7]),
+        }
+
+    def get_checkpoint_by_id(self, checkpoint_id: str) -> dict[str, Any] | None:
+        """Get a specific checkpoint record by ID."""
+        res = self._con.execute(
+            """
+            SELECT
+                checkpoint_id,
+                asset_id,
+                state_time_utc,
+                last_processed_event_id,
+                state_sequence,
+                state_json,
+                state_hash,
+                created_at_utc
+            FROM twin_checkpoints
+            WHERE checkpoint_id = ?
+            """,
+            [checkpoint_id],
+        ).fetchone()
+        if not res:
+            return None
+        return {
+            "checkpoint_id": res[0],
+            "asset_id": res[1],
+            "state_time_utc": _ensure_utc(res[2]),
+            "last_processed_event_id": res[3],
+            "state_sequence": res[4],
+            "state_json": res[5],
+            "state_hash": res[6],
+            "created_at_utc": _ensure_utc(res[7]),
+        }
+
+    def get_checkpoint_count(self, asset_id: str | None = None) -> int:
+        """Get total count of saved checkpoints."""
+        if asset_id:
+            res = self._con.execute("SELECT count(*) FROM twin_checkpoints WHERE asset_id = ?", [asset_id]).fetchone()
+        else:
+            res = self._con.execute("SELECT count(*) FROM twin_checkpoints").fetchone()
+        return int(res[0]) if res else 0
+
     def close(self) -> None:
         """Close database connection."""
         self._con.close()
@@ -758,3 +873,4 @@ class StorageEngine:
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self.close()
+

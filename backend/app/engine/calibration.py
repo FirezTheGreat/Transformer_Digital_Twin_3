@@ -50,7 +50,9 @@ from app.models.thermal_artifact import (
     HorizonMetricBreakdown,
     IdentifiabilityReport,
     PromotionDecision,
+    QualificationStatus,
     ThermalModelParamsDict,
+    ThermalModelQualification,
 )
 
 logger = logging.getLogger(__name__)
@@ -1083,8 +1085,95 @@ def run_full_calibration_pipeline(
         "secondary_1step_closed_loop": sec_diag,
     }
 
+    # Step 7: Independent Capability-Specific Qualification Matrix
+    # Each capability is evaluated strictly against its own independent prerequisites
+    param_qual = (
+        QualificationStatus.QUALIFIED
+        if identifiability.is_identifiable
+        else QualificationStatus.UNVERIFIED
+    )
+    forecast_qual = (
+        QualificationStatus.QUALIFIED
+        if (promotion.passes_mae_criterion and promotion.passes_coverage_criterion and promotion.passes_bias_criterion)
+        else QualificationStatus.PENDING_VALIDATION
+    )
+    scenario_qual = (
+        QualificationStatus.QUALIFIED
+        if (forecast_qual == QualificationStatus.QUALIFIED and promotion.passes_scenario_criterion)
+        else QualificationStatus.PENDING_VALIDATION
+    )
+    resid_disp_qual = (
+        QualificationStatus.DESCRIPTIVE_ONLY
+        if (fitted_params.beta_0 >= 0 and fitted_params.beta_1 >= 0 and fitted_params.tau_hours > 0)
+        else QualificationStatus.DISABLED
+    )
+    resid_anom_qual = (
+        QualificationStatus.QUALIFIED
+        if (identifiability.is_identifiable and promotion.passes_bias_criterion)
+        else QualificationStatus.NOT_QUALIFIED
+    )
+    cusum_qual = (
+        QualificationStatus.QUALIFIED
+        if (identifiability.is_identifiable and conformal.num_calibration_origins >= 30 and not identifiability.boundary_hit)
+        else QualificationStatus.DISABLED
+    )
+    maint_qual = (
+        QualificationStatus.QUALIFIED
+        if (identifiability.is_identifiable and forecast_qual == QualificationStatus.QUALIFIED and cusum_qual == QualificationStatus.QUALIFIED)
+        else QualificationStatus.DISABLED
+    )
+
+    dimension_reasons = {
+        "parameter_interpretability": (
+            "Parameter identifiability criteria satisfied across FIT partition."
+            if param_qual == QualificationStatus.QUALIFIED
+            else f"Parameter identifiability failure: {'boundary hit on tau' if identifiability.boundary_hit else 'data insufficiency / fold instability'}."
+        ),
+        "forecast_qualification": (
+            "Autonomous 2-hour trajectory prediction meets all holdout evaluation criteria."
+            if forecast_qual == QualificationStatus.QUALIFIED
+            else "Autonomous 2-hour forward forecasting pending independent validation under revised qualification policy."
+        ),
+        "scenario_qualification": (
+            "Interactive what-if scenario projection meets all causal and trajectory criteria."
+            if scenario_qual == QualificationStatus.QUALIFIED
+            else "Scenario what-if projection pending explicit independent causal validation beyond historical rolling-origin forecast accuracy."
+        ),
+        "residual_display_qualification": (
+            "First-order grey-box ODE runs continuously on valid telemetry to compute descriptive shadow residuals without diagnostic validation."
+            if resid_disp_qual == QualificationStatus.DESCRIPTIVE_ONLY
+            else "Thermal model parameters invalid; descriptive residual display disabled."
+        ),
+        "residual_anomaly_qualification": (
+            "Residual excursions validated against identifiable physical baseline."
+            if resid_anom_qual == QualificationStatus.QUALIFIED
+            else "Thermal residuals are descriptive-only; not qualified as statistical anomaly evidence."
+        ),
+        "cusum_qualification": (
+            "Two-sided CUSUM tracker qualified on identifiable model residuals."
+            if cusum_qual == QualificationStatus.QUALIFIED
+            else "CUSUM drift tracker disabled on unpromoted thermal model to prevent unvalidated false drift alarms."
+        ),
+        "maintenance_inference_qualification": (
+            "Asset health and maintenance recommendations authorized from validated physical degradation models."
+            if maint_qual == QualificationStatus.QUALIFIED
+            else "Model-driven maintenance recommendations disabled until parameter identifiability and causal degradation models are qualified."
+        ),
+    }
+
+    qualification = ThermalModelQualification(
+        parameter_interpretability=param_qual,
+        forecast_qualification=forecast_qual,
+        scenario_qualification=scenario_qual,
+        residual_display_qualification=resid_disp_qual,
+        residual_anomaly_qualification=resid_anom_qual,
+        cusum_qualification=cusum_qual,
+        maintenance_inference_qualification=maint_qual,
+        dimension_reasons=dimension_reasons,
+    )
+
     artifact = CalibratedThermalModelArtifact(
-        schema_version="1.1.0",
+        schema_version="1.2.0",
         model_version=model_version,
         asset_id=asset_id,
         created_at_utc=datetime.now(timezone.utc).isoformat(),
@@ -1100,6 +1189,7 @@ def run_full_calibration_pipeline(
         baselines=baseline_metrics,
         test_metrics=test_metrics,
         promotion=promotion,
+        qualification=qualification,
         dataset_hashes=hashes,
         metadata=metadata,
     )

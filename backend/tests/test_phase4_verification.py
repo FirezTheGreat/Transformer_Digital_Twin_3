@@ -257,7 +257,7 @@ def test_verif_thermal_residual_calculation():
 def test_verif_calibration_artifact_schema_and_metadata(loaded_artifact: CalibratedThermalModelArtifact):
     """Verify that the frozen calibration artifact satisfies all schema & lockbox requirements."""
     # 1. Model version & identity
-    assert loaded_artifact.schema_version == "1.1.0"
+    assert loaded_artifact.schema_version == "1.2.0"
     assert loaded_artifact.model_version == "greybox_v1_0"
 
     # 2. Dataset provenance

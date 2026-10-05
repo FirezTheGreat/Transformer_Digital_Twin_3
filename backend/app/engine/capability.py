@@ -12,7 +12,9 @@ from typing import Mapping
 
 from app.models.capability import CapabilityItem, CapabilityManifest, CapabilityTier
 from app.models.profile import AssetProfile, InsulationClass, ProfileVerificationStatus
+from app.models.scenario import ThermalTrustState
 from app.models.telemetry import Measurement, QualitySeverity
+from app.models.thermal_artifact import QualificationStatus, ThermalModelQualification
 from app.models.twin_state import TwinState
 
 
@@ -137,6 +139,7 @@ class CapabilityEvaluator:
         profile: AssetProfile | None = None,
         model_version: str = "uncalibrated",
         is_model_promoted: bool = False,
+        qualification: ThermalModelQualification | None = None,
         hotspot_supported: bool = False,
         expected_cadence_s: int = 900,
         evaluation_window_s: int = 86400,
@@ -147,6 +150,7 @@ class CapabilityEvaluator:
             profile: Optional AssetProfile for nameplate verification.
             model_version: Thermal model version string.
             is_model_promoted: Whether the thermal model has passed promotion tests.
+            qualification: Optional capability-specific qualification breakdown.
             hotspot_supported: Whether credible hot-spot estimation is supported.
             expected_cadence_s: Configured telemetry interval in seconds.
             evaluation_window_s: Rolling evaluation window duration in seconds.
@@ -154,6 +158,7 @@ class CapabilityEvaluator:
         self.profile = profile
         self.model_version = model_version
         self.is_model_promoted = is_model_promoted
+        self.qualification = qualification
         self.hotspot_supported = hotspot_supported
         self.expected_cadence_s = expected_cadence_s
         self.evaluation_window_s = evaluation_window_s
@@ -430,6 +435,7 @@ class CapabilityEvaluator:
         capabilities["top_oil_monitoring"] = capabilities["C2"]
 
         # ------------------------------------------------------------------
+        # ------------------------------------------------------------------
         # Ambient Monitoring Sub-capability
         # ------------------------------------------------------------------
         amb_missing = [] if m_ambient is not None else ["ambient_temperature"]
@@ -447,6 +453,45 @@ class CapabilityEvaluator:
             missing_inputs=amb_missing,
             disabled_reason_codes=amb_reasons,
             model_status="NOT_APPLICABLE",
+        )
+
+        # ------------------------------------------------------------------
+        # Thermal Residual Shadow Sub-capability (Under C2)
+        # ------------------------------------------------------------------
+        shadow_has_inputs = c2_enabled and (m_ambient is not None) and has_load_driver
+        if self.qualification is not None:
+            shadow_is_permitted = self.qualification.residual_display_qualification in (
+                QualificationStatus.DESCRIPTIVE_ONLY,
+                QualificationStatus.QUALIFIED,
+            )
+        else:
+            shadow_is_permitted = (
+                self.is_model_promoted
+                or state.thermal_latent.model_status in ("PROMOTED", "SHADOW_DESCRIPTIVE")
+                or state.thermal_latent.last_free_running_top_oil_degc is not None
+            )
+        shadow_enabled = shadow_has_inputs and shadow_is_permitted
+        shadow_missing: list[str] = []
+        shadow_reasons: list[str] = []
+        if not c2_enabled:
+            shadow_missing.append("top_oil_temperature")
+            shadow_reasons.append("C2_UNAVAILABLE")
+        if m_ambient is None:
+            shadow_missing.append("ambient_temperature")
+            shadow_reasons.append("MISSING_AMBIENT_TEMPERATURE")
+        if not has_load_driver:
+            shadow_missing.append("load_driver")
+            shadow_reasons.append("MISSING_LOAD_DRIVER")
+        if not shadow_is_permitted:
+            shadow_reasons.append("RESIDUAL_DISPLAY_NOT_QUALIFIED")
+
+        capabilities["thermal_residual_shadow"] = CapabilityItem(
+            enabled=shadow_enabled,
+            evidence_grade="B" if shadow_enabled else "U",
+            required_inputs=["top_oil_temperature", "ambient_temperature", "load_driver"],
+            missing_inputs=shadow_missing,
+            disabled_reason_codes=shadow_reasons,
+            model_status="DESCRIPTIVE_ONLY" if shadow_enabled else "DISABLED",
         )
 
         # ------------------------------------------------------------------
@@ -471,22 +516,25 @@ class CapabilityEvaluator:
             c3_missing.append("load_driver")
             c3_reasons.append("MISSING_LOAD_DRIVER")
 
-        # Thermal model promotion check
-        # Must be genuinely promoted via Phase 4 contract
-        model_is_promoted = (
-            self.is_model_promoted
-            or (state.thermal_latent.model_status == "PROMOTED" and self.model_version != "uncalibrated")
+        # Thermal model promotion / forecast qualification check
+        forecast_is_qualified = (
+            (self.qualification.forecast_qualification == QualificationStatus.QUALIFIED)
+            if self.qualification is not None
+            else (
+                self.is_model_promoted
+                or (state.thermal_latent.model_status == "PROMOTED" and self.model_version != "uncalibrated")
+            )
         )
 
-        model_status_str = "PROMOTED" if model_is_promoted else (
+        model_status_str = "PROMOTED" if forecast_is_qualified else (
             state.thermal_latent.model_status if state.thermal_latent.model_status != "PROMOTED" else "UNCALIBRATED"
         )
 
-        if not model_is_promoted:
+        if not forecast_is_qualified:
             c3_missing.append("promoted_thermal_model")
             c3_reasons.append("MODEL_NOT_PROMOTED")
 
-        c3_enabled = c2_enabled and (m_ambient is not None) and has_load_driver and model_is_promoted
+        c3_enabled = c2_enabled and (m_ambient is not None) and has_load_driver and forecast_is_qualified
         c3_grade = "A" if c3_enabled else "U"
 
         capabilities["C3"] = CapabilityItem(
@@ -584,6 +632,7 @@ def evaluate_capabilities(
     profile: AssetProfile | None = None,
     model_version: str = "uncalibrated",
     is_model_promoted: bool = False,
+    qualification: ThermalModelQualification | None = None,
     hotspot_supported: bool = False,
     expected_cadence_s: int = 900,
     evaluated_at_utc: datetime | None = None,
@@ -593,6 +642,7 @@ def evaluate_capabilities(
         profile=profile,
         model_version=model_version,
         is_model_promoted=is_model_promoted,
+        qualification=qualification,
         hotspot_supported=hotspot_supported,
         expected_cadence_s=expected_cadence_s,
     )

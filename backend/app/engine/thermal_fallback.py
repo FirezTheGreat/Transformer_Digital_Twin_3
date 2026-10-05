@@ -30,7 +30,11 @@ from app.engine.thermal import ThermalModelParameters, step_thermal_ode
 from app.models.telemetry import Measurement, QualitySeverity
 from app.models.anomaly import AnomalyCategory, EvidenceItem
 from app.models.scenario import ThermalTrustState
-from app.models.thermal_artifact import CalibratedThermalModelArtifact
+from app.models.thermal_artifact import (
+    CalibratedThermalModelArtifact,
+    QualificationStatus,
+    ThermalModelQualification,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +235,7 @@ class ThermalFallbackGate:
         load_driver_type: str = "rms_current_a",
         load_driver_reference: float = 153.865,
         is_model_promoted: bool = True,
+        qualification: Optional[ThermalModelQualification] = None,
         conformal_half_width_1step: float = 2.9945,
         calibration_residual_median: float = 0.2062,
         calibration_residual_mad: float = 0.9613,
@@ -243,6 +248,7 @@ class ThermalFallbackGate:
         self.load_driver_type = str(load_driver_type)
         self.load_driver_reference = max(float(load_driver_reference), 1e-4)
         self.is_model_promoted = bool(is_model_promoted)
+        self.qualification = qualification
         self.conformal_half_width_1step = float(conformal_half_width_1step)
         self.max_gap_hours = float(max_gap_hours)
 
@@ -286,6 +292,29 @@ class ThermalFallbackGate:
             if is_model_promoted_override is not None
             else (artifact.promotion.status == "PROMOTED")
         )
+        if is_model_promoted_override is True:
+            qualification = ThermalModelQualification(
+                parameter_interpretability=artifact.qualification.parameter_interpretability if artifact.qualification else QualificationStatus.QUALIFIED,
+                forecast_qualification=QualificationStatus.QUALIFIED,
+                scenario_qualification=QualificationStatus.QUALIFIED,
+                residual_display_qualification=QualificationStatus.QUALIFIED,
+                residual_anomaly_qualification=QualificationStatus.QUALIFIED,
+                cusum_qualification=QualificationStatus.QUALIFIED,
+                maintenance_inference_qualification=QualificationStatus.QUALIFIED,
+            )
+        elif is_model_promoted_override is False:
+            qualification = ThermalModelQualification(
+                parameter_interpretability=QualificationStatus.UNVERIFIED,
+                forecast_qualification=QualificationStatus.NOT_QUALIFIED,
+                scenario_qualification=QualificationStatus.NOT_QUALIFIED,
+                residual_display_qualification=QualificationStatus.NOT_QUALIFIED,
+                residual_anomaly_qualification=QualificationStatus.NOT_QUALIFIED,
+                cusum_qualification=QualificationStatus.DISABLED,
+                maintenance_inference_qualification=QualificationStatus.DISABLED,
+            )
+        else:
+            qualification = artifact.qualification
+
         w1 = (
             artifact.conformal_uncertainty.horizon_half_widths_degc[0]
             if artifact.conformal_uncertainty.horizon_half_widths_degc
@@ -300,6 +329,7 @@ class ThermalFallbackGate:
             load_driver_type=artifact.selected_load_driver,
             load_driver_reference=artifact.load_driver_reference_value,
             is_model_promoted=is_promoted,
+            qualification=qualification,
             conformal_half_width_1step=w1,
             calibration_residual_median=med,
             calibration_residual_mad=mad,
@@ -352,7 +382,15 @@ class ThermalFallbackGate:
         load_val, load_ok = self._extract_value_and_quality(load_obs)
 
         # 2. Check input sufficiency & hard fallback conditions
-        if not is_promoted:
+        if self.qualification is not None:
+            can_display_residual = self.qualification.residual_display_qualification in (
+                QualificationStatus.DESCRIPTIVE_ONLY,
+                QualificationStatus.QUALIFIED,
+            )
+        else:
+            can_display_residual = is_promoted
+
+        if not can_display_residual and not is_promoted:
             fallback_reasons.append(ThermalFallbackReason.UNPROMOTED_MODEL)
 
         if not t_oil_ok or t_oil_val is None:
@@ -415,7 +453,7 @@ class ThermalFallbackGate:
         is_hard_fallback = len(fallback_reasons) > 0
 
         # ------------------------------------------------------------------
-        # 5. State Progression: Fallback vs Warmup vs Healthy
+        # 5. State Progression: Fallback vs Warmup vs Healthy/Shadow
         # ------------------------------------------------------------------
         if is_hard_fallback:
             trust_state = ThermalTrustState.FALLBACK_PERSISTENCE
@@ -472,7 +510,7 @@ class ThermalFallbackGate:
             )
 
         # ------------------------------------------------------------------
-        # 6. Normal ODE Step (All inputs valid and model promoted)
+        # 6. Normal ODE Step (Inputs valid and residual display permitted)
         # ------------------------------------------------------------------
         u_load = max(0.0, float(load_val) / self.load_driver_reference)
 
@@ -507,15 +545,49 @@ class ThermalFallbackGate:
             )
         else:
             is_warmup = False
-            trust_state = ThermalTrustState.MODEL_HEALTHY
-            what_if_enabled = True
-            cusum_res = self.cusum_tracker.update(
-                residual_degc=residual,
-                is_warmup=False,
+
+            # Evaluate specific qualification statuses
+            is_forecast_qualified = (
+                (self.qualification.forecast_qualification == QualificationStatus.QUALIFIED)
+                if self.qualification is not None
+                else is_promoted
+            )
+            is_scenario_qualified = (
+                (self.qualification.scenario_qualification == QualificationStatus.QUALIFIED)
+                if self.qualification is not None
+                else is_promoted
+            )
+            is_cusum_qualified = (
+                (self.qualification.cusum_qualification == QualificationStatus.QUALIFIED)
+                if self.qualification is not None
+                else is_promoted
+            )
+            is_anomaly_qualified = (
+                (self.qualification.residual_anomaly_qualification == QualificationStatus.QUALIFIED)
+                if self.qualification is not None
+                else is_promoted
             )
 
-            # 7. Check for CUSUM Alarms and emit evidence
-            if cusum_res.alarm_active:
+            if is_forecast_qualified:
+                trust_state = ThermalTrustState.MODEL_HEALTHY
+                what_if_enabled = is_scenario_qualified
+            else:
+                trust_state = ThermalTrustState.SHADOW_DESCRIPTIVE
+                what_if_enabled = False
+
+            if is_cusum_qualified:
+                cusum_res = self.cusum_tracker.update(
+                    residual_degc=residual,
+                    is_warmup=False,
+                )
+            else:
+                cusum_res = self.cusum_tracker.update(
+                    residual_degc=0.0,
+                    is_fallback=True,
+                )
+
+            # 7. Check for CUSUM Alarms and emit evidence if anomaly detection is qualified
+            if is_anomaly_qualified and cusum_res.alarm_active:
                 direction_str = (
                     "POSITIVE_SHIFT"
                     if cusum_res.direction == CUSUMDirection.POSITIVE_SHIFT
@@ -555,7 +627,7 @@ class ThermalFallbackGate:
             expected_top_oil_degc=round(expected_top_oil, 4),
             free_running_top_oil_degc=round(self.free_running_top_oil_degc, 4),
             thermal_residual_degc=residual,
-            standardized_residual_z=cusum_res.standardized_residual_z,
+            standardized_residual_z=cusum_res.standardized_residual_z if (self.qualification is None or self.qualification.cusum_qualification == QualificationStatus.QUALIFIED) else None,
             cusum_pos=cusum_res.cusum_pos,
             cusum_neg=cusum_res.cusum_neg,
             cusum_alarm_active=cusum_res.alarm_active,

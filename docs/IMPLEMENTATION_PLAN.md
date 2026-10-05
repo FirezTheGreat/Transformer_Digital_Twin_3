@@ -232,27 +232,32 @@ graph TD
 - **4.3 Runtime Residual & Thermal Fallback Gate**
   - *What is implemented:* Author `backend/app/engine/thermal_fallback.py`:
     - Runtime residual calculation: $r_k = T_{o,\text{observed},k} - \hat{T}_{o,\text{free-running},k}$ (no silent step resets; reinitialize only on startup/gap with warm-up $\max(4\ \text{samples}, \tau)$).
+    - Support **Capability-Specific Thermal Qualification Architecture** via `ThermalModelQualification` (7 independent dimensions):
+      - In `DESCRIPTIVE_ONLY` mode with valid telemetry, steps ODE continuously in `SHADOW_DESCRIPTIVE` trust state to compute descriptive shadow residuals without tripping hard fallback.
+      - Freezes CUSUM accumulators when `cusum_qualification = DISABLED` to prevent spurious drift alarms.
+      - Suppresses thermal deviation evidence when `residual_anomaly_qualification = NOT_QUALIFIED`.
     - Evidence separation: Distinguish asset evidence (`UNUSUAL_THERMAL_BEHAVIOR`), sensor evidence (`POSSIBLE_SENSOR_BIAS`), and model-health hypothesis (`MODEL_MISSPECIFICATION_POSSIBLE`).
     - Monitored fallback capability trust state (`THERMAL_MODEL:FALLBACK`):
-      - *Hard fallback:* unpromoted model, missing $T_o$, missing $T_a$, sensor frozen, physical impossibility ($T_o < T_a - 10^{\circ}\text{C}$).
+      - *Hard fallback:* missing $T_o$, missing $T_a$, missing load driver, bad quality, physical impossibility ($T_o < T_a - 10^{\circ}\text{C}$), monitoring gap $> 1.0\,\text{h}$.
       - *Performance-degradation fallback:* sustained calibrated residual bias or conformal coverage breakdown.
     - Fallback action: Use last-value top-oil persistence with empirical error band for thermal display; disable causal what-if, model residual CUSUM, and thermal-model recommendations; preserve electrical checks, direct protection, descriptive thermal (C2), valid exposure (C4), and deterministic rules.
     - Non-negotiable Invariants: Fallback MUST NOT erase anomaly evidence, MUST NOT reclassify asset evidence, and MUST NOT turn model hypotheses into confirmed diagnoses.
-  - *Tests/checks:* Unit tests verifying fallback tripping within 1 cycle on corrupted thermal inputs, and asserting that electrical checks and direct protection rules remain 100% operational.
+  - *Tests/checks:* Unit tests verifying fallback tripping within 1 cycle on corrupted thermal inputs, shadow descriptive residual progression, CUSUM freezing, and asserting that electrical checks and direct protection rules remain 100% operational.
   - *Success criteria:* Thermal fallback is strictly confined without collapsing unrelated system capabilities.
 
 - **4.4 2-Hour What-If Scenario Projection Engine**
   - *What is implemented:* Author `backend/app/engine/scenario_simulator.py` (`POST /v1/assets/{asset_id}/scenario`):
     - Initializes strictly from current observed state $T_{o,\text{observed}}$ (or last valid twin state).
+    - Gated strictly on `scenario_qualification == QUALIFIED` (disabled in `SHADOW_DESCRIPTIVE`, `WARMUP`, or `FALLBACK_PERSISTENCE`).
     - Projects forward 8 15-minute steps under user-adjusted load step ($u$) and ambient delta ($\Delta T_a$) with empirical 90% uncertainty band.
     - Detects threshold crossings and computes time above threshold within scenario horizon.
-  - *Tests/checks:* Scenario simulator tests verifying projection trajectory under various $(u, \Delta T_a)$ steps and assertion that simulator is disabled when thermal model is in fallback.
+  - *Tests/checks:* Scenario simulator tests verifying projection trajectory under various $(u, \Delta T_a)$ steps and assertion that simulator is disabled when thermal model is in fallback or shadow mode.
   - *Success criteria:* Fast ($< 5\ \text{ms}$) scenario projection with empirical uncertainty bounds.
 
 - **4.5 Phase 4 Verification & Thermal Model Checkpoint**
-  - *What is implemented:* Comprehensive deterministic verification suite [`backend/tests/test_phase4_verification.py`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/backend/tests/test_phase4_verification.py) covering all 5 pillars: (1) Thermal ODE stepping and state propagation, (2) Calibration artifact integrity and frozen parameter consumption, (3) Runtime residual tracking, CUSUM drift, warm-up, and capability confinement, (4) 2-hour what-if scenario projection, extrapolation widening, and fallback gating, (5) End-to-end event sequence integration ($< 5\,\text{ms}$ latency budget).
-  - *Tests/checks:* Run `pytest backend/tests/test_thermal.py backend/tests/test_calibration.py backend/tests/test_thermal_fallback.py backend/tests/test_scenario_simulator.py backend/tests/test_phase4_verification.py`.
-  - *Success criteria:* 100% test pass rate across 188 backend tests; ODE accuracy verified against analytical solutions; calibration artifact integrity verified; fallback confinement confirmed; scenario projection verified.
+  - *What is implemented:* Comprehensive deterministic verification suite [`backend/tests/test_phase4_verification.py`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/backend/tests/test_phase4_verification.py) and [`backend/tests/test_qualification.py`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/backend/tests/test_qualification.py) covering all 6 pillars: (1) Thermal ODE stepping and state propagation, (2) Calibration artifact integrity and frozen parameter consumption, (3) Runtime residual tracking, CUSUM drift, warm-up, and capability confinement, (4) 2-hour what-if scenario projection, extrapolation widening, and fallback gating, (5) 7-dimension qualification architecture and shadow descriptive evaluation, (6) End-to-end event sequence integration ($< 5\,\text{ms}$ latency budget).
+  - *Tests/checks:* Run `pytest backend/tests/test_thermal.py backend/tests/test_calibration.py backend/tests/test_thermal_fallback.py backend/tests/test_scenario_simulator.py backend/tests/test_phase4_verification.py backend/tests/test_qualification.py`.
+  - *Success criteria:* 100% test pass rate across all 194 backend tests; ODE accuracy verified against analytical solutions; calibration artifact integrity verified; fallback confinement confirmed; scenario projection verified; capability-specific qualification verified.
 
 ---
 

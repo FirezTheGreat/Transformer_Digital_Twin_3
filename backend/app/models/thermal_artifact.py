@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
@@ -71,6 +72,66 @@ class HorizonMetricBreakdown(BaseModel):
     conformal_coverage_pct: Optional[float] = None
 
 
+class QualificationStatus(str, Enum):
+    """Qualification authorization states for individual thermal capabilities."""
+    QUALIFIED = "QUALIFIED"                     # Freshly validated and fully authorized for trusted use
+    DESCRIPTIVE_ONLY = "DESCRIPTIVE_ONLY"       # Authorized strictly for shadow/informational visualization; NO diagnostic authority
+    UNVERIFIED = "UNVERIFIED"                   # Physical parameter interpretation cannot be justified (e.g. boundary hit)
+    PENDING_VALIDATION = "PENDING_VALIDATION"   # Awaiting formal validation under the revised policy
+    NOT_QUALIFIED = "NOT_QUALIFIED"             # Evaluated and failed qualification criteria
+    DISABLED = "DISABLED"                       # Explicitly deactivated by policy or missing prerequisites
+
+
+class ThermalModelQualification(BaseModel):
+    """Granular capability-specific qualification matrix across 7 operational dimensions."""
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    # 1. Physical Parameter Interpretability (Physical Attribution)
+    parameter_interpretability: QualificationStatus = Field(
+        default=QualificationStatus.UNVERIFIED,
+        description="Whether tau and betas represent genuine physical transformer constants",
+    )
+    # 2. 2-Hour Autonomous Forecast Rollout (Predictive Forecasting)
+    forecast_qualification: QualificationStatus = Field(
+        default=QualificationStatus.PENDING_VALIDATION,
+        description="Whether 2-hour autonomous forward trajectory forecasting is authorized",
+    )
+    # 3. 2-Hour What-If Scenario Analysis (Interactive Operator Simulation)
+    scenario_qualification: QualificationStatus = Field(
+        default=QualificationStatus.PENDING_VALIDATION,
+        description="Whether interactive load/ambient what-if scenario projection is authorized",
+    )
+    # 4. Free-Running Residual Visualization (Descriptive Monitoring)
+    residual_display_qualification: QualificationStatus = Field(
+        default=QualificationStatus.DESCRIPTIVE_ONLY,
+        description="Whether continuous free-running residual can be displayed for descriptive/shadow monitoring",
+    )
+    # 5. Residual-Based Anomaly Evidence (Diagnostic Episode Input)
+    residual_anomaly_qualification: QualificationStatus = Field(
+        default=QualificationStatus.NOT_QUALIFIED,
+        description="Whether thermal residual excursions qualify as formal diagnostic evidence items",
+    )
+    # 6. Two-Sided CUSUM Drift Detection (Automated Drift Alarms)
+    cusum_qualification: QualificationStatus = Field(
+        default=QualificationStatus.DISABLED,
+        description="Whether CUSUM accumulator escalation and alarm generation are authorized",
+    )
+    # 7. Model-Driven Maintenance & Ageing Inference (Asset Health)
+    maintenance_inference_qualification: QualificationStatus = Field(
+        default=QualificationStatus.DISABLED,
+        description="Whether model outputs can drive automated maintenance recommendations or health index scoring",
+    )
+    # Deterministic evidence and rationale supporting each qualification dimension
+    dimension_reasons: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Deterministic evidence or rationale supporting each qualification dimension",
+    )
+
+    def get_reason(self, dimension_name: str) -> Optional[str]:
+        """Retrieve deterministic rationale for a specific qualification dimension."""
+        return self.dimension_reasons.get(dimension_name)
+
+
 class PromotionDecision(BaseModel):
     """Formal decision report on model promotion against untouched TEST."""
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -92,7 +153,7 @@ class CalibratedThermalModelArtifact(BaseModel):
     """Complete frozen calibrated thermal model artifact for runtime consumption."""
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: str = Field(default="1.1.0", description="Artifact schema version")
+    schema_version: str = Field(default="1.2.0", description="Artifact schema version")
     model_version: str = Field(default="greybox_v1_0", description="Model semantic version")
     asset_id: str = Field(default="tripura_dt_01", description="Target transformer asset identifier")
     created_at_utc: str = Field(..., description="ISO 8601 UTC creation timestamp")
@@ -107,6 +168,7 @@ class CalibratedThermalModelArtifact(BaseModel):
     baselines: Dict[str, BaselineMetricEntry] = Field(default_factory=dict, description="Metrics for baseline models on TEST (2-hour path)")
     test_metrics: BaselineMetricEntry = Field(..., description="Grey-box model metrics on untouched TEST (2-hour path)")
     promotion: PromotionDecision = Field(..., description="Locked promotion evaluation report based on 2-hour trajectory")
+    qualification: ThermalModelQualification = Field(default_factory=ThermalModelQualification, description="Capability-specific qualification matrix")
     
     dataset_hashes: Dict[str, str] = Field(default_factory=dict, description="SHA-256 hashes of fit, cal, and test parquets")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional provenance and training configuration")

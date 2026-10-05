@@ -430,7 +430,7 @@ def test_run_full_calibration_pipeline_and_json_roundtrip(synthetic_partitions, 
     assert loaded_artifact.parameters == artifact.parameters
     assert loaded_artifact.conformal_uncertainty == artifact.conformal_uncertainty
     assert loaded_artifact.promotion.status == artifact.promotion.status
-    assert loaded_artifact.schema_version == "1.1.0"
+    assert loaded_artifact.schema_version == "1.2.0"
     assert loaded_artifact.promotion.primary_evaluation_horizon == "2_hour_multi_step_trajectory"
     assert "horizon_breakdown" in loaded_artifact.metadata
     assert "secondary_1step_closed_loop" in loaded_artifact.metadata

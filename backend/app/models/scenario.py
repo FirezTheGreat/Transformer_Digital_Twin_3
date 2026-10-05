@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class ThermalTrustState(str, Enum):
     """Operational capability trust states for the thermal model."""
     MODEL_HEALTHY = "MODEL_HEALTHY"
+    SHADOW_DESCRIPTIVE = "SHADOW_DESCRIPTIVE"
     WARMUP = "WARMUP"
     FALLBACK_PERSISTENCE = "FALLBACK_PERSISTENCE"
 

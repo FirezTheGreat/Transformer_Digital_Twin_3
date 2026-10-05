@@ -302,6 +302,37 @@ Team Decision (Locked):
 
 ---
 
+## Capability-specific thermal qualification architecture
+
+Status: IMPLEMENTED
+
+Team Decision (Locked):
+1. **Replaced Monolithic Binary Promotion:**
+   - Monolithic `PROMOTED / NOT_PROMOTED` is replaced by seven independent capability qualification dimensions in `ThermalModelQualification`:
+     1. `parameter_interpretability` (`UNVERIFIED` on Tripura due to $\tau=0.5\,\text{h}$ boundary hit)
+     2. `forecast_qualification` (`PENDING_VALIDATION` on Tripura; holdout test score not treated as fresh validation)
+     3. `scenario_qualification` (`PENDING_VALIDATION` on Tripura)
+     4. `residual_display_qualification` (`DESCRIPTIVE_ONLY` on Tripura)
+     5. `residual_anomaly_qualification` (`NOT_QUALIFIED` on Tripura)
+     6. `cusum_qualification` (`DISABLED` on Tripura)
+     7. `maintenance_inference_qualification` (`DISABLED` on Tripura)
+2. **Shadow Descriptive Mode (`DESCRIPTIVE_ONLY`):**
+   - When telemetry is valid ($T_o, T_a, \text{Load}$), the first-order grey-box ODE steps continuously and calculates $\hat{T}_{o,\text{free-running}}$ and shadow residuals $r_k = T_{o,\text{obs}} - \hat{T}_{o,\text{free-running}}$ exposed under `TwinState.thermal_latent` with `trust_state = ThermalTrustState.SHADOW_DESCRIPTIVE`.
+   - Exposed under Capability Manifest as sub-capability `C2:thermal_residual_shadow` with Grade B (descriptive shadow, not diagnostic).
+3. **CUSUM & Anomaly Evidence Gating:**
+   - When `cusum_qualification = DISABLED`, CUSUM accumulators remain frozen at 0 ($S^+=0, S^-=0$) to guarantee zero false drift alarms.
+   - When `residual_anomaly_qualification = NOT_QUALIFIED`, no thermal deviation anomaly evidence is emitted.
+4. **Independent CPRI Qualification:**
+   - CPRI/future models must qualify each capability dimension independently based on explicit criteria; successful calibration does not automatically qualify all 7 dimensions.
+   - Historical promotion reasons and parameter values are strictly preserved in the artifact without rewriting.
+5. **Hard Telemetry Overrides:**
+   - Missing/corrupted telemetry, physical impossibility ($T_o < T_a - 10\,^\circ\text{C}$), or gaps $> 1.0\,\text{h}$ immediately force `FALLBACK_PERSISTENCE`.
+
+> **Summary Qualification Status (Tripura Artifact):**
+> "The current Tripura thermal artifact has predictive evidence but is not physically/parameter-identifiably qualified; therefore descriptive thermal residuals may be exposed, while anomaly/CUSUM/maintenance inference remain disabled and predictive/scenario capabilities remain pending explicit qualification."
+
+---
+
 # Phase 5 — Anomaly Detection
 
 ## Stuck-sensor detection

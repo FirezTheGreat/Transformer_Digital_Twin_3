@@ -29,7 +29,11 @@ from app.models.scenario import (
     ScenarioRequest,
 )
 from app.models.telemetry import Measurement, QualitySeverity
-from app.models.thermal_artifact import CalibratedThermalModelArtifact
+from app.models.thermal_artifact import (
+    CalibratedThermalModelArtifact,
+    QualificationStatus,
+    ThermalModelQualification,
+)
 from app.models.twin_state import TwinState
 
 
@@ -53,6 +57,7 @@ class ScenarioSimulator:
         load_driver_reference: float = 153.865,
         load_driver_type: str = "rms_current_a",
         is_model_promoted: bool = True,
+        qualification: Optional[ThermalModelQualification] = None,
         conformal_half_widths_degc: Optional[Sequence[float]] = None,
         model_version: str = "greybox_v1_0",
         conformal_quantile_90: float = 5.9891,
@@ -62,6 +67,7 @@ class ScenarioSimulator:
         self.load_driver_reference = max(float(load_driver_reference), 1e-4)
         self.load_driver_type = str(load_driver_type)
         self.is_model_promoted = bool(is_model_promoted)
+        self.qualification = qualification
         self.conformal_half_widths = list(
             conformal_half_widths_degc
             if conformal_half_widths_degc and len(conformal_half_widths_degc) == 8
@@ -87,6 +93,29 @@ class ScenarioSimulator:
             if is_model_promoted_override is not None
             else (artifact.promotion.status == "PROMOTED")
         )
+        if is_model_promoted_override is True:
+            qualification = ThermalModelQualification(
+                parameter_interpretability=artifact.qualification.parameter_interpretability if artifact.qualification else QualificationStatus.QUALIFIED,
+                forecast_qualification=QualificationStatus.QUALIFIED,
+                scenario_qualification=QualificationStatus.QUALIFIED,
+                residual_display_qualification=QualificationStatus.QUALIFIED,
+                residual_anomaly_qualification=QualificationStatus.QUALIFIED,
+                cusum_qualification=QualificationStatus.QUALIFIED,
+                maintenance_inference_qualification=QualificationStatus.QUALIFIED,
+            )
+        elif is_model_promoted_override is False:
+            qualification = ThermalModelQualification(
+                parameter_interpretability=QualificationStatus.UNVERIFIED,
+                forecast_qualification=QualificationStatus.NOT_QUALIFIED,
+                scenario_qualification=QualificationStatus.NOT_QUALIFIED,
+                residual_display_qualification=QualificationStatus.NOT_QUALIFIED,
+                residual_anomaly_qualification=QualificationStatus.NOT_QUALIFIED,
+                cusum_qualification=QualificationStatus.DISABLED,
+                maintenance_inference_qualification=QualificationStatus.DISABLED,
+            )
+        else:
+            qualification = artifact.qualification
+
         widths = (
             artifact.conformal_uncertainty.horizon_half_widths_degc
             if artifact.conformal_uncertainty.horizon_half_widths_degc
@@ -99,6 +128,7 @@ class ScenarioSimulator:
             load_driver_reference=artifact.load_driver_reference_value,
             load_driver_type=artifact.selected_load_driver,
             is_model_promoted=is_promoted,
+            qualification=qualification,
             conformal_half_widths_degc=widths,
             model_version=artifact.model_version,
             conformal_quantile_90=artifact.conformal_uncertainty.block_quantile_90,
@@ -137,15 +167,24 @@ class ScenarioSimulator:
         is_enabled = True
         disabled_reason: Optional[str] = None
 
-        if not self.is_model_promoted:
+        is_scenario_qualified = (
+            (self.qualification.scenario_qualification == QualificationStatus.QUALIFIED)
+            if self.qualification is not None
+            else self.is_model_promoted
+        )
+
+        if not is_scenario_qualified:
             is_enabled = False
-            disabled_reason = "Thermal scenario projection disabled: model is not promoted."
+            disabled_reason = "Thermal scenario projection disabled: scenario capability is not qualified."
         elif trust_state == ThermalTrustState.FALLBACK_PERSISTENCE:
             is_enabled = False
             disabled_reason = "Thermal scenario projection disabled: thermal model is in fallback persistence mode."
         elif trust_state == ThermalTrustState.WARMUP:
             is_enabled = False
             disabled_reason = "Thermal scenario projection disabled: thermal model is in warmup phase."
+        elif trust_state == ThermalTrustState.SHADOW_DESCRIPTIVE:
+            is_enabled = False
+            disabled_reason = "Thermal scenario projection disabled: thermal model is operating in shadow descriptive mode."
 
         # Check telemetry sufficiency at origin
         if (

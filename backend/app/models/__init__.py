@@ -56,6 +56,13 @@ from app.models.scenario import (
     ScenarioRequest,
     ThermalTrustState,
 )
+from app.models.injector import (
+    GroundTruthCondition,
+    GroundTruthMetadata,
+    InjectedEventContext,
+    InjectorScenarioConfig,
+    InjectorType,
+)
 
 __all__ = [
     # Telemetry
@@ -104,4 +111,10 @@ __all__ = [
     "ScenarioProjectionStep",
     "ScenarioProjectionResult",
     "ThermalTrustState",
+    # Injector
+    "InjectorType",
+    "GroundTruthCondition",
+    "GroundTruthMetadata",
+    "InjectorScenarioConfig",
+    "InjectedEventContext",
 ]

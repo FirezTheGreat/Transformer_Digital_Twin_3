@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Any, List, Mapping, Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.engine.cusum import CUSUMDirection, CUSUMStepResult, CUSUMTracker, TwoSidedCUSUMTracker
 from app.engine.thermal import ThermalModelParameters, step_thermal_ode
 from app.models.telemetry import Measurement, QualitySeverity
 from app.models.anomaly import AnomalyCategory, EvidenceItem
@@ -56,134 +57,7 @@ class ThermalFallbackReason(str, Enum):
     CONFORMAL_COVERAGE_BREAKDOWN = "CONFORMAL_COVERAGE_BREAKDOWN"
 
 
-class CUSUMDirection(str, Enum):
-    """Direction of CUSUM residual drift."""
-    NORMAL = "NORMAL"
-    POSITIVE_SHIFT = "POSITIVE_SHIFT"
-    NEGATIVE_SHIFT = "NEGATIVE_SHIFT"
-
-
-class CUSUMStepResult(BaseModel):
-    """Result of one CUSUM step update."""
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    standardized_residual_z: float
-    cusum_pos: float
-    cusum_neg: float
-    is_positive_alarm: bool
-    is_negative_alarm: bool
-    alarm_active: bool
-    direction: CUSUMDirection
-
-
-# ---------------------------------------------------------------------------
-# 1. Two-Sided CUSUM Accumulator
-# ---------------------------------------------------------------------------
-
-class CUSUMTracker:
-    """Deterministic two-sided CUSUM tracker for standardized thermal residuals.
-
-    Formulation:
-        z_k = (r_k - median_cal) / max(1.4826 * MAD_cal, sensor_resolution_floor)
-        S^+_k = max(0, S^+_{k-1} + z_k - k)
-        S^-_k = min(0, S^-_{k-1} + z_k + k)
-
-    Parameters:
-        k: Reference allowance parameter (default 0.50 for a half-sigma shift).
-        h: Decision limit for warning alarm (default 4.50 standardized units).
-        calibration_median: Empirical median of calibration residuals (degC).
-        calibration_mad: Empirical MAD of calibration residuals (degC).
-        sensor_resolution_floor: Minimum scale floor to prevent division by zero (default 0.50 degC).
-    """
-
-    def __init__(
-        self,
-        reference_k: float = 0.50,
-        decision_limit_h: float = 4.50,
-        calibration_median: float = 0.0,
-        calibration_mad: float = 1.0,
-        sensor_resolution_floor: float = 0.50,
-    ) -> None:
-        self.k = float(reference_k)
-        self.h = float(decision_limit_h)
-        self.calibration_median = float(calibration_median)
-        self.calibration_mad = float(calibration_mad)
-        self.scale = max(1.4826 * self.calibration_mad, float(sensor_resolution_floor))
-
-        self.cusum_pos: float = 0.0
-        self.cusum_neg: float = 0.0
-
-    def reset(self) -> None:
-        """Reset CUSUM accumulators to zero."""
-        self.cusum_pos = 0.0
-        self.cusum_neg = 0.0
-
-    def update(
-        self,
-        residual_degc: float,
-        is_warmup: bool = False,
-        is_fallback: bool = False,
-    ) -> CUSUMStepResult:
-        """Update CUSUM accumulators with a new residual observation.
-
-        Args:
-            residual_degc: Observed top-oil minus expected top-oil in degC.
-            is_warmup: If True, residuals are observed during warm-up (no escalation).
-            is_fallback: If True, thermal fallback is active (CUSUM disabled).
-
-        Returns:
-            CUSUMStepResult: Updated state and alarm flags.
-        """
-        if not math.isfinite(residual_degc) or is_fallback:
-            return CUSUMStepResult(
-                standardized_residual_z=0.0,
-                cusum_pos=self.cusum_pos,
-                cusum_neg=self.cusum_neg,
-                is_positive_alarm=False,
-                is_negative_alarm=False,
-                alarm_active=False,
-                direction=CUSUMDirection.NORMAL,
-            )
-
-        z = (residual_degc - self.calibration_median) / self.scale
-
-        if is_warmup:
-            # During warm-up, do not escalate accumulators
-            return CUSUMStepResult(
-                standardized_residual_z=round(z, 4),
-                cusum_pos=self.cusum_pos,
-                cusum_neg=self.cusum_neg,
-                is_positive_alarm=False,
-                is_negative_alarm=False,
-                alarm_active=False,
-                direction=CUSUMDirection.NORMAL,
-            )
-
-        # Standard two-sided CUSUM updates
-        self.cusum_pos = max(0.0, self.cusum_pos + z - self.k)
-        self.cusum_neg = min(0.0, self.cusum_neg + z + self.k)
-
-        is_pos_alarm = self.cusum_pos >= self.h
-        is_neg_alarm = self.cusum_neg <= -self.h
-        alarm_active = is_pos_alarm or is_neg_alarm
-
-        direction = CUSUMDirection.NORMAL
-        if is_pos_alarm and not is_neg_alarm:
-            direction = CUSUMDirection.POSITIVE_SHIFT
-        elif is_neg_alarm and not is_pos_alarm:
-            direction = CUSUMDirection.NEGATIVE_SHIFT
-        elif is_pos_alarm and is_neg_alarm:
-            direction = CUSUMDirection.POSITIVE_SHIFT if abs(self.cusum_pos) >= abs(self.cusum_neg) else CUSUMDirection.NEGATIVE_SHIFT
-
-        return CUSUMStepResult(
-            standardized_residual_z=round(z, 4),
-            cusum_pos=round(self.cusum_pos, 4),
-            cusum_neg=round(self.cusum_neg, 4),
-            is_positive_alarm=is_pos_alarm,
-            is_negative_alarm=is_neg_alarm,
-            alarm_active=alarm_active,
-            direction=direction,
-        )
+# (CUSUMDirection, CUSUMStepResult, and TwoSidedCUSUMTracker / CUSUMTracker are imported from app.engine.cusum)
 
 
 # ---------------------------------------------------------------------------

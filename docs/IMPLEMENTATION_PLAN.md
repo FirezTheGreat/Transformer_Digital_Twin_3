@@ -261,55 +261,62 @@ graph TD
 
 ---
 
-### Phase 5: Anomaly Evidence Engine & Episode Lifecycle FSM
-* **Priority Tier:** P0 (Core Anomaly Detection)
-* **Goal:** Implement multi-domain anomaly detectors, cumulative sum (CUSUM) residual tracker, dynamic synthetic injectors, and exact 6-state episode lifecycle FSM.
+### Phase 5: Anomaly Evidence Engine, Episode Lifecycle & Synthetic Evaluation
+* **Priority Tier:** P0 (Core Anomaly Detection & Testing Layer)
+* **Goal:** Implement stateful electrical anomaly episode engine (5.1), two-sided CUSUM residual tracker (5.2), dynamic synthetic scenario injectors (5.3), and multi-domain anomaly evidence integration.
+
+> **Evaluation Tooling Note:** Synthetic injectors are controlled evaluation tooling and are not themselves evidence that the injected parameter ranges represent universal transformer behaviour.
 
 #### Substeps:
-- **5.1 Multi-Domain Anomaly Detectors**
-  - *What is implemented:* Author `backend/app/engine/anomaly_detectors.py` implementing 8 operator categories:
-    - `DATA_QUALITY`: missing, out-of-range, stale, clock error, duplicate, conflict.
-    - `SENSOR_PLAUSIBILITY`: sensor freeze/stuck, spike / rate-of-change, impossible step.
-    - `THERMAL_DEVIATION`: contextual thermal residual shift, CUSUM drift.
-    - `THERMAL_LIMIT`: direct temperature limit exceedance ($T_o > T_{\text{warning}}$).
-    - `LOADING`: per-unit overload or relative-load excursion.
-    - `PHASE_OR_NEUTRAL`: phase current imbalance, neutral current / ground return.
-    - `VOLTAGE_PF_FREQUENCY`: voltage magnitude imbalance, undervoltage/overvoltage, low PF, frequency deviation.
-    - `PROTECTION_OR_OIL_STATUS`: direct alarm/trip bits, oil level status.
-  - *Tests/checks:* Detector unit tests in `backend/tests/test_detectors.py` verifying trigger thresholds and emission of standardized `EvidenceItem` structures.
-  - *Success criteria:* All 8 categories emit structured evidence with severity, confidence, and input lineage.
+- **5.1 Stateful Electrical Episode Engine**
+  - *What is implemented:* Author `backend/app/engine/electrical_episodes.py` and `backend/app/models/electrical_episode.py`:
+    - Tracks 5 canonical electrical conditions: `CURRENT_IMBALANCE` (% IUB), `VOLTAGE_IMBALANCE` (% VUB), `NEUTRAL_CURRENT_RATIO`, `LOW_POWER_FACTOR`, and `PQS_INCONSISTENCY` (strictly classified as `DATA_QUALITY`).
+    - Explicit 4-state episode lifecycle FSM: `CANDIDATE` (accumulating persistence timer $T_{\text{on}}$) $\rightarrow$ `ACTIVE` (persisted $\ge 900\,\text{s}$) $\rightarrow$ `RECOVERING` (below hysteresis threshold $T_{\text{off}}$) $\rightarrow$ `CLOSED` (clean for $\ge 900\,\text{s}$).
+    - Integrated with `TwinReducer` to deterministically track open episodes, persistence/recovery timers, peak values, and recurrence counts without mutating base telemetry.
+  - *Tests/checks:* Unit tests in `backend/tests/test_electrical_episodes.py` verifying state transitions, debouncing, recovery cancellation, and recurrence tracking.
+  - *Success criteria:* 100% deterministic electrical episode tracking with zero episode chatter.
 
 - **5.2 Two-Sided CUSUM Residual Tracker**
   - *What is implemented:* Author `backend/app/engine/cusum.py`:
-    - Robust standardization $z_k = (r_k - \text{median}_{\text{cal}}) / \max(1.4826 \times \text{MAD}_{\text{cal}}, \text{floor})$.
-    - Accumulators: $C^+_k = \max(0, C^+_{k-1} + z_k - 0.5)$, $C^-_k = \min(0, C^-_{k-1} + z_k + 0.5)$.
-    - Calibrate decision limit $h$ via grid search on calibration partition (target $\le 1$ false warning per 7 asset-days while detecting 2-sigma drift within 1 hour). If unachievable on dataset, document measured outcome and flag for review.
-  - *Tests/checks:* Unit tests in `backend/tests/test_cusum.py` verifying drift accumulation, zero-floor clamping, and alarm triggering on persistent shifts.
-  - *Success criteria:* CUSUM accumulator detects subtle mean shifts while suppressing point noise.
+    - Robust standardization: $z_k = (r_k - \text{median}_{\text{cal}}) / \max(1.4826 \times \text{MAD}_{\text{cal}}, \text{floor})$.
+    - Two-sided accumulators with zero-floor clamping:
+      $C^+_k = \max(0, C^+_{k-1} + z_k - k)$, $C^-_k = \min(0, C^-_{k-1} + z_k + k)$ (with reference allowance $k = 0.50$).
+    - Decision threshold $h = 4.50$ evaluated on CAL partition (80.62 asset-days, ~2.78 warnings / 7d, detects 2-sigma drift in ~45 min).
+    - Qualification gating: Tripura operational qualification remains `cusum_qualification = DISABLED` and `residual_anomaly_qualification = NOT_QUALIFIED`. CUSUM operates in shadow/exploratory mode without triggering operational alarms or overriding fallback.
+  - *Tests/checks:* Unit tests in `backend/tests/test_cusum.py` verifying drift accumulation, zero-floor clamping, two-sided tracking, reset behavior, and deterministic state roundtrip.
+  - *Success criteria:* Two-sided CUSUM tracker detects persistent mean shifts while suppressing isolated noise.
 
 - **5.3 Dynamic Synthetic Scenario Injectors**
-  - *What is implemented:* Author `backend/app/engine/injectors.py` implementing 5 locked scenario injectors labeled `SYNTHETIC_SCENARIO`:
-    1. `INJ_SENSOR_SPIKE`: single-frame or transient reading spike.
-    2. `INJ_STUCK_SENSOR`: frozen flatline reading over multiple intervals.
-    3. `INJ_PERSISTENT_BIAS`: 2-sigma calibration drift for CUSUM validation.
-    4. `INJ_SUSTAINED_OVERLOAD`: sustained load step above rated/reference load.
-    5. `INJ_PHASE_IMBALANCE`: current/voltage unbalance across phases with/without neutral return.
-  - *Tests/checks:* Scenario isolation tests in `backend/tests/test_injectors.py` confirming injectors only modify targeted copy stream without leaking into baseline.
-  - *Success criteria:* All 5 dynamic injectors reliably trigger expected detector categories within $\le 2$ cycles.
+  - *What is implemented:* Author `backend/app/models/injector.py` and `backend/app/engine/injectors.py`:
+    - Pure non-mutating injection layer for evaluation: Base Telemetry $\rightarrow$ Scenario Injector $\rightarrow$ Modified Telemetry $\rightarrow$ TwinReducer / Detectors.
+    - 5 locked canonical scenarios:
+      1. `INJ_SENSOR_SPIKE`: Single/multi-step transient spike on target sensor; preserves unaffected signals; explicit `SENSOR_SPIKE_TRANSIENT` data quality ground truth.
+      2. `INJ_STUCK_SENSOR`: Freezes target sensor at last observed value or explicit fixed value across $[t_{\text{start}}, t_{\text{end}})$; records `STUCK_SENSOR` ground truth.
+      3. `INJ_PERSISTENT_BIAS`: Adds constant signed offset ($v + \Delta$) across $[t_{\text{start}}, t_{\text{end}})$; records `PERSISTENT_SENSOR_BIAS` ground truth.
+      4. `INJ_SUSTAINED_OVERLOAD`: Scales electrical load-driving signals ($P, Q, S$, phase currents $I_1, I_2, I_3$) consistently by multiplier $M$ so thermal ODE and feature extraction respond naturally without directly editing temperature readings. Records `SUSTAINED_ELECTRICAL_OVERLOAD` ground truth.
+      5. `INJ_PHASE_IMBALANCE`: Modifies underlying phase currents on specified phase ($L_1, L_2, \text{or } L_3$) via multiplier or additive delta; downstream `DerivedFeatures` and `ElectricalEpisodeEngine` compute % IUB naturally. Records `PHASE_CURRENT_IMBALANCE` ground truth.
+    - Explicit half-open interval $[t_{\text{start}}, t_{\text{end}})$ temporal semantics.
+    - Ground truth metadata kept separate from telemetry inputs (never passed directly to twin).
+  - *Tests/checks:* Unit and integration tests in `backend/tests/test_injectors.py` verifying individual scenarios, temporal boundaries, replay determinism, multi-asset isolation, input immutability, invalid config rejection, and end-to-end integration with Phase 5.1 `ElectricalEpisodeEngine` and thermal pipeline.
+  - *Success criteria:* 100% test pass rate across all 5 injectors; full episode lifecycle observed on injected phase imbalance; thermal ODE responds naturally to injected electrical overload.
 
-- **5.4 Exact 6-State Episode Lifecycle FSM**
-  - *What is implemented:* Author `backend/app/engine/episode_fsm.py` managing state machine:
-    - States: `NORMAL` $\rightarrow$ `WATCH` $\rightarrow$ `WARNING` $\rightarrow$ `CRITICAL` $\rightarrow$ `RECOVERING` $\rightarrow$ `CLOSED`.
-    - Direct transition from `NORMAL` to `CRITICAL` for valid direct protection trips.
-    - Transitions: `WATCH` (30 min qualifying evidence), `WARNING` (CUSUM trip or 60 min `WATCH`), `CRITICAL` (direct trip or `WARNING` + independent corroboration), `RECOVERING` (30 min below exit threshold), `CLOSED` (2 continuous clean hours).
-    - Freeze episode as `MONITORING_GAP` during telemetry dropouts rather than falsely closing.
-  - *Tests/checks:* State machine tests in `backend/tests/test_episode_fsm.py` testing debouncing, persistence timers, recovery counters, and direct critical trips.
-  - *Success criteria:* Zero episode chatter/flapping during noisy threshold crossings; direct trips jump immediately to `CRITICAL`.
+- **5.4 Multi-Domain Anomaly Detectors & Integration**
+  - *What is implemented:* Author `backend/app/engine/anomaly_detectors.py` implementing modular, deterministic detectors across the 8 canonical categories:
+    1. `DATA_QUALITY`: bad measurement quality flags, out-of-range sensor bounds, P-Q-S inconsistency metric.
+    2. `SENSOR_PLAUSIBILITY`: frozen/flatline sensor detection ($\ge 4$ consecutive steps), impossible thermal rate of change ($> 1.0^{\circ}\text{C}/\text{min}$).
+    3. `THERMAL_DEVIATION`: thermal residual shift & CUSUM drift with strict qualification gating (suppressed/shadow for unqualified models).
+    4. `THERMAL_LIMIT`: direct absolute top-oil temperature limits ($85^{\circ}\text{C}$ warning, $95^{\circ}\text{C}$ critical) and rise-over-ambient limits ($55^{\circ}\text{C}$ warning, $65^{\circ}\text{C}$ critical).
+    5. `LOADING`: relative load index overload ($u \ge 1.00$ warning, $u \ge 1.25$ critical) and phase overcurrent.
+    6. `PHASE_OR_NEUTRAL`: NEMA current magnitude imbalance (% IUB $\ge 10\%$ warning, $\ge 25\%$ critical) and neutral current ratio ($\ge 0.20$ warning, $\ge 0.50$ critical).
+    7. `VOLTAGE_PF_FREQUENCY`: NEMA voltage magnitude imbalance (% VUB $\ge 2\%$ warning, $\ge 3\%$ critical), low power factor ($\le 0.85$ warning, $\le 0.70$ critical), and phase undervoltage/overvoltage.
+    8. `PROTECTION_OR_OIL_STATUS`: discrete hardware alarm/trip binary contacts (WTI trip, OTI alarm/trip, MOG alarm) and continuous oil level percentage ($\le 25\%$ warning, $\le 10\%$ critical).
+  - *Tests/checks:* Comprehensive unit and integration tests in `backend/tests/test_detectors.py` asserting standard `EvidenceItem` emission across all 8 categories with exact severity, confidence, and input lineage.
+  - *Success criteria:* 100% detector test pass rate; zero false positives on nominal telemetry; decisive direct trip severity on hardware protection contacts.
 
 - **5.5 Phase 5 Verification & Anomaly Checkpoint**
   - *What is implemented:* Execute comprehensive anomaly and episode test suite.
-  - *Tests/checks:* Run `pytest backend/tests/test_detectors.py backend/tests/test_cusum.py backend/tests/test_injectors.py backend/tests/test_episode_fsm.py`.
-  - *Success criteria:* All 8 anomaly categories, CUSUM drift detection, 5 synthetic injectors, and 6-state episode FSM verified.
+  - *Tests/checks:* Run `pytest backend/tests/test_electrical_episodes.py backend/tests/test_cusum.py backend/tests/test_injectors.py backend/tests/test_detectors.py`.
+  - *Success criteria:* All electrical episodes, CUSUM drift detection, 5 synthetic injectors, and 8 anomaly categories verified with 100% pass rate.
 
 ---
 

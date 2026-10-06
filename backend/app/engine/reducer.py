@@ -34,6 +34,8 @@ class TwinReducer:
         load_reference_kva: float = 142.898,
         checkpoint_cadence_events: int = 100,
         checkpoint_store: CheckpointStore | None = None,
+        episode_engine: Any | None = None,
+        anomaly_engine: Any | None = None,
     ) -> None:
         """Initialize TwinReducer.
 
@@ -42,11 +44,16 @@ class TwinReducer:
             load_reference_kva: Reference apparent power in kVA for unverified relative load index.
             checkpoint_cadence_events: Number of processed events between automatic checkpoints (0 to disable).
             checkpoint_store: Optional CheckpointStore instance to persist periodic checkpoints.
+            episode_engine: Optional ElectricalEpisodeEngine instance to process stateful electrical episodes.
+            anomaly_engine: Optional MultiDomainAnomalyEngine instance to evaluate multi-domain anomaly evidence.
         """
         self.profile = profile
         self.load_reference_kva = load_reference_kva
         self.checkpoint_cadence_events = checkpoint_cadence_events
         self.checkpoint_store = checkpoint_store
+        self.episode_engine = episode_engine
+        self.anomaly_engine = anomaly_engine
+        self.latest_emitted_evidence: list[EvidenceItem] = []
 
     def reduce(
         self,
@@ -123,7 +130,25 @@ class TwinReducer:
         exposure_state = (
             current_state.exposure_state if current_state is not None else ExposureState()
         )
-        open_episodes = list(current_state.open_episodes) if current_state is not None else []
+
+        if self.episode_engine is not None:
+            elec_episodes = self.episode_engine.evaluate_step(event=event, derived=derived_electrical)
+            open_episodes = [ep.to_anomaly_episode() for ep in elec_episodes]
+            det_timers = {k.value: v for k, v in self.episode_engine.persistence_timers.items()}
+            rec_timers = {k.value: v for k, v in self.episode_engine.recovery_timers.items()}
+            detector_state = detector_state.model_copy(
+                update={"persistence_timers": det_timers, "cooldown_timers": rec_timers}
+            )
+        else:
+            open_episodes = list(current_state.open_episodes) if current_state is not None else []
+
+        if self.anomaly_engine is not None:
+            self.latest_emitted_evidence = self.anomaly_engine.evaluate_event(
+                event=event, derived=derived_electrical
+            )
+        else:
+            self.latest_emitted_evidence = []
+
         health_bundle = current_state.health_bundle if current_state is not None else None
         active_recommendations = (
             list(current_state.active_recommendations) if current_state is not None else []

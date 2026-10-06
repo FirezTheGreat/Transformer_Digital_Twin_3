@@ -322,46 +322,64 @@ graph TD
 
 ### Phase 6: Multi-Domain OTHI, Thermal Exposure & Maintenance Engine
 * **Priority Tier:** P0 (Core Health & Maintenance)
-* **Goal:** Implement multi-domain health aggregation across 5 exact domains, exact gated OTHI computation, gated thermal exposure, and deterministic recommendation engine.
+* **Goal:** Implement multi-domain health aggregation across 5 exact domains with evidence-family deduplication, exact gated OTHI computation (`MAX_PLUS_SECONDARY_V1`), hybrid stale-domain anti-uplift logic, capability-specific gated thermal exposure, deterministic maintenance recommendations with provenance metadata, and immutable operator feedback.
 
 #### Substeps:
 - **6.1 Domain Severity & Exact Gated OTHI Aggregator**
-  - *What is implemented:* Author `backend/app/engine/othi.py`:
-    - Piecewise-linear severity $s_d \in [0, 1]$ across 5 exact domains: `thermal`, `loading`, `phase and neutral`, `voltage/PF/frequency`, `oil/protection status`.
-    - Penalty aggregation: $\text{base\_penalty} = \max(s_d)$, $\text{secondary\_penalty} = 0.2 \times \sum_{d \neq \text{base}} s_d$, $\text{total\_penalty} = \min(1.0, \text{base} + \text{secondary})$, $\text{OTHI} = \text{round}(100 \times (1.0 - \text{total}))$.
-    - **Exact Gating Rule:** Numeric OTHI emitted **only** when $\ge 2$ current domains have medium-or-better evidence quality/coverage, OR 1 decisive direct protection/critical domain exists; otherwise $\text{OTHI} = \text{null}$ with reason "Insufficient current evidence". (A healthy transformer with $\ge 2$ valid domains receives $\text{OTHI} = 100$).
-    - Deterministic Evidence Grade ($A, B, C, U$) computed independently from sensor coverage and data freshness.
-  - *Tests/checks:* Unit tests in `backend/tests/test_othi.py` covering: healthy asset ($\text{OTHI} = 100$), single-domain mild issue ($\text{OTHI} = \text{null}$ gated), two medium domain issues (numeric OTHI with secondary penalty), direct protection trip ($\text{OTHI} \le 39$, `CRITICAL`).
-  - *Success criteria:* OTHI calculation and gating match canonical architecture rules with 100% test coverage.
+  - *What is implemented:* Author `backend/app/engine/othi.py` and `backend/app/models/health.py`:
+    - Piecewise-linear severity $s_d \in [0.0, 1.0]$ across the 5 exact domains: `thermal`, `loading`, `phase_neutral`, `voltage_pf_freq`, `oil_protection`.
+    - **Evidence Family Deduplication:** Group evidence by `condition_family`; evaluate domain severity as maximum severity among eligible families in that domain; secondary domain contributions require semantically distinct condition families (zero double-counting of derived representations).
+    - **Aggregation Algorithm (`MAX_PLUS_SECONDARY_V1`):**
+      $$\text{base\_penalty} = \max_d(s_d)$$
+      $$\text{secondary\_penalty} = 0.20 \times \sum_{d \neq \text{base}} s_d$$
+      $$\text{total\_penalty} = \min(1.0, \text{base} + \text{secondary})$$
+      $$\text{OTHI} = \text{round}(100 \times (1.0 - \text{total}))$$
+      (Explicit product policy parameter `secondary_coefficient = 0.20`, versioned and validated for monotonicity, permutation invariance, max/tie invariance, and saturation).
+    - **Exact Gating Rule:** Numeric OTHI emitted **only** when $\ge 2$ current domains have medium-or-better evidence quality/coverage, OR 1 decisive direct protection/critical domain exists; otherwise $\text{OTHI} = \text{null}$ with reason `"Insufficient current evidence"`. (A healthy transformer with $\ge 2$ valid domains receives $\text{OTHI} = 100$).
+    - **Hybrid Stale-Domain & Anti-Uplift Policy:** Dynamic cadence-based freshness (`CURRENT`, `WARNING_STALE` / `HELD_STALE`, `HARD_STALE`). Counterfactual check ensures loss of observability never improves health; withholds `current_othi` and serves `last_valid_othi` if missing signals would cause artificial score uplift.
+    - **Health-Band Persistence:** Underlying score is raw numeric OTHI; operational health-band transitions (`NORMAL`, `WATCH`, `WARNING`, `CRITICAL`) use episode persistence/recovery logic (direct trips immediately transition to `CRITICAL`).
+    - Deterministic Evidence Grade ($A, B, C, U$) computed from domain coverage and data freshness.
+  - *Tests/checks:* Unit tests in `backend/tests/test_othi.py` covering: healthy asset ($\text{OTHI} = 100$), single-domain mild issue ($\text{OTHI} = \text{null}$ gated), two medium domain issues (numeric OTHI with secondary penalty), direct protection trip ($\text{OTHI} = 0$, `CRITICAL`), evidence-family deduplication, stale-domain anti-uplift, and mathematical invariant tests.
+  - *Success criteria:* OTHI calculation, gating, and anti-uplift logic pass 100% of tests.
 
 - **6.2 Gated Thermal Exposure Engine**
-  - *What is implemented:* Author `backend/app/engine/exposure.py`:
-    - Always-available metrics: observed thermal exposure (time in temperature bands, degree-hours above threshold).
-    - Standards-derived aging: Winding Hot-Spot $T_{\text{HS}}$, Aging Acceleration Factor $F_{AA}$, and Equivalent Aging Hours $L_{eq}$ per IEEE C57.91 / IEC 60076-7 formulas.
-    - **Exposure Gating:** Standards-derived aging is active *only* when paper insulation class (non-thermally upgraded vs thermally upgraded) and credible hot-spot estimates are verified; otherwise remains unavailable without fabricating parameters.
-  - *Tests/checks:* Unit tests in `backend/tests/test_exposure.py` comparing calculated $F_{AA}$ against IEEE C57.91 tables within $0.5\%$, and asserting unavailable state when insulation class is unverified.
+  - *What is implemented:* Author `backend/app/engine/exposure.py` and `backend/app/models/exposure.py`:
+    - **Capability-Specific Gating:** C4 thermal exposure is decoupled from C3 grey-box model promotion.
+    - **Observed Thermal Exposure (Always Available):** Integrates actual timestamp intervals ($\Delta t$), reports time in temperature bands ($T_o > 85^\circ\text{C}, > 95^\circ\text{C}, > 105^\circ\text{C}$), and degree-hours whenever valid top-oil telemetry and timestamps exist.
+    - **Standards-Derived Ageing:** Direct hot-spot measurement + verified insulation profile enables relative ageing rate ($F_{AA}$ or $V$) and equivalent ageing hours ($L_{eq}$) even if C3 grey-box top-oil ODE is unpromoted; model-derived hot-spot requires promoted C3 model.
+    - **Insulation Profile Enum:** `UNKNOWN`, `CELLULOSIC_NON_THERMALLY_UPGRADED`, `CELLULOSIC_THERMALLY_UPGRADED`, `HIGH_TEMPERATURE_OR_HYBRID`, `OTHER_UNSUPPORTED`.
+    - **Standard Edition Versioning:** Explicit standard/edition/profile metadata configuration (e.g. IEEE Std C57.91-2011 / IEC 60076-7:2018).
+    - Discrete binary WTI trip/alarm contacts are strictly isolated from continuous winding hot-spot measurements. Whole-life RUL and failure probability remain unsupported.
+  - *Tests/checks:* Unit tests in `backend/tests/test_exposure.py` validating observed exposure accumulation, $F_{AA}$ calculations against standard tables within $0.5\%$, and gating when insulation class is `UNKNOWN`.
   - *Success criteria:* Exposure metrics computed accurately when supported; gracefully withheld when ungrounded.
 
 - **6.3 Deterministic Maintenance Policy & Rules Engine**
-  - *What is implemented:* Author `backend/app/engine/maintenance.py` and versioned rule configuration `backend/app/engine/rules.yaml`:
-    - Locked rules `MNT-PROT-001` through `MNT-MODEL-007`.
-    - Priorities: `P0 SAFETY`, `P1 URGENT_INSPECTION`, `P2 PLANNED_ACTION`, `P3 MONITOR`, `P4 DATA_OR_MODEL`.
-    - Qualitative action windows: `IMMEDIATE`, `WITHIN_24H`, `NEXT_AUTHORIZED_MAINTENANCE_WINDOW`, `MONITOR`, `MODEL_REVIEW`.
-    - Conflict resolution: P0 safety always first; identical `merge_key` combined with strictest urgency; data-quality rules suppress only dependent model recommendations.
-  - *Tests/checks:* Rule precedence and suppression tests in `backend/tests/test_maintenance.py`.
-  - *Success criteria:* Prioritized, explainable recommendations emitted with exact rule IDs, standard citations, and evidence links.
+  - *What is implemented:* Author `backend/app/engine/maintenance.py`, `backend/app/models/maintenance.py`, and versioned rule configuration `backend/app/engine/rules.yaml`:
+    - Locked rules `MNT-PROT-001` through `MNT-MODEL-007` with revised priorities and safe advisory wording:
+      - `MNT-PROT-001` (P0 / `IMMEDIATE`): Verified protection trip $\implies$ follow site trip/isolation procedure (qualified operator attention, not confirmed failure).
+      - `MNT-THERM-002` (P1 / `WITHIN_24H`): CUSUM/thermal model deviation $\implies$ suppressed on Tripura due to `cusum_qualification = DISABLED`.
+      - `MNT-FORE-003` (P3 / `MONITOR` or P1 escalation): Upper uncertainty-band crossing alone triggers P3 Monitor/Review; central forecast crossing verified limit escalates to P1.
+      - `MNT-PHASE-004` (P2 / `NEXT_AUTHORIZED_MAINTENANCE_WINDOW`): Persistent phase imbalance corroborated by neutral current.
+      - `MNT-PF-005` (P3 / `MONITOR`): Low power factor $\implies$ downstream reactive review, not transformer deterioration.
+      - `MNT-SENS-006` (P4 / `MODEL_REVIEW`): Sensor flatline/fault $\implies$ data/model workstream.
+      - `MNT-MODEL-007` (P4 / `MODEL_REVIEW`): Model residual/coverage drift $\implies$ model review.
+    - **Action-Window Provenance:** Every recommendation record carries explicit provenance metadata (`window_provenance_type` $\in$ [`APPLICABLE_STANDARD_OR_GUIDE`, `MANUFACTURER_REQUIREMENT`, `PROTECTION_OR_SITE_PROCEDURE`, `OPERATOR_POLICY`, `ENGINEERING_POLICY`, `DEMO_DEFAULT`], `window_source_reference`, `source_version`, `approved_by`, `binding_vs_advisory`).
+    - **Suppression & Merging:** Bad telemetry suppresses only dependent model recommendations (never P0 protection); compatible recommendations merged under `merge_key` with strictest compatible urgency; incompatible recommendations escalate to qualified human review.
+  - *Tests/checks:* Unit tests in `backend/tests/test_maintenance.py` testing rule triggers, Tripura CUSUM suppression, uncertainty band vs central forecast escalation, merge/suppression logic, and provenance metadata validation.
+  - *Success criteria:* Prioritized, explainable recommendations emitted with exact rule IDs, action window provenance, and evidence links.
 
 - **6.4 Operator Feedback Store**
   - *What is implemented:* Implement feedback ingestion handler in `backend/app/engine/maintenance.py` (`POST /v1/feedback`):
-    - Appends `OperatorFeedbackEvent` (acknowledgement, dismissal, inspection outcome, override notes) to append-only audit stream.
-    - Updates advisory state in `TwinState` without mutating historical evidence.
-  - *Tests/checks:* Unit tests verifying feedback event round-trip and audit trail integrity.
-  - *Success criteria:* Operator feedback safely recorded and reflected in active twin advisory state.
+    - Appends `OperatorFeedbackEvent` (acknowledgement, dismissal, inspection outcome, override notes) to append-only immutable audit stream.
+    - Semantics: `ACKNOWLEDGE` updates workflow state; `DISMISS` dismisses recommendation instance with required actor/reason/rationale (does not erase underlying evidence, recurrence reopens instance); `INSPECTION_OUTCOME` enters as new SOURCE evidence; P0 protection cannot be silently dismissed.
+    - Historical telemetry, evidence items, and calculated OTHI records are never rewritten.
+  - *Tests/checks:* Unit tests in `backend/tests/test_maintenance.py` verifying feedback event round-trip, audit trail integrity, and dismissal/recurrence semantics.
+  - *Success criteria:* Operator feedback safely recorded in immutable ledger and reflected in active twin advisory state.
 
 - **6.5 Phase 6 Verification & Health/Maintenance Checkpoint**
   - *What is implemented:* Execute comprehensive health, exposure, and maintenance engine test suite.
   - *Tests/checks:* Run `pytest backend/tests/test_othi.py backend/tests/test_exposure.py backend/tests/test_maintenance.py`.
-  - *Success criteria:* Gated OTHI, 5 domains, exposure gating, maintenance rule precedence, and feedback storage verified.
+  - *Success criteria:* Gated OTHI, 5 domains, exposure gating, maintenance rule precedence, action window provenance, and feedback storage verified with 100% pass rate.
 
 ---
 
@@ -389,7 +407,7 @@ graph TD
   - *What is implemented:* Implement FastAPI routers in `backend/app/api/routers/`:
     - `GET /v1/assets/{asset_id}/health`: domain health scores, evidence grades, gated OTHI.
     - `GET /v1/assets/{asset_id}/episodes`: open and resolved anomaly episodes.
-    - `GET /v1/recommendations`: active maintenance recommendations.
+    - `GET /v1/assets/{asset_id}/recommendations`: active maintenance recommendations.
     - `GET /v1/assets/{asset_id}/model-card`: physical parameters, calibration metrics, bounds.
     - `POST /v1/assets/{asset_id}/scenario`: 2-hour what-if scenario projection.
     - `POST /v1/feedback`: operator acknowledge/override submission.

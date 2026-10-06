@@ -47,6 +47,11 @@ class EvidenceItem(BaseModel):
     input_lineage: list[str] = Field(default_factory=list, description="IDs of source measurements/events used")
     reason_codes: list[str] = Field(default_factory=list, description="Deterministic reason codes")
     hypothesis_codes: list[str] = Field(default_factory=list, description="Non-assertive possible explanatory hypotheses")
+    condition_family: str | None = Field(default=None, description="Condition family grouping for multi-domain deduplication")
+    domain: str | None = Field(default=None, description="Canonical OTHI domain if applicable")
+    derivation_type: str = Field(default="DIRECT_OBSERVATION", description="Derivation type (DIRECT_OBSERVATION, DERIVED_FEATURE, MODEL_DERIVED, PROTECTION_DISCRETE, OPERATOR_ACTION)")
+    upstream_evidence_ids: list[str] = Field(default_factory=list, description="IDs of upstream evidence items in causal/derivation graph")
+    rule_or_model_version: str = Field(default="1.0.0", description="Version of emitting rule or engine")
 
 
 class AnomalyEpisode(BaseModel):

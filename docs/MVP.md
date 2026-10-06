@@ -443,31 +443,35 @@ If the required calibration cannot be justified from the available data, the CUS
 
 The MVP shall implement **OTHI**.
 
-## 11.1 Domains
+## 11.1 Domains & Evidence Families
 
-The MVP shall support, where evidence exists:
+The MVP shall support, where evidence exists, the 5 exact canonical domains:
+- thermal;
+- loading;
+- phase/neutral;
+- voltage/PF/frequency;
+- oil/protection.
 
--   thermal;
--   loading;
--   phase/neutral;
--   voltage/PF/frequency;
--   oil/protection.
+**Evidence Family Deduplication:**
+- Each evidence item is associated with a `condition_family`.
+- Domain severity $s_d \in [0.0, 1.0]$ is evaluated as the maximum severity among eligible condition families in that domain. Derived representations of the same physical condition do not sum.
+- Across domains, secondary penalties apply only to semantically distinct condition families.
 
-## 11.2 Formula and status bands
+## 11.2 Formula, Algorithm & Status Bands
 
-**Domain severity** ($s_d \in [0, 1]$) is the normalized severity quantity evaluated across each available domain. In aggregate calculation, the highest domain severity sets the base penalty, while secondary domains contribute an additional penalty:
+The MVP shall implement the `MAX_PLUS_SECONDARY_V1` aggregation algorithm:
 
 ``` text
 Base_Penalty = MAX(domain_severities)
 
-Secondary_Penalty = 0.2 × SUM(other domain severities)
+Secondary_Penalty = 0.20 × SUM(other non-duplicative domain severities)
 
-Total_Penalty = MIN(1, Base_Penalty + Secondary_Penalty)
+Total_Penalty = MIN(1.0, Base_Penalty + Secondary_Penalty)
 
 OTHI = round(100 × (1 − Total_Penalty))
 ```
 
-The `0.2` coefficient is a visible product-policy parameter. The resulting OTHI is an integer from 0 to 100.
+The `0.20` coefficient is a visible **product-policy parameter**, versioned and documented as such. The resulting OTHI is a deterministic integer from 0 to 100.
 
 ### Status bands
 
@@ -480,80 +484,62 @@ The `0.2` coefficient is a visible product-policy parameter. The resulting OTHI 
 
 OTHI is strictly an operational/current-condition index reflecting currently observed operating condition, not a whole-life asset-health or remaining useful life (RUL) score.
 
-## 11.3 Evidence gating
+## 11.3 Evidence Gating, Staleness & Anti-Uplift
 
 The MVP shall:
-
--   expose domain severities;
--   identify the driving domain;
--   expose an evidence grade;
--   withhold the numeric OTHI when evidence is insufficient;
--   distinguish poor data quality from poor physical condition.
+- expose domain severities and driving domain;
+- expose an evidence grade ($A, B, C, U$);
+- withhold the numeric OTHI when evidence is insufficient ($\ge 2$ current domains or 1 decisive direct trip required);
+- implement **hybrid stale-domain handling**: `CURRENT` (fresh), `WARNING_STALE` (`HELD_STALE`), and `HARD_STALE` (dropped);
+- enforce the **Anti-Uplift Rule**: loss of observability must never improve health. If missing/stale domains make the score appear healthier than the last-known abnormal condition, withhold numeric `current_othi` and expose `last_valid_othi` with staleness reason;
+- govern categorical health-band transitions by episode persistence (direct trips immediately transition to `CRITICAL`).
 
 ------------------------------------------------------------------------
 
 # 12. MVP Thermal Exposure and Ageing
 
-The MVP shall always provide supported **thermal exposure** when
-temperature data permits.
+The MVP shall provide **capability-specific gated thermal exposure** (C4 decoupled from C3 grey-box ODE promotion):
 
-This may include:
+1. **Observed Thermal Exposure (Always Active with Valid Telemetry):**
+   - peak temperature;
+   - time spent in temperature bands ($T_o > 85^\circ\text{C}, > 95^\circ\text{C}, > 105^\circ\text{C}$);
+   - degree-hours above configured thresholds;
+   - bounded two-hour threshold projection.
+2. **Standards-Derived Equivalent Ageing:**
+   - Direct verified hot-spot measurement + verified insulation profile (`CELLULOSIC_NON_THERMALLY_UPGRADED` vs `CELLULOSIC_THERMALLY_UPGRADED`) enables relative ageing rate ($F_{AA}$ / $V$) and equivalent ageing hours ($L_{eq}$) even if the C3 grey-box top-oil ODE is unpromoted.
+   - Model-derived hot spot requires promoted C3 model.
+   - Unverified insulation profile (`UNKNOWN`) gracefully gates standards-derived ageing.
+   - Every standards-derived calculation records its explicit standard edition (e.g. IEEE Std C57.91-2011 / IEC 60076-7:2018).
 
--   peak temperature;
--   time spent in temperature bands;
--   degree-hours above configured thresholds;
--   bounded two-hour threshold projection.
-
-Standards-derived equivalent ageing shall be implemented only if all
-frozen prerequisites are verified.
-
-If prerequisites are absent:
-
-``` text
-Thermal exposure = available
-Equivalent ageing = unavailable / gated
-RUL = not provided
-```
-
-WTI shall not automatically be interpreted as a validated hot-spot
-measurement.
+WTI binary alarm/trip contacts shall not be interpreted as continuous winding hot-spot measurements. Whole-life RUL and failure probabilities remain unsupported.
 
 ------------------------------------------------------------------------
 
 # 13. MVP Maintenance Engine
 
-The MVP shall implement deterministic, versioned maintenance rules.
+The MVP shall implement deterministic, versioned maintenance rules (`backend/app/engine/rules.yaml`).
 
 Each active recommendation shall expose:
+- rule ID (`MNT-PROT-001` .. `MNT-MODEL-007`);
+- title, triggering condition, evidence IDs, severity, priority;
+- qualitative action window (`IMMEDIATE`, `WITHIN_24H`, `NEXT_AUTHORIZED_MAINTENANCE_WINDOW`, `MONITOR`, `MODEL_REVIEW`);
+- **action-window provenance metadata**: `window_provenance_type` (`APPLICABLE_STANDARD_OR_GUIDE`, `MANUFACTURER_REQUIREMENT`, `PROTECTION_OR_SITE_PROCEDURE`, `OPERATOR_POLICY`, `ENGINEERING_POLICY`, `DEMO_DEFAULT`), `window_source_reference`, `source_version`, `approved_by`, `binding_vs_advisory`;
+- advisory rationale and safe wording ("review", "inspect", "investigate").
 
--   rule ID;
--   title;
--   triggering condition;
--   evidence;
--   severity;
--   priority;
--   action window;
--   rationale;
--   source/configuration where applicable.
-
-The MVP shall support the frozen priority hierarchy:
-
+### Priority hierarchy & rules:
 ``` text
-P0 — Safety
-P1 — Urgent inspection
-P2 — Planned action
-P3 — Monitor
-P4 — Data/model review
+P0 — Safety (MNT-PROT-001: immediate operator attention / follow site procedure)
+P1 — Urgent inspection (MNT-THERM-002: suppressed on Tripura; MNT-FORE-003: central forecast limit crossing)
+P2 — Planned action (MNT-PHASE-004: persistent phase imbalance)
+P3 — Monitor (MNT-FORE-003: upper uncertainty band crossing; MNT-PF-005: downstream reactive review)
+P4 — Data/model review (MNT-SENS-006: sensor fault; MNT-MODEL-007: model drift)
 ```
 
 The maintenance engine shall:
-
--   suppress dependent recommendations when prerequisite data is
-    invalid;
--   merge compatible recommendations;
--   resolve conflicts deterministically;
--   escalate incompatible actions for qualified review;
--   never directly control equipment.
+- suppress dependent recommendations when prerequisite data is invalid (never suppress P0 protection);
+- merge compatible recommendations sharing a `merge_key` with strictest compatible urgency;
+- escalate incompatible actions for qualified human review;
+- record operator feedback in an immutable, append-only ledger (`POST /v1/feedback`) preserving all historical telemetry and calculated records.
 
 ------------------------------------------------------------------------
 

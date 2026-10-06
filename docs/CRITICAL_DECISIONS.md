@@ -337,132 +337,251 @@ Team Decision (Locked):
 
 ## Stuck-sensor detection
 
-Status: PENDING_TEAM_DECISION
+Status: IMPLEMENTED
 
-Detection must account for source resolution/quantization.
-
-Decision required:
-What constitutes a genuine stuck sensor versus normal quantized behaviour?
-
-Do not invent a threshold solely from convenience.
+Decision (Locked):
+- Stuck sensor detection checks for $N \ge 8$ consecutive identical readings under changing load ($\Delta \text{load} > 0.05$) or flatline of $M \ge 12$ consecutive identical values on active analog telemetry channels (e.g. OTI, active power, voltage).
+- Configured as an engineering default (`threshold_provenance: "CONFIGURED_ENGINEERING_DEFAULT"`), accounting for source integer quantization floors ($s_{\text{floor}} \ge 0.50^\circ\text{C}$).
 
 ---
 
-## Evidence-family independence
+## Evidence-family independence & dependency grouping
 
-Status: PENDING_TEAM_DECISION
+Status: DECIDED_LOCKED
 
-The team must define which detector/evidence families are sufficiently
-independent for escalation and health aggregation.
-
-Do not assume that different signals automatically represent independent
-evidence.
+Team Decision (Locked):
+- Evidence items must not simply be summed across signals without semantic lineage.
+- Every `EvidenceItem` must support:
+  - `condition_family`: identifies the underlying physical/operational phenomenon.
+  - `domain`: one of the 5 canonical OTHI domains (`thermal`, `loading`, `phase_neutral`, `voltage_pf_freq`, `oil_protection`).
+  - `root_source_event_ids`: immutable raw/canonical event references.
+  - `upstream_evidence_ids`: causal/derivation graph references.
+  - `derivation_type`: `DIRECT_OBSERVATION`, `DERIVED_FEATURE`, `MODEL_DERIVED`, `PROTECTION_DISCRETE`, `OPERATOR_ACTION`.
+  - `quality_freshness`: timestamp and freshness status.
+  - `rule_or_model_version`: version of the emitting engine/rule.
+- **Within an evidence family:** retain the strongest qualified severity as the numeric penalty; other observations serve as corroboration/lineage. Transformed versions of the same condition (e.g., $I_{\text{phase}} \to I_{\text{eq}} \to \text{relative load}$, or $P, Q \to S \to \text{relative load}$) must not double-count.
+- **Within a domain:** domain severity $s_d \in [0.0, 1.0]$ is the maximum severity across eligible, non-duplicative condition families in that domain. Multiple derived representations of the same condition are never summed.
+- **Across domains:** secondary domain contribution is permitted only when the contributing condition family is semantically distinct (e.g., loading stress + observed thermal exceedance = two distinct families; load-derived thermal projection + loading = dependent and not double-counted; protection trip + temperature exceedance = one decisive protection family with temperature as corroboration).
+- Offline statistical correlation may be analyzed for research/diagnostics, but MUST NOT silently alter runtime OTHI aggregation.
 
 ---
 
 ## CUSUM calibration and disablement
 
-Status: VALIDATION_REQUIRED
+Status: IMPLEMENTED
 
-CUSUM must be disabled when its calibration/promotion prerequisites fail.
-
-Thresholds and persistence must be validated against calibration data and
-controlled synthetic scenarios.
-
-Do not claim real-world sensitivity or false-negative rates without
-appropriate labels.
+Locked Rule:
+- CUSUM $z_k$ drift detection operates under explicit capability qualification (`cusum_qualification`).
+- On development/unqualified datasets (such as Tripura where $\tau=0.5\,\text{h}$ hits boundary and parameter interpretability is unverified), `cusum_qualification = DISABLED` and `residual_anomaly_qualification = NOT_QUALIFIED`.
+- CUSUM accumulators remain frozen at 0.0 during disabled qualification, preventing false alarms and ensuring zero operational authority.
+- Shadow descriptive residuals ($r_k = T_{o,\text{obs}} - \hat{T}_{o,\text{free-running}}$) are exposed descriptively with Grade B and hypothesis `UNQUALIFIED_SHADOW_EVIDENCE`, without influencing OTHI, fallback, or maintenance.
 
 ---
 
-# Phase 6.1 — OTHI
+# Phase 6.1 — OTHI & Domain Aggregation
 
 ## Evidence dependency groups
 
+Status: DECIDED_LOCKED
+
+Team Decision (Locked):
+- Evidence grouping follows the Evidence-Family Independence architecture specified above.
+- The 5 canonical OTHI domains are strictly preserved:
+  1. `thermal`
+  2. `loading`
+  3. `phase_neutral`
+  4. `voltage_pf_freq`
+  5. `oil_protection`
+- No ungrounded domains (such as mechanical or dielectric/DGA) shall be fabricated from electrical/thermal telemetry.
+
+---
+
+## OTHI secondary coefficient ($0.2$)
+
+Status: DECIDED_LOCKED
+
+Team Decision (Locked):
+- Algorithm identifier: `MAX_PLUS_SECONDARY_V1`.
+- Secondary coefficient: `secondary_coefficient = 0.20`.
+- Formula:
+  $$\text{base\_penalty} = \max_{d}(s_d)$$
+  $$\text{secondary\_penalty} = 0.20 \times \sum_{d \neq \text{base}} s_d$$
+  $$\text{total\_penalty} = \min(1.0, \text{base\_penalty} + \text{secondary\_penalty})$$
+  $$\text{OTHI} = \text{round}(100 \times (1.0 - \text{total\_penalty}))$$
+- **Policy Status:** This is an explicit **PRODUCT POLICY** parameter, not an IEEE/IEC/CPRI universal constant. It is versioned and documented as such.
+- **Mandatory Validation Properties:**
+  1. Monotonicity: worsening any domain severity $s_d$ never improves OTHI.
+  2. Permutation invariance: domain evaluation order does not alter the score.
+  3. Max/tie invariance: ties in maximum severity are resolved symmetrically.
+  4. Severe vs moderate: one critical domain ($s_d = 1.0 \implies \text{OTHI} \le 39$) dominates multiple mild deviations.
+  5. Duplicate-family invariance: duplicate evidence within a family produces zero additive secondary penalty.
+  6. Direct-protection behavior: a valid direct trip drives $\text{base\_penalty} = 1.0 \implies \text{OTHI} = 0$.
+  7. Missing-domain anti-uplift: losing a domain never causes an artificial score uplift.
+  8. Saturation: $\text{total\_penalty}$ is strictly clamped to $[0.0, 1.0]$, ensuring $\text{OTHI} \in [0, 100]$.
+- **Fleet Comparability Note:** OTHI scores across assets with differing evidence coverage/tiers are not directly fleet-comparable unless accompanied by their Evidence Grade ($A/B/C/U$) and coverage manifest.
+
+---
+
+## Missing & Stale Domain Behavior (Hybrid Policy & Anti-Uplift Rule)
+
+Status: DECIDED_LOCKED
+
+Team Decision (Locked):
+- Freshness thresholds must be derived dynamically from the asset's capability profile and expected cadence ($\Delta t_{\text{cadence}}$), NOT hardcoded to Tripura 15-minute intervals.
+- Domain Freshness States:
+  1. **CURRENT:** Fresh, valid telemetry within warning cadence threshold ($t_{\text{stale}} \le \max(2 \times \Delta t_{\text{cadence}}, 10\,\text{min})$). Counts toward current OTHI evidence gates.
+  2. **WARNING_STALE:** Age exceeds warning threshold but within hard stale threshold ($t_{\text{stale}} \le \max(4 \times \Delta t_{\text{cadence}}, 60\,\text{min})$). Last severity held under `HELD_STALE` state; does NOT count as a fresh current domain for the numeric OTHI evidence gate; Evidence Grade downgraded; last-valid timestamp exposed.
+  3. **HARD_STALE:** Age exceeds hard stale threshold. Domain is dropped from current computation.
+- **Anti-Uplift Rule:**
+  - *Loss of observability must never silently improve health.*
+  - When evaluating current OTHI with missing/stale domains, also compute the counterfactual OTHI including the last uncleared abnormal domain state.
+  - If missing evidence would make the asset appear healthier than the last-known uncleared abnormal state, withhold the numeric `current_othi` (`null` with reason `"Insufficient fresh evidence; last known condition was degraded"`), and expose `last_valid_othi` alongside the staleness details.
+- **Protection & Episode Persistence:**
+  - Latched direct protection trips remain active until an explicit, verified reset/clearing event is received.
+  - Stale protection telemetry indicates loss of observability, NOT trip clearance.
+  - Ongoing anomaly episodes do NOT close merely because telemetry drops out; they transition to `MONITORING_GAP` or retain state until fresh valid evidence confirms recovery.
+
+---
+
+## OTHI Health-Band Hysteresis & Operational Display
+
+Status: DECIDED_LOCKED
+
+Team Decision (Locked):
+- No arbitrary numerical deadbands or invented score hysteresis shall be applied to the raw numeric OTHI.
+- The underlying score remains the exact deterministic integer $\text{OTHI} \in [0, 100]$.
+- Categorical health-band transitions (`NORMAL: 80–100`, `WATCH: 60–79`, `WARNING: 40–59`, `CRITICAL: 0–39`) in operational views are governed by **evidence episode lifecycle and persistence**:
+  - Direct valid protection trips cause **immediate** transition to `CRITICAL`.
+  - Non-protection worsening requires active qualifying evidence / episode persistence.
+  - Recovery to a healthier operational band requires fresh valid evidence satisfying the episode recovery/clearing window ($30\,\text{min}$ recovery, $2\,\text{h}$ closure).
+- The system exposes:
+  - `raw_othi`: exact instantaneous calculation.
+  - `raw_band`: direct band corresponding to `raw_othi`.
+  - `operational_band`: persisted band reflecting active episode status.
+
+---
+
+# Phase 6.2 — Thermal Exposure & Standards-Derived Ageing
+
+## Capability-Specific Thermal Exposure (C4) Architecture
+
+Status: DECIDED_LOCKED
+
+Team Decision (Locked):
+- **C4 Thermal Exposure is NOT globally blocked by C3 Grey-Box Model Promotion.**
+- Thermal exposure capabilities are gated independently:
+  1. **Observed Top-Oil Exposure:** Always available whenever verified top-oil telemetry ($T_o$) and timestamps are valid. Integrates actual timestamp intervals ($\Delta t$), reports coverage gaps, time in temperature bands ($T_o > 85^\circ\text{C}, > 95^\circ\text{C}, > 105^\circ\text{C}$), and degree-hours.
+  2. **Direct Hot-Spot Exposure & Standards-Derived Ageing:** Enabled when a verified direct hot-spot measurement exists AND an explicit insulation profile is verified—EVEN IF the C3 grey-box top-oil model is unpromoted or in fallback.
+  3. **Model-Derived Hot-Spot Exposure:** Enabled ONLY when an applicable, validated thermal model is promoted (`C3_predictive = ENABLED`) with verified transformer parameters.
+- **Supported Insulation Profiles (Enum):**
+  - `UNKNOWN` (default; standards-derived ageing is gated/suppressed)
+  - `CELLULOSIC_NON_THERMALLY_UPGRADED` (reference temp $98^\circ\text{C}$, IEC/IEEE Arrhenius or half-life formulation)
+  - `CELLULOSIC_THERMALLY_UPGRADED` (reference temp $110^\circ\text{C}$, Arrhenius formulation)
+  - `HIGH_TEMPERATURE_OR_HYBRID` (requires specific manufacturer thermal profile)
+  - `OTHER_UNSUPPORTED`
+- **WTI Contact Boundary:** Discrete binary WTI trip/alarm contacts MUST NOT be treated as continuous winding hot-spot measurements.
+- **No Whole-Life RUL / PoF:** Exposure represents observed cumulative thermal stress and equivalent ageing hours ($L_{\text{eq}}$) over the observed telemetry window only. Total loss of life, remaining insulation life, and numeric RUL remain explicitly unsupported.
+
+---
+
+## Thermal Ageing Standard Edition & Profile Selection
+
 Status: PENDING_TEAM_DECISION
 
-The OTHI implementation must account for correlated evidence.
-
-The team must decide the dependency/lineage grouping used when multiple
-signals describe substantially the same underlying condition.
-
-Do not introduce arbitrary statistical deduplication without team approval.
-
----
-
-## OTHI secondary coefficient
-
-Status: VALIDATION_REQUIRED
-
-The current 0.2 secondary-penalty coefficient remains provisional.
-
-Validate:
-- monotonicity,
-- sensitivity,
-- correlated-domain behaviour,
-- scenario behaviour,
-- missing-domain transitions.
-
-Do not silently change the coefficient.
+Decision Required:
+- Which specific standard edition and thermal profile shall serve as the default standards-derived ageing formula when enabled:
+  - Option A: **IEEE Std C57.91-2011 / IEEE Std C57.91-2025** Arrhenius equation:
+    $$F_{AA} = \exp\left(\frac{15000}{383} - \frac{15000}{\theta_{\text{HS}} + 273}\right)$$ (for thermally upgraded paper, reference $110^\circ\text{C}$).
+  - Option B: **IEC 60076-7:2018** relative ageing rate equation:
+    $$V = 2^{(\theta_{\text{HS}} - 98)/6}$$ (for non-upgraded paper) and corresponding modified Arrhenius for upgraded paper.
+- **Constraint:** The implementation must record explicit standard identifiers (`standard_id: "IEEE_C57_91_2011"`, `edition: "2011"`, `profile_id: "THERMALLY_UPGRADED_KRAFT"`) in the metadata rather than generic unversioned strings like "IEEE formula".
 
 ---
 
-## Missing-domain behaviour
+# Phase 6.3 — Maintenance Engine & Action Provenance
 
-Status: PENDING_TEAM_DECISION
+## Maintenance Action-Window Provenance & Metadata
 
-The team must decide how OTHI behaves when a previously available domain
-becomes unavailable or stale.
+Status: DECIDED_LOCKED
 
-The score must not silently improve merely because evidence disappeared.
-
-Present options before implementation.
-
----
-
-## Health-band hysteresis
-
-Status: PENDING_TEAM_DECISION
-
-Determine whether state/band hysteresis is required to prevent health status
-chatter near thresholds.
-
-Do not introduce hysteresis values without team approval.
-
----
-
-# Phase 6.3 — Maintenance Policy
-
-## Maintenance action-window provenance
-
-Status: PENDING_TEAM_DECISION
-
-Action windows such as immediate, within 30 minutes, 60 minutes, or
-within 24 hours must not be presented as validated engineering limits unless
-supported by authoritative evidence.
-
-The team must decide which timings are:
-- engineering-derived,
-- operator-configured,
-- demonstration defaults.
-
-Unsourced timings must be explicitly labelled, e.g. `DEMO_DEFAULT`.
+Team Decision (Locked):
+- Recommendation action windows must have independent, auditable provenance. No temperature or electrical limit standard shall be cited as the source of an operational response window unless the standard explicitly defines that response timing.
+- **Provenance Types (Enum):**
+  - `APPLICABLE_STANDARD_OR_GUIDE` (e.g. IEEE/IEC guide defining specific inspection protocols)
+  - `MANUFACTURER_REQUIREMENT` (nameplate/O&M manual specifications)
+  - `PROTECTION_OR_SITE_PROCEDURE` (utility safety/trip procedures)
+  - `OPERATOR_POLICY` (utility maintenance schedule policy)
+  - `ENGINEERING_POLICY` (internal utility engineering workflow rules)
+  - `DEMO_DEFAULT` (default demonstration parameters, clearly labeled)
+- **Recommendation Record Metadata Structure:**
+  - `rule_id`, `version`, `title`, `priority` (`P0`..`P4`)
+  - `action_window` (`IMMEDIATE`, `WITHIN_24H`, `NEXT_AUTHORIZED_MAINTENANCE_WINDOW`, `MONITOR`, `MODEL_REVIEW`)
+  - `window_provenance_type` (one of the enum types above)
+  - `window_source_reference` (specific document, section, or policy ID)
+  - `source_version`, `asset_applicability`, `binding_vs_advisory`
+  - `approved_by`, `effective_from`, `review_by`
+- **Default Action Windows & Provenance:**
+  - `IMMEDIATE`: `PROTECTION_OR_SITE_PROCEDURE` or `ENGINEERING_POLICY` (safety default).
+  - `WITHIN_24H`: `OPERATOR_POLICY` or `DEMO_DEFAULT`.
+  - `NEXT_AUTHORIZED_MAINTENANCE_WINDOW`: `OPERATOR_POLICY`.
+  - `MONITOR`: `ENGINEERING_POLICY`.
+  - `MODEL_REVIEW`: `ENGINEERING_POLICY` / internal model governance.
+- Site/operator policies outrank demo defaults upon configuration.
 
 ---
 
-# API / Plan-wide
+## Maintenance Rule Hierarchy & Tripura Suppression Gating
 
-## Recommendations endpoint consistency
+Status: DECIDED_LOCKED
 
-Status: VALIDATION_REQUIRED
+Team Decision (Locked):
+- The deterministic P0–P4 rule hierarchy is locked with the following specific trigger, priority, and wording refinements:
+  - `MNT-PROT-001` (P0 / `IMMEDIATE`): Triggered by verified protection/trip contact. Wording: *"Follow site-approved trip and isolation procedure. Qualified personnel should verify transformer and protection status before return to service."* (Safety attention, NOT confirmed physical destruction).
+  - `MNT-THERM-002` (P1 / `WITHIN_24H`): Model/CUSUM-derived thermal recommendation. **Suppressed on Tripura** because `cusum_qualification = DISABLED` and residual anomaly qualification is unpromoted. Active only on qualified assets.
+  - `MNT-FORE-003` (P3 / `MONITOR` or P1 escalation): Upper empirical uncertainty-band crossing alone triggers **P3 Monitor/Review**. Central forecast crossing a verified operational limit escalates to **P1**.
+  - `MNT-PHASE-004` (P2 / `NEXT_AUTHORIZED_MAINTENANCE_WINDOW`): Persistent, quality-verified phase imbalance corroborated by neutral current.
+  - `MNT-PF-005` (P3 / `MONITOR`): Low power factor. Framed as downstream reactive demand / power factor correction review (P3), NOT intrinsic transformer deterioration.
+  - `MNT-SENS-006` (P4 / `MODEL_REVIEW`): Sensor flatline / plausibility fault. Default P4 data/model workstream; escalates only if safety-critical.
+  - `MNT-MODEL-007` (P4 / `MODEL_REVIEW`): Model residual or uncertainty coverage drift. Directs model/calibration review.
+- **Suppression & Merging Rules:**
+  - Bad data suppresses only recommendations dependent on that specific bad signal; NEVER suppress P0 protection advice.
+  - Merge compatible recommendations sharing a `merge_key` (e.g. within same condition family), retaining all supporting rule IDs and evidence links, adopting the strictest compatible action window.
+  - Incompatible recommendations must not be silently collapsed; emit an escalation requiring qualified human review.
 
-Ensure the implementation plan, API implementation, tests, and documentation
-use one canonical recommendations route.
+---
 
-Canonical route currently specified by the implementation plan:
+# Phase 6.4 — Operator Feedback & Audit Semantics
 
-`GET /v1/assets/{asset_id}/recommendations`
+## Operator Feedback Ledger & Lifecycle Semantics
 
-Do not introduce a second competing route without explicit team approval.
+Status: DECIDED_LOCKED
+
+Team Decision (Locked):
+- Feedback is stored in an **append-only immutable audit ledger** (`OperatorFeedbackEvent`).
+- **Feedback Action Semantics:**
+  - `ACKNOWLEDGE`: Workflow state update only; recommendation remains active with acknowledged flag.
+  - `DISMISS`: Dismisses the *specific active recommendation instance*; requires `actor_id`, `reason_code`, `rationale`, and `timestamp_utc`. Does NOT delete or modify underlying historical evidence or telemetry.
+  - `INSPECTION_OUTCOME`: Records physical inspection findings as **new SOURCE evidence** entering the twin state.
+  - `OVERRIDE`: Advisory override requiring authorized role, explicit rationale, and expiry/review timestamp.
+- **Safety Invariants:**
+  - P0 Safety / Protection recommendations CANNOT be silently or permanently dismissed without documented resolution.
+  - If an underlying abnormal condition recurs or persists past the closure window after dismissal, a NEW recommendation instance is generated.
+  - Historical telemetry, derived features, evidence items, and calculated OTHI records are NEVER rewritten by operator feedback.
+  - Feedback does NOT automatically trigger online model retraining or threshold modification during the hackathon.
+
+---
+
+# API & Documentation Consistency
+
+## Canonical Recommendations Endpoint Route
+
+Status: DECIDED_LOCKED
+
+Team Decision (Locked):
+- The canonical recommendation endpoint is strictly asset-scoped:
+  `GET /v1/assets/{asset_id}/recommendations`
+- All documentation, implementation files, API routers, and test suites must use this exact route consistently.
+- Recommendations cite explicit source and provenance metadata (`window_source_reference`, `provenance_type`), not blind standard citations for non-standard operational decisions.
 
 ---
 

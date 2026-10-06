@@ -10,10 +10,11 @@ and periodic deterministic checkpointing per Phase 3.2 requirements.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Sequence
+from typing import Any, Sequence
 
 from app.core.checkpoint import CheckpointStore, compute_twin_state_hash
 from app.engine.physics import extract_electrical_features
+from app.models.anomaly import AnomalyEpisode, EvidenceItem
 from app.models.features import DerivedFeatures
 from app.models.profile import AssetProfile
 from app.models.telemetry import CanonicalEvent, Measurement, QualitySeverity
@@ -36,6 +37,9 @@ class TwinReducer:
         checkpoint_store: CheckpointStore | None = None,
         episode_engine: Any | None = None,
         anomaly_engine: Any | None = None,
+        othi_engine: Any | None = None,
+        exposure_engine: Any | None = None,
+        maintenance_engine: Any | None = None,
     ) -> None:
         """Initialize TwinReducer.
 
@@ -46,6 +50,9 @@ class TwinReducer:
             checkpoint_store: Optional CheckpointStore instance to persist periodic checkpoints.
             episode_engine: Optional ElectricalEpisodeEngine instance to process stateful electrical episodes.
             anomaly_engine: Optional MultiDomainAnomalyEngine instance to evaluate multi-domain anomaly evidence.
+            othi_engine: Optional OTHIEngine instance to evaluate multi-domain health and gated OTHI.
+            exposure_engine: Optional ThermalExposureEngine instance to evaluate thermal exposure and ageing.
+            maintenance_engine: Optional MaintenanceEngine instance to evaluate advisory maintenance policies.
         """
         self.profile = profile
         self.load_reference_kva = load_reference_kva
@@ -53,6 +60,9 @@ class TwinReducer:
         self.checkpoint_store = checkpoint_store
         self.episode_engine = episode_engine
         self.anomaly_engine = anomaly_engine
+        self.othi_engine = othi_engine
+        self.exposure_engine = exposure_engine
+        self.maintenance_engine = maintenance_engine
         self.latest_emitted_evidence: list[EvidenceItem] = []
 
     def reduce(
@@ -127,9 +137,19 @@ class TwinReducer:
         detector_state = (
             current_state.detector_state if current_state is not None else DetectorState()
         )
-        exposure_state = (
-            current_state.exposure_state if current_state is not None else ExposureState()
-        )
+        if self.exposure_engine is not None:
+            exp_bundle = self.exposure_engine.step(event=event)
+            exposure_state = ExposureState(
+                time_above_bands_s={
+                    k: v.duration_seconds for k, v in exp_bundle.observed_exposure.bands.items()
+                },
+                equivalent_ageing_hours=exp_bundle.standards_ageing.equivalent_ageing_hours,
+                is_ageing_enabled=exp_bundle.standards_ageing.is_enabled,
+            )
+        else:
+            exposure_state = (
+                current_state.exposure_state if current_state is not None else ExposureState()
+            )
 
         if self.episode_engine is not None:
             elec_episodes = self.episode_engine.evaluate_step(event=event, derived=derived_electrical)
@@ -149,10 +169,27 @@ class TwinReducer:
         else:
             self.latest_emitted_evidence = []
 
-        health_bundle = current_state.health_bundle if current_state is not None else None
-        active_recommendations = (
-            list(current_state.active_recommendations) if current_state is not None else []
-        )
+        if self.othi_engine is not None:
+            health_bundle = self.othi_engine.evaluate(
+                event=event,
+                derived=derived_electrical,
+                evidence_items=self.latest_emitted_evidence,
+                open_episodes=open_episodes,
+                previous_bundle=current_state.health_bundle if current_state is not None else None,
+            )
+        else:
+            health_bundle = current_state.health_bundle if current_state is not None else None
+
+        if self.maintenance_engine is not None:
+            active_recommendations = self.maintenance_engine.evaluate(
+                event=event,
+                evidence_items=self.latest_emitted_evidence,
+                health_bundle=health_bundle,
+            )
+        else:
+            active_recommendations = (
+                list(current_state.active_recommendations) if current_state is not None else []
+            )
 
         # 7. Construct TwinState
         temp_state = TwinState(

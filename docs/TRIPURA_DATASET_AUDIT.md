@@ -141,8 +141,9 @@
 - Nominal 15-minute resolution across 102 continuous segments.
 - Found 5 continuous segments spanning >= 7 calendar days and 11 segments with >= 500 samples.
 - Longest continuous segment spans 15.0 days (1486 consecutive samples).
-- Detected 2 severe thermal inversions (To < Ta - 10 degC) and 1730 slight inversions (To < Ta).
+- Detected 2 severe thermal inversions (`T_o < T_a - 10 degC`) and 1730 slight inversions (`T_o < T_a`).
 - Quantization observed: OTI and ATI are recorded as integer-rounded values (step size 1.0 deg C).
+
 
 ---
 

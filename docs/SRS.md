@@ -580,50 +580,44 @@ The system shall provide an **Operational Transformer Health Index
 (OTHI)** representing current operational condition rather than
 whole-life insulation or asset health.
 
-### FR-HEALTH-002 --- Health domains
+### FR-HEALTH-002 --- Health domains and condition families
 
-Where evidence exists, OTHI shall consider relevant condition domains
-including:
+Where evidence exists, OTHI shall consider 5 exact condition domains:
+- thermal condition;
+- loading;
+- phase/neutral behavior;
+- voltage/power-factor/frequency behavior;
+- oil/protection status.
 
--   thermal condition;
--   loading;
--   phase/neutral behavior;
--   voltage/power-factor/frequency behavior;
--   oil/protection status.
+Evidence items shall declare a `condition_family`. Domain severity $s_d \in [0.0, 1.0]$ shall be evaluated as the maximum severity among eligible non-duplicative condition families in that domain. Derived representations of the same physical condition shall not sum. Secondary penalties across domains shall apply only to semantically distinct condition families.
 
-### FR-HEALTH-003 --- Transparent aggregation
+### FR-HEALTH-003 --- Transparent aggregation (`MAX_PLUS_SECONDARY_V1`)
 
-The terms **domain severity** and **domain penalty** refer to the same
-normalized 0--1 quantity used by OTHI aggregation. **Domain severity** is
-the canonical requirements term; **penalty** is reserved for aggregate
-calculation terminology.
-
-The health calculation shall use the frozen transparent aggregation
-rule:
+The health calculation shall use the versioned `MAX_PLUS_SECONDARY_V1` aggregation rule:
 
 `Base penalty = maximum domain severity`
 
-`Secondary penalty = 0.2 × sum of remaining domain severities`
+`Secondary penalty = 0.20 × sum of remaining non-duplicative domain severities`
 
-`Total penalty = min(1, base penalty + secondary penalty)`
+`Total penalty = min(1.0, base penalty + secondary penalty)`
 
-`OTHI = 100 × (1 − total penalty)`
+`OTHI = round(100 × (1 − total penalty))`
 
-The 0.2 factor shall remain an explicit product-policy parameter.
+The 0.20 factor shall remain an explicit, versioned product-policy parameter, satisfying monotonicity, permutation invariance, max/tie invariance, and saturation clamping.
 
 ### FR-HEALTH-004 --- Domain independence
 
 Individual domain severities shall remain inspectable rather than being
 hidden inside an opaque composite model.
 
-### FR-HEALTH-005 --- Evidence sufficiency
+### FR-HEALTH-005 --- Evidence sufficiency, staleness, and anti-uplift
 
-The system shall withhold a numeric OTHI when the minimum evidence
-requirements are not satisfied.
+The system shall withhold a numeric OTHI when minimum evidence requirements are not satisfied ($\ge 2$ current domains or 1 decisive direct trip required).
+The system shall enforce cadence-based staleness (`CURRENT`, `WARNING_STALE`/`HELD_STALE`, `HARD_STALE`) and the **Anti-Uplift Rule**: loss of observability must never improve health. If missing evidence makes the score appear healthier than the last-known abnormal condition, the system shall withhold numeric `current_othi` and expose `last_valid_othi` with staleness metadata. Categorical health-band transitions shall follow active episode persistence (direct trips immediately transition to `CRITICAL`).
 
 ### FR-HEALTH-006 --- Evidence grade
 
-The system shall provide an evidence grade associated with OTHI.
+The system shall provide a deterministic evidence grade ($A, B, C, U$) associated with OTHI.
 
 ### FR-HEALTH-007 --- Data-quality treatment
 
@@ -644,23 +638,21 @@ domain driving the score.
 
 Where valid temperature history exists, the system shall quantify
 observable thermal exposure such as temperature peaks, time in
-temperature bands, and degree-hours above configured thresholds.
+temperature bands ($T_o > 85^\circ\text{C}, > 95^\circ\text{C}, > 105^\circ\text{C}$), and degree-hours above configured thresholds.
 
-### FR-AGE-002 --- Ageing eligibility
+### FR-AGE-002 --- Capability-specific ageing eligibility
 
-Standards-derived thermal equivalent ageing shall only be enabled when
-the required hot-spot-equivalent temperature, insulation assumptions,
-model validity, units, and data quality are supportable.
+Standards-derived thermal equivalent ageing (C4) shall be decoupled from grey-box ODE promotion (C3). A verified direct hot-spot measurement with a verified insulation profile (`CELLULOSIC_NON_THERMALLY_UPGRADED` or `CELLULOSIC_THERMALLY_UPGRADED`) shall enable relative ageing calculation ($F_{AA}$ / $V$) and equivalent ageing hours ($L_{eq}$) even if the C3 top-oil ODE is unpromoted. Model-derived hot-spot ageing shall require a promoted C3 model. Every standards-derived calculation shall record explicit standard edition metadata (e.g. IEEE Std C57.91-2011 / IEC 60076-7:2018).
 
 ### FR-AGE-003 --- WTI limitation
 
-A winding-temperature indicator shall not automatically be treated as a
+A winding-temperature indicator contact shall not automatically be treated as a
 validated hot-spot measurement without supporting evidence.
 
 ### FR-AGE-004 --- No RUL inference
 
 Thermal ageing calculations shall not be converted into numeric
-remaining useful life without a separately validated
+remaining useful life or failure probabilities without a separately validated
 degradation/end-of-life model and data basis.
 
 ------------------------------------------------------------------------
@@ -672,9 +664,9 @@ degradation/end-of-life model and data basis.
 The system shall provide condition-based maintenance recommendations
 derived from sufficiently supported evidence.
 
-### FR-MNT-002 --- Rule traceability
+### FR-MNT-002 --- Rule traceability and safe advisory wording
 
-Each recommendation shall identify the rule that generated it.
+Each recommendation shall identify the rule that generated it (`MNT-PROT-001` .. `MNT-MODEL-007`), using safe advisory wording ("review", "inspect", "investigate", not confirmed failure). Model/CUSUM-derived thermal recommendations shall be suppressed when the underlying model is unqualified. Upper uncertainty-band crossings alone shall trigger P3 monitoring rather than urgent inspection.
 
 ### FR-MNT-003 --- Evidence requirement
 
@@ -682,18 +674,15 @@ Each recommendation shall identify the evidence required to trigger it.
 
 ### FR-MNT-004 --- Priority
 
-Recommendations shall have an explicit priority.
+Recommendations shall have an explicit priority from the locked hierarchy (`P0 SAFETY`, `P1 URGENT_INSPECTION`, `P2 PLANNED_ACTION`, `P3 MONITOR`, `P4 DATA_OR_MODEL`).
 
-### FR-MNT-005 --- Action window
+### FR-MNT-005 --- Action window and provenance metadata
 
-Recommendations shall communicate an appropriate qualitative action
-window such as immediate, within 24 hours, next authorized maintenance
-window, monitor, or model review.
+Recommendations shall communicate an appropriate qualitative action window (`IMMEDIATE`, `WITHIN_24H`, `NEXT_AUTHORIZED_MAINTENANCE_WINDOW`, `MONITOR`, `MODEL_REVIEW`) accompanied by explicit provenance metadata (`window_provenance_type` $\in$ [`APPLICABLE_STANDARD_OR_GUIDE`, `MANUFACTURER_REQUIREMENT`, `PROTECTION_OR_SITE_PROCEDURE`, `OPERATOR_POLICY`, `ENGINEERING_POLICY`, `DEMO_DEFAULT`], `window_source_reference`, `source_version`, `approved_by`, `binding_vs_advisory`).
 
-### FR-MNT-006 --- Suppression
+### FR-MNT-006 --- Suppression and merging
 
-Data-quality problems shall suppress recommendations that depend on
-invalid or insufficient measurements.
+Data-quality problems shall suppress recommendations that depend on invalid measurements (never P0 protection). Recommendations sharing a `merge_key` shall be merged preserving all supporting rule IDs and adopting the strictest compatible action window. Incompatible recommendations shall escalate to qualified human review.
 
 ### FR-MNT-007 --- Conflict handling
 
@@ -705,10 +694,13 @@ escalate to qualified human review where required.
 Recommendations shall not directly actuate transformer protection or
 control equipment.
 
-### FR-MNT-009 --- Human feedback
+### FR-MNT-009 --- Immutable human feedback ledger
 
-The system shall support acknowledgement and inspection/outcome feedback
-for recommendations.
+The system shall support acknowledgement (`ACKNOWLEDGE`), dismissal (`DISMISS` with actor/reason/rationale), and inspection findings (`INSPECTION_OUTCOME`) via an append-only immutable audit ledger (`POST /v1/feedback`). Historical telemetry, evidence items, and calculated OTHI records shall never be rewritten. P0 safety recommendations cannot be silently dismissed.
+
+### FR-MNT-010 --- Canonical API route
+
+The canonical recommendation endpoint shall be asset-scoped: `GET /v1/assets/{asset_id}/recommendations`.
 
 ------------------------------------------------------------------------
 

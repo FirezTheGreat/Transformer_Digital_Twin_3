@@ -1,0 +1,179 @@
+# ==============================================================================
+# Transformer Digital Twin — Maintenance Rules Specification (Phase 6.3)
+# ==============================================================================
+# Governance: FINAL_ARCHITECTURE_DECISIONS.md, CRITICAL_DECISIONS.md
+# Hierarchy: P0 (SAFETY) > P1 (URGENT) > P2 (PLANNED) > P3 (MONITOR) > P4 (DATA/MODEL)
+# ==============================================================================
+
+version: "1.0.0"
+rules:
+  - rule_id: "MNT-PROT-001"
+    version: "1.0.0"
+    title: "Protection Contact Trip Action"
+    scope: "HARDWARE_PROTECTION"
+    priority: "P0"
+    priority_label: "P0 SAFETY"
+    action_window: "IMMEDIATE"
+    window_provenance_type: "PROTECTION_OR_SITE_PROCEDURE"
+    window_source_reference: "Utility Substation Safety & Protection Operating Procedure (Trip Isolation Standard)"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "Chief Substation Protection Engineer"
+    source_version: "2026.1"
+    consequence_class: "SAFETY_CRITICAL"
+    merge_key: "SAFETY_PROTECTION_TRIP"
+    condition_families:
+      - "DIRECT_PROTECTION_TRIP"
+      - "TRIP_DISCRETE"
+    trigger_signals:
+      - "top_oil_temp_trip"
+      - "breaker_trip"
+      - "buchholz_trip"
+    advisory_wording: "Follow site-approved trip and isolation procedure. Qualified personnel should verify transformer and protection status before return to service."
+    rationale: "Direct hardware protection contact fired. Requires immediate site procedure compliance and safety verification prior to any re-energization."
+    suppress_if_bad_data: false
+
+  - rule_id: "MNT-THERM-002"
+    version: "1.0.0"
+    title: "Thermal Model Deviation / Cooling Stress Inspection"
+    scope: "THERMAL_SUBSYSTEM"
+    priority: "P1"
+    priority_label: "P1 URGENT_INSPECTION"
+    action_window: "WITHIN_24H"
+    window_provenance_type: "OPERATOR_POLICY"
+    window_source_reference: "Utility Condition-Based Maintenance Manual Sec 4.2"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "Substation Maintenance Superintendent"
+    source_version: "2026.1"
+    consequence_class: "THERMAL_ACCELERATED_AGEING"
+    merge_key: "THERMAL_COOLING_STRESS"
+    requires_qualification: true
+    condition_families:
+      - "THERMAL_DEVIATION_UNEXPECTED"
+      - "THERMAL_LIMIT_EXCEEDANCE"
+    trigger_signals:
+      - "top_oil_temperature"
+      - "winding_temperature_indicator"
+    advisory_wording: "Arrange prompt inspection of cooling operation and temperature sensing. Review loading under approved operating procedure."
+    rationale: "Statistically significant or physical thermal deviation detected against expected thermodynamic behavior. Requires prompt cooling and sensing verification."
+    suppress_if_bad_data: true
+
+  - rule_id: "MNT-FORE-003"
+    version: "1.0.0"
+    title: "Thermal Scenario Threshold Exceedance Review"
+    scope: "PREDICTIVE_THERMAL"
+    priority: "P1"
+    priority_label: "P1 URGENT_INSPECTION"
+    action_window: "WITHIN_24H"
+    window_provenance_type: "ENGINEERING_POLICY"
+    window_source_reference: "Digital Twin 2-Hour Thermal Forecast & Loading Guide"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "Asset Strategy Lead"
+    source_version: "2026.1"
+    consequence_class: "OPERATIONAL_OVERLOAD_RISK"
+    merge_key: "THERMAL_PROJECTION"
+    requires_qualification: true
+    condition_families:
+      - "SCENARIO_THRESHOLD_CROSSING"
+    trigger_signals:
+      - "top_oil_temperature"
+      - "active_power_total"
+    advisory_wording: "Review permissible load redistribution or reduction with authorized operator; conditional projection, not a trip command."
+    rationale: "Central thermodynamic projection indicates top-oil limit crossing within 2-hour scenario horizon under current duty."
+    suppress_if_bad_data: true
+
+  - rule_id: "MNT-PHASE-004"
+    version: "1.0.0"
+    title: "Phase Imbalance / Neutral Path Maintenance"
+    scope: "ELECTRICAL_BALANCE"
+    priority: "P2"
+    priority_label: "P2 PLANNED_ACTION"
+    action_window: "NEXT_AUTHORIZED_MAINTENANCE_WINDOW"
+    window_provenance_type: "OPERATOR_POLICY"
+    window_source_reference: "Distribution Feeder Phase Balancing Maintenance Standard"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "Distribution Operations Lead"
+    source_version: "2026.1"
+    consequence_class: "UNEVEN_HEATING_NEUTRAL_STRESS"
+    merge_key: "PHASE_NEUTRAL_IMBALANCE"
+    condition_families:
+      - "PHASE_CURRENT_IMBALANCE"
+      - "NEUTRAL_CURRENT_EXCESS"
+    trigger_signals:
+      - "current_l1"
+      - "current_l2"
+      - "current_l3"
+      - "neutral_current"
+    advisory_wording: "Inspect phase loading, connections, and neutral path during next authorized maintenance window."
+    rationale: "Persistent current imbalance corroborated by neutral return creates uneven winding thermal stress and stray losses."
+    suppress_if_bad_data: true
+
+  - rule_id: "MNT-PF-005"
+    version: "1.0.0"
+    title: "Low Power Factor / Reactive Demand Investigation"
+    scope: "POWER_QUALITY"
+    priority: "P3"
+    priority_label: "P3 MONITOR"
+    action_window: "MONITOR"
+    window_provenance_type: "ENGINEERING_POLICY"
+    window_source_reference: "Utility Reactive Power Management Guideline"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "Grid Modernization Engineer"
+    source_version: "2026.1"
+    consequence_class: "REACTIVE_LOSSES"
+    merge_key: "POWER_FACTOR_REACTIVE"
+    condition_families:
+      - "LOW_POWER_FACTOR"
+    trigger_signals:
+      - "power_factor_total"
+      - "active_power_total"
+      - "reactive_power_total"
+    advisory_wording: "Investigate downstream reactive demand and power factor correction; do not switch equipment from this application."
+    rationale: "Sub-nominal power factor with valid P/Q indicates downstream load reactive demand rather than internal transformer failure."
+    suppress_if_bad_data: true
+
+  - rule_id: "MNT-SENS-006"
+    version: "1.0.0"
+    title: "Sensor Plausibility / Flatline Fault"
+    scope: "DATA_QUALITY_AND_SENSORS"
+    priority: "P4"
+    priority_label: "P4 DATA_OR_MODEL"
+    action_window: "MODEL_REVIEW"
+    window_provenance_type: "ENGINEERING_POLICY"
+    window_source_reference: "Telemetry Data Governance & Sensor Validation Standard"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "OT Systems Lead"
+    source_version: "2026.1"
+    consequence_class: "DATA_QUALITY_DEGRADATION"
+    merge_key: "SENSOR_PLAUSIBILITY_FAULT"
+    condition_families:
+      - "SENSOR_FLATLINE"
+      - "SENSOR_RATE_OF_CHANGE"
+      - "OUT_OF_BOUNDS"
+    trigger_signals:
+      - "all"
+    advisory_wording: "Inspect identified sensor and mapping. Model-dependent conclusions suspended until data quality recovers."
+    rationale: "Sensor flatline, step anomaly, or unphysical value detected. Suspends model dependency until channel is verified."
+    suppress_if_bad_data: false
+
+  - rule_id: "MNT-MODEL-007"
+    version: "1.0.0"
+    title: "Thermal Model Residual / Calibration Review"
+    scope: "MODEL_GOVERNANCE"
+    priority: "P4"
+    priority_label: "P4 DATA_OR_MODEL"
+    action_window: "MODEL_REVIEW"
+    window_provenance_type: "ENGINEERING_POLICY"
+    window_source_reference: "Digital Twin Model Calibration & Validation Policy"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "Chief Data Scientist"
+    source_version: "2026.1"
+    consequence_class: "MODEL_UNCERTAINTY"
+    merge_key: "MODEL_CALIBRATION_DRIFT"
+    condition_families:
+      - "MODEL_CALIBRATION_DRIFT"
+      - "COVERAGE_DEGRADATION"
+    trigger_signals:
+      - "top_oil_expected"
+    advisory_wording: "Review calibration and input mapping; continue direct engineering checks while predictive capability is downgraded."
+    rationale: "Thermal model residual median drift or empirical conformal coverage degradation detected against validation standards."
+    suppress_if_bad_data: true

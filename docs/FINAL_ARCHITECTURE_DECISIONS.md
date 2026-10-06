@@ -573,7 +573,7 @@ The UI and reports use **Transformer Health Index (Operational)**, abbreviated *
 
 That distinction is necessary: established transformer health-index methods commonly use dissolved-gas analysis, oil quality, furan or degree of polymerization, dielectric tests, age, inspection, and component history [S9]. CIGRE recommends consistent scoring by failure mode linked to actions and timing, which supports the domain-and-rule approach used here [S10].
 
-### Domains and severity
+### Domains, evidence families, and severity
 
 | Domain | Evidence included | Evidence excluded |
 | - | - | - |
@@ -583,49 +583,57 @@ That distinction is necessary: established transformer health-index methods comm
 | Voltage, PF, frequency | Verified operating bands and persistent deviations. | Utility-wide power-quality causation. |
 | Oil and protection status | Valid oil level/status, temperature alarm/trip, magnetic oil gauge or breaker status. | DGA, oil chemistry, or inferred internal faults. |
 
-Each domain severity `s_d` is in `[0,1]` and is produced by a versioned piecewise-linear rule between its normal, watch, warning, and critical thresholds. Threshold precedence is:
+Each domain severity $s_d \in [0, 1]$ is produced by a versioned piecewise-linear rule between its normal, watch, warning, and critical thresholds. Threshold precedence is:
 
 1. Verified protection/sensor settings.
-
 2. Verified manufacturer/nameplate limits.
-
 3. A requirement verified from an applicable standard for this asset and cooling/insulation class.
-
 4. Asset-specific empirical deviation calibrated on normal history.
+5. Clearly labeled demo default (`DEMO_DEFAULT`).
 
-5. Clearly labeled demo default.
+#### Evidence-Family Dependency & Deduplication Rules
+- **Condition Families:** Every evidence item belongs to a declared `condition_family` (e.g. `LOADING_STRESS`, `PHASE_UNBALANCE`, `THERMAL_EXCEEDANCE`, `VOLTAGE_DEVIATION`, `DIRECT_PROTECTION_TRIP`).
+- **Within a Domain:** The domain severity $s_d$ is evaluated as the maximum severity among eligible, non-duplicative condition families in that domain. Multiple derived representations of the same physical condition (e.g., $I_{\text{phase}} \to I_{\text{eq}} \to \text{relative load}$, or $P, Q \to S$) are never summed.
+- **Across Domains:** Secondary domain contributions are permitted only when the contributing condition family is semantically distinct. Correlated or dependent observations (e.g., load-derived thermal projection when loading stress is already active, or temperature exceedance when a direct thermal trip contact has fired) do not generate additive secondary penalties.
 
-Within a domain, correlated evidence is deduplicated by lineage and the strongest supported severity wins. Across available independent domains:
+### Aggregation formula: `MAX_PLUS_SECONDARY_V1`
 
 ```text
 base_penalty = max(s_d)
-secondary_penalty = 0.2 * sum(all s_d except the domain attaining base_penalty)
-total_penalty = min(1, base_penalty + secondary_penalty)
+secondary_penalty = 0.20 * sum(all s_d except the domain attaining base_penalty)
+total_penalty = min(1.0, base_penalty + secondary_penalty)
 OTHI = round(100 * (1 - total_penalty))
 ```
 
-This is a transparent rule-based engineering aggregation, not a probability calculation and not a statistically calibrated health score. The worst current domain sets the base penalty; additional independent domain penalties contribute at the explicitly configured **0.2 secondary coefficient**. The coefficient is a visible product-policy parameter, not a learned weight and not a hidden statistical calibration.
+This is a transparent rule-based engineering aggregation (`MAX_PLUS_SECONDARY_V1`), not a probability calculation and not a statistically calibrated health score. The worst current domain sets the base penalty; additional independent domain penalties contribute at the explicitly configured **0.20 secondary coefficient**. The coefficient is a visible **product-policy parameter**, not a learned weight and not a universal standards constant.
 
-| OTHI | State |
-| - | - |
-| 80–100 | Normal |
-| 60–79 | Watch |
-| 40–59 | Warning |
-| 0–39 | Critical |
+Required mathematical invariants include: monotonicity, permutation invariance, max/tie invariance, severe-vs-moderate dominance, duplicate-family invariance, direct-protection dominance ($s_{\text{prot}}=1.0 \implies \text{OTHI}=0$), missing-domain anti-uplift, and saturation clamping to $[0, 100]$.
+
+| OTHI | State | Meaning |
+| - | - | - |
+| 80–100 | Normal | Asset operating within expected engineering boundaries. |
+| 60–79 | Watch | Moderate deviation or persistent minor abnormal evidence in one or more domains. |
+| 40–59 | Warning | Significant operational stress or multi-domain corroboration. |
+| 0–39 | Critical | Severe operating exceedance, direct protection trip, or critical multi-domain risk. |
 
 These are product policy bands, not IEC/IEEE limits. The domain thresholds beneath them carry the engineering source.
 
-### Missing data, quality, and confidence
+### Missing data, staleness, anti-uplift, and confidence
 
-Missing domains are omitted, never scored as healthy or unhealthy. The UI always shows `available domains / possible domains`, the driving domain, and the evidence grade. A numeric OTHI is emitted only when:
-
+Missing domains are omitted from current calculations, never scored as healthy or unhealthy. The UI always shows `available domains / possible domains`, the driving domain, and the evidence grade. A numeric OTHI is emitted only when:
 - at least two current domains have medium-or-better evidence; or
-
 - one valid direct protection/critical-limit domain is decisive.
 
 Otherwise the value is `null` with **Insufficient current evidence** and domain-level observations are still shown.
 
-Bad telemetry lowers evidence grade or makes the index unavailable; it does not lower physical health. At the warning stale limit, the last score remains visible with its timestamp and `STALE`. At the hard stale limit, the current numeric score is withheld.
+#### Hybrid Stale-Domain Policy & Anti-Uplift Rule
+- **Cadence-Based Freshness:** Evaluated against expected asset cadence ($\Delta t_{\text{cadence}}$):
+  - `CURRENT`: fresh valid evidence ($t_{\text{stale}} \le \max(2 \times \Delta t_{\text{cadence}}, 10\,\text{min})$).
+  - `WARNING_STALE` / `HELD_STALE`: held with stale flag; does not count toward fresh evidence gates; downgrades Evidence Grade.
+  - `HARD_STALE`: dropped from current domain computation ($t_{\text{stale}} > \max(4 \times \Delta t_{\text{cadence}}, 60\,\text{min})$).
+- **Anti-Uplift Rule:** *Loss of observability must never silently improve health.* When evaluating OTHI with missing/stale domains, compute the counterfactual including the last uncleared abnormal state. If missing evidence would make the asset appear healthier than the last-known abnormal condition, withhold numeric `current_othi` and serve `last_valid_othi` alongside freshness/staleness metadata.
+- **Protection Latch:** Latched protection trips remain active until explicit verified reset/clearing events. Stale protection telemetry represents loss of observability, not clearance.
+- **Health-Band Transitions:** The raw underlying score is deterministic integer OTHI. Categorical operational band changes follow active episode persistence and recovery windows rather than artificial numerical deadbands.
 
 | Grade | Meaning |
 | - | - |
@@ -642,36 +650,37 @@ The grade is a deterministic evidence classification with reason codes, not a pr
 
 Include thermal exposure in the MVP and implement a gated ageing calculation. Always available when temperature is good are peak temperature, time in configured bands, degree-hours above a verified threshold, and the two-hour conditional threshold projection. These are useful even when insulation properties are unknown.
 
-With the currently supplied development/reference materials, standards-derived ageing is expected to remain **OFF** unless the final CPRI data or verified transformer metadata supplies credible hot-spot semantics and insulation class. The system still reports observed thermal exposure whenever temperature data are valid.
+### Capability-Specific Gating (C4 Decoupled from C3)
+- **C4 Thermal Exposure is NOT globally blocked by C3 grey-box model promotion.**
+- Gating dimensions:
+  1. **Observed Top-Oil Exposure:** Always active whenever valid top-oil telemetry and timestamps exist. Integrates actual $\Delta t$, reports coverage gaps, time in temperature bands ($T_o > 85^\circ\text{C}, > 95^\circ\text{C}, > 105^\circ\text{C}$), and degree-hours.
+  2. **Direct Hot-Spot Exposure & Standards-Derived Ageing:** Enabled when a verified direct hot-spot measurement exists AND an explicit insulation profile is verified—even if the C3 grey-box top-oil ODE is unpromoted or in fallback.
+  3. **Model-Derived Hot-Spot Exposure:** Enabled ONLY when an applicable, validated thermal model is promoted (`C3_predictive = ENABLED`) with verified transformer parameters.
 
-Standards-derived ageing is enabled only when all of the following are true:
+#### Supported Insulation Profiles (Enum)
+- `UNKNOWN` (default; standards-derived ageing is gated/suppressed)
+- `CELLULOSIC_NON_THERMALLY_UPGRADED` (reference temp $98^\circ\text{C}$)
+- `CELLULOSIC_THERMALLY_UPGRADED` (reference temp $110^\circ\text{C}$)
+- `HIGH_TEMPERATURE_OR_HYBRID` (requires manufacturer thermal profile)
+- `OTHER_UNSUPPORTED`
 
-1. A credible winding hot-spot estimate or verified hot-spot-equivalent measurement is present.
+WTI binary alarm/trip contacts MUST NOT be treated as continuous winding hot-spot measurements.
 
-2. The insulation paper class is verified as non-thermally-upgraded or thermally-upgraded.
+### Equations & Standard Versioning
 
-3. The relevant model and units pass validation.
+Any standards-derived ageing calculation must record its explicit standard identifier, edition, and profile metadata (e.g. `standard_id: "IEEE_C57_91_2011"`, `edition: "2011"`).
 
-4. No hard data-quality or extrapolation gate is active.
-
-WTI is not automatically accepted as direct hot-spot truth. If its device semantics are verified as a thermal-image hot-spot indicator, it can support a model-estimated hot spot with the source and uncertainty shown. Otherwise it remains `winding_temperature_indicator` and ageing stays unavailable.
-
-### Equations
-
-For verified non-thermally-upgraded paper:
-
+For verified non-thermally-upgraded paper (IEC 60076-7 / IEEE half-life formulation):
 ```text
 V_k = 2 ^ ((theta_hotspot_k - 98) / 6)
 ```
 
-For verified thermally-upgraded paper:
-
+For verified thermally-upgraded paper (IEEE C57.91-2011 Arrhenius formulation):
 ```text
 V_k = exp(15000 / 383 - 15000 / (theta_hotspot_k + 273))
 ```
 
 For either supported class:
-
 ```text
 equivalent_ageing_hours = sum(V_k * Delta_t_k_hours)
 average_relative_ageing_rate = equivalent_ageing_hours / elapsed_hours
@@ -687,43 +696,49 @@ The strongest replacement is a tuple of current operating condition, thermal exp
 
 ## I. Final maintenance engine
 
-### Rule architecture
+### Rule architecture & Action Provenance
 
-Rules are versioned YAML loaded at startup and validated against a schema. Each rule contains:
+Rules are versioned YAML loaded at startup and validated against a schema. Each rule and emitted recommendation contains:
 
 ```text
 rule_id, version, title, scope, prerequisites, conditions,
 minimum_evidence_grade, severity, consequence_class,
-priority, persistence, action_window, suppress_if, merge_key,
-recommendation_template, rationale_template,
-evidence_fields, source_reference, review_by, expiry
+priority, persistence, action_window,
+window_provenance_type, window_source_reference, source_version,
+approved_by, binding_vs_advisory,
+suppress_if, merge_key, recommendation_template, rationale_template,
+evidence_fields, review_by, expiry
 ```
 
-Priorities are `P0 SAFETY`, `P1 URGENT_INSPECTION`, `P2 PLANNED_ACTION`, `P3 MONITOR`, and `P4 DATA_OR_MODEL`. The engine emits an advisory action, reason, evidence IDs, owner role if configured, `action_window`, and the rule version. `action_window` is a qualitative urgency class such as `IMMEDIATE`, `WITHIN_24H`, `NEXT_AUTHORIZED_MAINTENANCE_WINDOW`, `MONITOR`, or `MODEL_REVIEW`; it is not an invented calendar deadline.
+Priorities are `P0 SAFETY`, `P1 URGENT_INSPECTION`, `P2 PLANNED_ACTION`, `P3 MONITOR`, and `P4 DATA_OR_MODEL`.
 
-### Example locked rules
+#### Action-Window Provenance Types (Enum)
+- `APPLICABLE_STANDARD_OR_GUIDE` (specific inspection/guide clauses)
+- `MANUFACTURER_REQUIREMENT` (nameplate / O&M requirements)
+- `PROTECTION_OR_SITE_PROCEDURE` (utility safety/trip procedures)
+- `OPERATOR_POLICY` (utility maintenance policy)
+- `ENGINEERING_POLICY` (internal utility engineering rules)
+- `DEMO_DEFAULT` (default demonstration parameters, clearly labeled)
 
-| Rule | Trigger | Priority | Action window | Advisory wording |
-| - | - | - | - | - |
-| `MNT-PROT-001` | Valid oil-temperature trip or breaker trip. | P0 | `IMMEDIATE` | “Follow the site-approved trip and isolation procedure. Qualified personnel should verify transformer and protection status before return to service.” |
-| `MNT-THERM-002` | Positive thermal CUSUM warning plus high load or verified cooling alarm. | P1 | `WITHIN_24H` | “Arrange prompt inspection of cooling operation and temperature sensing. Review loading under the approved operating procedure.” |
-| `MNT-FORE-003` | Upper empirical band crosses a verified temperature limit within two hours. | P1 | `WITHIN_24H` | “Review permissible load redistribution or reduction with the authorized operator; this is a conditional projection, not a trip command.” |
-| `MNT-PHASE-004` | Persistent phase imbalance corroborated by neutral current. | P2 | `NEXT_AUTHORIZED_MAINTENANCE_WINDOW` | “Inspect phase loading, connections, and neutral path during the next authorized maintenance window.” |
-| `MNT-PF-005` | Persistent low PF with good P/Q semantics. | P2 | `NEXT_AUTHORIZED_MAINTENANCE_WINDOW` | “Investigate downstream reactive demand and existing compensation settings; do not switch equipment from this application.” |
-| `MNT-SENS-006` | Flatline, impossible step, or cross-signal inconsistency. | P2 | `MODEL_REVIEW` | “Inspect the identified sensor and mapping. Model-dependent conclusions are suspended until data quality recovers.” |
-| `MNT-MODEL-007` | Residual median or interval coverage drift. | P4 | `MODEL_REVIEW` | “Review calibration and input mapping; continue direct engineering checks while the predictive capability is downgraded.” |
+### Locked rules
 
-### Conflict resolution
+| Rule | Trigger | Priority | Action window | Provenance type | Advisory wording |
+| - | - | - | - | - | - |
+| `MNT-PROT-001` | Valid oil-temperature trip or breaker trip contact. | P0 | `IMMEDIATE` | `PROTECTION_OR_SITE_PROCEDURE` | “Follow site-approved trip and isolation procedure. Qualified personnel should verify transformer and protection status before return to service.” |
+| `MNT-THERM-002` | Qualified positive thermal CUSUM warning plus high load or cooling alarm. (Suppressed on Tripura). | P1 | `WITHIN_24H` | `OPERATOR_POLICY` | “Arrange prompt inspection of cooling operation and temperature sensing. Review loading under approved operating procedure.” |
+| `MNT-FORE-003` | Central forecast crosses verified limit (P1) OR upper empirical band crosses limit (P3). | P1 / P3 | `WITHIN_24H` / `MONITOR` | `ENGINEERING_POLICY` | “Review permissible load redistribution or reduction with authorized operator; conditional projection, not a trip command.” |
+| `MNT-PHASE-004` | Persistent phase imbalance corroborated by neutral current. | P2 | `NEXT_AUTHORIZED_MAINTENANCE_WINDOW` | `OPERATOR_POLICY` | “Inspect phase loading, connections, and neutral path during next authorized maintenance window.” |
+| `MNT-PF-005` | Persistent low PF with good P/Q semantics. | P3 | `MONITOR` | `ENGINEERING_POLICY` | “Investigate downstream reactive demand and power factor correction; do not switch equipment from this application.” |
+| `MNT-SENS-006` | Flatline, impossible step, or cross-signal inconsistency. | P4 | `MODEL_REVIEW` | `ENGINEERING_POLICY` | “Inspect identified sensor and mapping. Model-dependent conclusions suspended until data quality recovers.” |
+| `MNT-MODEL-007` | Residual median or interval coverage drift. | P4 | `MODEL_REVIEW` | `ENGINEERING_POLICY` | “Review calibration and input mapping; continue direct engineering checks while predictive capability is downgraded.” |
 
-1. P0 safety/protection advice is always shown first and cannot be suppressed by lower-priority rules.
+### Conflict resolution & Feedback Ledger
 
-2. Recommendations with the same `merge_key` are combined; the strictest urgency wins and all evidence reasons remain visible.
-
-3. A data-quality rule suppresses only model-dependent recommendations that rely on the bad signal.
-
-4. If actions appear incompatible, the system does not choose an operating action. It emits one escalation: “Qualified operations review required,” with both evidence sets.
-
-5. Acknowledgement hides nothing from the audit trail. It changes status to acknowledged and waits for an outcome.
+1. **P0 Safety Precedence:** P0 safety/protection advice is always shown first and cannot be suppressed by lower-priority rules or data quality faults.
+2. **Merging Compatible Recommendations:** Recommendations with the same `merge_key` (e.g. same condition family) are combined; the strictest compatible action window is adopted, preserving all supporting rule IDs and evidence links.
+3. **Data Quality Suppression:** A data-quality rule suppresses only model-dependent recommendations that rely on the bad signal.
+4. **Incompatible Action Escalation:** If actions appear incompatible, the system does not choose an operating action; it emits one escalation: “Qualified operations review required,” preserving both evidence sets.
+5. **Append-Only Feedback Ledger:** Operator acknowledgement (`ACKNOWLEDGE`), dismissal (`DISMISS` with actor/reason/rationale), and inspection findings (`INSPECTION_OUTCOME`) are appended to an immutable audit ledger (`POST /v1/feedback`). Historical telemetry, evidence items, and calculated OTHI records are never rewritten. P0 safety recommendations cannot be silently dismissed. Recurrence reopens new recommendation instances.
 
 The product description is **condition-based and predictive maintenance decision support**. “Predictive” refers narrowly to expected-behavior residuals, thermal threshold approach, and conditional thermal projection. It never means failure prediction or numeric RUL.
 

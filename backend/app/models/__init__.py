@@ -29,6 +29,7 @@ from app.models.anomaly import (
     EvidenceItem,
 )
 from app.models.health import (
+    DomainFreshness,
     DomainHealth,
     EvidenceGrade,
     HealthStatus,
@@ -36,6 +37,7 @@ from app.models.health import (
 )
 from app.models.maintenance import (
     ActionWindow,
+    ActionWindowProvenanceType,
     FeedbackAction,
     MaintenancePriority,
     MaintenanceRecommendation,
@@ -55,6 +57,14 @@ from app.models.scenario import (
     ScenarioProjectionStep,
     ScenarioRequest,
     ThermalTrustState,
+)
+from app.models.exposure import (
+    AgeingStandardMetadata,
+    InsulationProfile,
+    ObservedThermalExposure,
+    StandardsAgeingResult,
+    TemperatureBandExposure,
+    ThermalExposureBundle,
 )
 from app.models.injector import (
     GroundTruthCondition,
@@ -89,12 +99,21 @@ __all__ = [
     "EpisodeState",
     "EvidenceItem",
     # Health
+    "DomainFreshness",
     "DomainHealth",
     "EvidenceGrade",
     "HealthStatus",
     "OTHIBundle",
+    # Exposure
+    "AgeingStandardMetadata",
+    "InsulationProfile",
+    "ObservedThermalExposure",
+    "StandardsAgeingResult",
+    "TemperatureBandExposure",
+    "ThermalExposureBundle",
     # Maintenance
     "ActionWindow",
+    "ActionWindowProvenanceType",
     "FeedbackAction",
     "MaintenancePriority",
     "MaintenanceRecommendation",

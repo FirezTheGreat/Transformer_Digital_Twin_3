@@ -115,7 +115,7 @@ graph TD
   - *Success criteria:* Complete audit report compiled into `docs/TRIPURA_DATASET_AUDIT.md`.
 
 - **1.2 Promotion Feasibility & Chronological Partitioning**
-  - *What is implemented:* Implement feasibility check in audit script: verify $\ge 500$ good points, $\ge 7$ calendar days, adequate load variation, and $\ge 30$ valid 2-hour calibration origins. Partition dataset chronologically: 60% fit, 20% calibration, 20% untouched test, inserting a 2-hour embargo at both boundaries. Author declarative mapping `backend/app/adapters/tripura_map.yaml`.
+  - *What is implemented:* Implement feasibility check in audit script: verify $\ge 500$ good points, $\ge 7$ calendar days, adequate load variation, and $\ge 30$ valid 2-hour calibration origins. Partition dataset chronologically: 60% fit, 20% calibration, 20% test partition, inserting a 2-hour embargo at both boundaries. Author declarative mapping `backend/app/adapters/tripura_map.yaml`.
   - *Tests/checks:* Automated partition verification test asserting boundary timestamps, non-overlapping splits, and embargo gap enforcement.
   - *Success criteria:* Clean partition datasets saved in `data/processed/`; `tripura_map.yaml` locked.
 
@@ -222,10 +222,10 @@ graph TD
     - Evaluate identifiability diagnostics ($N \ge 500$, span $\ge 7\,\text{d}$, load variation $CV \ge 0.10, \text{range} \ge 10\,\text{kVA}$, fold stability $CV(\tau) \le 0.60$, domain boundary checks).
     - Implement 3 baselines: (1) Last-value persistence, (2) Ambient + median training rise, (3) Static robust regression $\text{ambient} + b_0 + b_1 u^2$.
     - Calibrate empirical 90% block-conformal path interval on 20% calibration partition (with resolution floor $s_h \ge 0.50\,^\circ\text{C}$).
-    - Strict lockbox evaluation sequence: `FIT → model decisions → CAL → calibration/threshold decisions → freeze → TEST` (one frozen methodological decision cycle).
+    - Strict one-way frozen evaluation sequence: `FIT → model decisions → CAL → calibration/threshold decisions → freeze → TEST` (one frozen methodological decision cycle; Tripura is development/calibration data with acknowledged historical exposure; deterministic replay of held-out telemetry authorized for runtime demo).
     - **Primary Operational Evaluation:** 2-hour / 8-step conditional forward trajectory projection without future $T_o$ feedback, matching Digital Twin scenario projection semantics. Evaluated against 8-step persistence baseline from identical origins.
-    - **Secondary Sanity-Check Diagnostic:** 1-step (15-minute) closed-loop prediction reported separately.
-    - Evaluate promotion criteria on untouched 20% test partition: 2-hour trajectory MAE $\ge 5\%$ better than 8-step persistence ($1.6527\,^\circ\text{C}$ vs $2.0300\,^\circ\text{C}$, $+18.59\%$), signed bias acceptable ($\le |\text{bias}_{\text{persistence}}| + 0.10\,^\circ\text{C}$), empirical 90% interval attains 80–98% marginal coverage (observed 94.04%), no safety-critical threshold missed in scenario tests.
+    - **Secondary Sanity-Check Diagnostic:** 1-step (15-minute) closed-loop prediction reported separately ($0.7252\,^\circ\text{C}$ vs $0.7456\,^\circ\text{C}$, $+2.73\%$).
+    - Evaluate promotion criteria on 20% test partition: 2-hour trajectory MAE $\ge 5\%$ better than 8-step persistence ($1.6527\,^\circ\text{C}$ vs $2.0300\,^\circ\text{C}$, $+18.59\%$), empirical 90% interval attains 80–98% marginal coverage (observed $97.33\%$). The model remains `NOT_PROMOTED` due to boundary hit $\tau = 0.5000\,\text{h}$ and trajectory signed bias ($+0.25\,^\circ\text{C}$ vs $+0.05\,^\circ\text{C}$), honestly invoking capability gating (`C3` disabled / fallback active).
   - *Tests/checks:* Verification script checking parameter positivity, calibration determinism, 2-hour trajectory evaluation, and model card metric output.
   - *Success criteria:* Model parameters and empirical conformal bounds recorded in model registry with exact dataset hash.
 

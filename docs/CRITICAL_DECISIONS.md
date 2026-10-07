@@ -155,13 +155,13 @@ Use them as plausibility checks where appropriate.
 
 ## Thermal load-driver selection on FIT-only data
 
-Status: DECIDED_PENDING_IMPLEMENTATION
+Status: DECIDED_LOCKED
 
 Team Decision (Locked):
 - The thermal model may use either apparent power `S` or RMS-equivalent phase current `I_eq` as its load driver.
 - This selection must be made strictly on **FIT-only data** using a predeclared rolling-origin predictive metric (not in-sample fit error).
 - Criteria include predictive performance and stability across chronological FIT folds.
-- Once selected: frozen before CAL; CAL cannot switch driver; TEST is not used; TEST remains untouched lockbox.
+- Once selected: frozen before CAL; CAL cannot switch driver; TEST is not used for driver selection or model fitting.
 - Selected driver documented with evidence and provenance.
 
 ---
@@ -222,28 +222,35 @@ Team Decision (Locked):
 3. **Methodological Correction Rationale:**
    - Comparing a 50-day free-running open-loop simulation against a 1-step 15-minute persistence baseline was flawed and asymmetric.
    - The grey-box ODE attains $+18.59\%$ MAE improvement on the fair 2-hour trajectory evaluation ($1.6527\,^\circ\text{C}$ vs $2.0300\,^\circ\text{C}$), beating persistence across all horizons $h=1 \dots 8$.
-4. **Promotion Criteria:**
-   - $\ge 5\%$ aggregate 2-hour trajectory MAE improvement vs 8-step persistence.
-   - Trajectory signed bias $|\text{bias}_{\text{greybox}}| \le |\text{bias}_{\text{persistence}}| + 0.10\,^\circ\text{C}$.
-   - Empirical 90% conformal path coverage within $[80\%, 98\%]$.
-   - Calibrated parameters remain unchanged: $\beta_0 = 1.0880\,^\circ\text{C}, \beta_1 = 2.8979\,^\circ\text{C}, \tau = 0.5000\,\text{h}$, driver `rms_current_a`.
+4. **Promotion Criteria & Current Model Status:**
+   - $\ge 5\%$ aggregate 2-hour trajectory MAE improvement vs 8-step persistence (Passed: $+18.59\%$).
+   - Trajectory signed bias $|\text{bias}_{\text{greybox}}| \le |\text{bias}_{\text{persistence}}| + 0.10\,^\circ\text{C}$ (Failed: $+0.25\,^\circ\text{C}$ vs $+0.05\,^\circ\text{C}$).
+   - Empirical 90% conformal path coverage within $[80\%, 98\%]$ (Passed: $97.33\%$).
+   - Calibrated parameters: $\beta_0 = 1.0880\,^\circ\text{C}, \beta_1 = 2.8979\,^\circ\text{C}, \tau = 0.5000\,\text{h}$, driver `rms_current_a`.
+   - Current status: `NOT_PROMOTED` (boundary $\tau = 0.5\,\text{h}$ and trajectory bias failure; `C3` predictive capability cleanly gated/disabled).
 
 ---
 
-## One-shot test evaluation discipline
+## Frozen Evaluation Discipline & Dataset Provenance Rules
 
 Status: DECIDED_LOCKED
 
 Team Decision (Locked):
-- Strict methodological sequence: `FIT → model/design decisions → CAL → calibration/threshold/uncertainty decisions → freeze → TEST`.
-- After observing TEST results:
-  - Do NOT change model family.
-  - Do NOT change load driver.
-  - Do NOT change parameter bounds.
-  - Do NOT change thresholds.
-  - Do NOT cherry-pick intervals.
-  - Do NOT modify promotion criteria.
-- "One-shot TEST" means **one frozen methodological decision cycle**, not literally one program execution. Deterministic reruns of the exact frozen methodology are allowed.
+- **Tripura Dataset Role & Historical Provenance:**
+  - Tripura telemetry (`tripura_dt_01`) is the development, calibration, and unit-testing dataset for the project, not the final hackathon competition holdout.
+  - During early Phase 4 development, the Tripura TEST partition was inspected while the evaluation methodology was being refined (specifically, an earlier 1-step diagnostic was evaluated before the 2-hour / 8-step forward trajectory was formalized).
+  - Therefore, the Tripura TEST partition is accurately documented as a development/test evaluation partition, NOT a scientifically pristine, never-before-seen lockbox.
+  - The implementation strictly adheres to the frozen one-way sequence:
+    $$\text{FIT (fit/model)} \longrightarrow \text{CAL (calibration/uncertainty)} \longrightarrow \text{FREEZE} \longrightarrow \text{TEST (evaluate)}$$
+  - No model parameters, load drivers, or loss scales are fitted on TEST.
+- **Future-Proofing Rules for Future / Hackathon Holdout Datasets:**
+  1. *Freeze before TEST:* All methodology, models, drivers, bounds, horizons, metrics, thresholds, uncertainty algorithms, and promotion rules must be frozen before evaluating on holdout TEST data.
+  2. *No tuning against TEST:* Never use TEST performance to select or change model families, load drivers, parameters, bounds, horizons, metrics, thresholds, uncertainty intervals, exclusions, or promotion criteria.
+  3. *Accept model weaknesses:* If TEST reveals a genuine model weakness, accept the result and allow capability gating / fallback to activate honestly, rather than tuning against TEST.
+  4. *Software defect remediation:* If a verified software defect invalidates TEST (e.g. CLI crash, logging bug, indexing error, reporting typo), document the invalid run, fix the defect with the minimal code change, and rerun the *exact same* frozen methodology; do NOT redesign based on TEST results.
+  5. *Burned TEST policy:* If TEST results are used to redesign or tune the methodology, that TEST partition is considered burned and an unseen holdout dataset is required for final scientific evaluation.
+- **Deterministic Replay Authorization:**
+  - Deterministic replay of held-out / TEST partition telemetry is explicitly permitted for live runtime simulation and interactive UI demonstration because replay ingests telemetry through the runtime state engine and does not retrain, calibrate, or modify model parameters or thresholds.
 
 ---
 

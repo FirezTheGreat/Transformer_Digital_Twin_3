@@ -134,15 +134,22 @@ If an implementation detail exposes a conflict with the locked architecture:
 
 ---
 
-## 10. Development Data vs. Runtime Data Separation
+## 10. Development Data vs. Runtime Data Separation & Evaluation Discipline
 
 Strictly preserve the separation between different data classes:
-- **Historical Development Data:** Tripura telemetry used exclusively for 60/20/20 train/calibration/test splits, fitting, and single-shot evaluation.
-- **Held-Out Replay Data:** Unseen test partition telemetry used for live runtime simulation.
+- **Historical Development Data (Tripura):** Tripura telemetry (`tripura_dt_01`) is used for development, calibration, and regression testing under a 60/20/20 chronological partition (`FIT` $\to$ `CAL` $\to$ `TEST`). Due to earlier exploratory analysis during methodology development, the Tripura TEST partition is documented as a development evaluation set, not a pristine final scientific lockbox.
+- **Held-Out Replay Telemetry:** Telemetry from the held-out/test period is explicitly authorized for live runtime simulation and interactive operator demonstration via deterministic replay (`POST /v1/replay`), because replay executes the runtime state engine without fitting or modifying model parameters.
 - **Synthetic Scenario Data:** Controlled anomaly injections, strictly labeled with `SYNTHETIC_SCENARIO`.
-- **Runtime Telemetry:** Incoming canonical events received via REST endpoints.
+- **Runtime Telemetry:** Incoming canonical events received via REST endpoints (`POST /v1/telemetry`).
 - **Reference / Commissioning Data:** `Draft Data for Condition Monitoring.xlsx` used purely as an adapter/tolerance reference, never as telemetry training data or asset rating source.
 - Never mix or leak data between these partitions.
+
+**Rules for Future CPRI / Hackathon Holdout Datasets:**
+1. *Freeze Before TEST:* Freeze all model families, load drivers, parameter bounds, optimization grids, forecasting horizons, evaluation metrics, anomaly thresholds, uncertainty interval algorithms, data exclusions, and promotion criteria prior to evaluating the holdout TEST partition.
+2. *No Tuning Against TEST:* Never use TEST performance to select or change model families, load drivers, parameters, bounds, horizons, metrics, thresholds, uncertainty intervals, exclusions, or promotion criteria.
+3. *Accept Model Weaknesses:* If TEST reveals a genuine model weakness, accept the result and allow capability qualification / fallback to activate honestly, rather than tuning against TEST.
+4. *Software Defect Remediation:* If a verified software defect invalidates TEST (e.g., CLI crash, logging exception, indexing bug, reporting key mismatch), document the invalid run, fix the software defect with the smallest possible code change, and rerun the *exact same* frozen methodology. Do NOT redesign or retune the methodology based on the TEST result.
+5. *Burned TEST Policy:* If TEST results are ever used to redesign, tune, or select the methodology, that TEST partition is considered burned and an unseen holdout dataset is mandatory for final scientific evaluation.
 
 ---
 

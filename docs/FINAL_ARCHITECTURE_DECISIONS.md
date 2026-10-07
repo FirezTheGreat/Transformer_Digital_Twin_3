@@ -332,7 +332,7 @@ where load_driver is selected from candidates:
 ```
 
 **Load Driver Selection Protocol (Locked):**
-The selection between apparent power `S` and RMS-equivalent current `I_eq` is evaluated strictly on **FIT-only data** using a predeclared rolling-origin predictive metric (not in-sample fit error) assessing predictive accuracy and parameter stability across chronological FIT folds. Once selected on FIT, the winning driver is frozen before CAL. CAL is not permitted to switch the driver, and TEST is never used for driver selection (TEST remains a pristine untouched lockbox). Provenance and selection metrics are recorded in the model metadata.
+The selection between apparent power `S` and RMS-equivalent current `I_eq` is evaluated strictly on **FIT-only data** using a predeclared rolling-origin predictive metric (not in-sample fit error) assessing predictive accuracy and parameter stability across chronological FIT folds. Once selected on FIT, the winning driver is frozen before CAL. CAL is not permitted to switch the driver, and TEST is never used for driver selection or model parameter fitting. Provenance and selection metrics are recorded in the model metadata.
 
 The state update for irregular interval `Δt_k` hours is:
 
@@ -359,28 +359,37 @@ top_oil_hat_k = top_oil_hat_k-1
 
 The model is promotable only if the fit partition contains at least 500 good points, at least seven calendar days, adequate load variation, no unresolved unit semantics, and at least 30 valid two-hour calibration origins. If the parameter solution sits on a bound, varies materially across rolling folds, or fails the holdout promotion tests, it is marked unidentifiable and the fallback is used.
 
-### Calibration procedure & TEST discipline
+### Calibration procedure & evaluation discipline
 
 1. Seal alarm, trip, and protection columns before feature construction. They are not used for filtering, fitting, thresholds, or model selection.
 
 2. Deduplicate, sort by event time, and retain irregular `Δt`. Do not interpolate across long gaps.
 
-3. Split each asset chronologically into 60% fit, 20% calibration, and 20% untouched test, with a two-hour embargo at both boundaries.
+3. Split each asset chronologically into 60% fit, 20% calibration, and 20% test partition, with a two-hour embargo at both boundaries.
 
 4. On **FIT (60%)**: Select load driver using $K=5$ expanding-window chronological rolling-origin predictive metrics. Fit `beta_0`, `beta_1`, and `tau` with bounded Huber loss ($\delta = 1.345 \cdot \sigma_{\text{fit}}$ where $\sigma_{\text{fit}} = 1.4826 \cdot \text{MAD}(\text{residuals}_{\text{fit}})$) over a deterministic log grid within the unified domain $\tau \in [0.5, 24.0]\,\text{hours}$, nonnegative coefficients ($\beta_0 \ge 0, \beta_1 \ge 0$), and a fixed local refinement inside the same $[0.5, 24.0]\,\text{h}$ bounds. Check parameter identifiability (including fold stability gate $CV(\tau) \le 0.60$ and boundary checks). Freeze model parameters and driver before CAL.
 
 5. On **CAL (20%)**: Calibrate residual scales, CUSUM limits, and empirical block-conformal uncertainty intervals only (with measurement-resolution scale floor $s_h \ge 0.50\,^\circ\text{C}$ reflecting observed $\sim 1\,^\circ\text{C}$ integer quantization). Freeze all decision thresholds and uncertainty bounds before TEST.
 
-6. On **TEST (20%)**: Promote once against the untouched test partition. Record all metrics and the exact data hash.
+6. On **TEST (20%)**: Evaluate once against the frozen test partition. Record all metrics, promotion decisions, and dataset SHA-256 hashes in the model card artifact.
 
-**TEST Lockbox Rule:**
-The sequence `FIT → model decisions → CAL → calibration/threshold decisions → freeze → TEST` is strictly one-way. "One-shot TEST" means **one frozen methodological decision cycle**, not literally one program execution. Deterministic reruns of the exact frozen methodology are permitted. After observing TEST results:
-- Do NOT change the model family.
-- Do NOT change the load driver.
-- Do NOT change parameter bounds or solver grids.
-- Do NOT alter anomaly thresholds or CUSUM limits.
-- Do NOT cherry-pick demo intervals.
-- Do NOT modify the promotion criteria.
+**Tripura Historical Provenance & Dataset Role:**
+The Tripura telemetry (`tripura_dt_01`) serves as the engineering development, calibration, and regression test dataset for building, auditing, and hardening this digital twin codebase. It is not the final hackathon competition evaluation holdout (which will be provided as simulated test datasets). During earlier Phase 4 development, the Tripura TEST partition was inspected while the evaluation methodology was still being refined (specifically, an earlier 1-step diagnostic was evaluated before the 2-hour / 8-step forward trajectory was formalized as the primary operational evaluation). Therefore, the Tripura TEST partition is accurately documented as a development/test evaluation partition, NOT a scientifically pristine, never-before-seen holdout.
+
+The implementation strictly maintains and enforces the frozen sequence:
+$$\text{FIT (model/driver/params)} \longrightarrow \text{CAL (uncertainty/thresholds)} \longrightarrow \text{FREEZE} \longrightarrow \text{TEST (evaluation)}$$
+No parameters, load drivers, loss scales, or conformal bounds are fitted or tuned on TEST. On the current frozen Tripura evaluation, the grey-box ODE attains an aggregate $+18.59\%$ 2-hour trajectory MAE improvement over persistence ($1.6527\,^\circ\text{C}$ vs $2.0300\,^\circ\text{C}$), but remains `NOT_PROMOTED` because $\tau$ hits the lower identifiability boundary ($0.5000\,\text{h}$) and signed trajectory bias ($+0.25\,^\circ\text{C}$ vs $+0.05\,^\circ\text{C}$) exceeds persistence bias.
+
+**Future-Proofing Rules for Future / Hackathon Holdout Datasets:**
+For any future unseen dataset (e.g. final CPRI / hackathon evaluation datasets), the following 5 rules are mandatory and non-negotiable:
+1. **Freeze Methodology Before TEST:** All model families, load drivers, parameter bounds, optimization grids, forecasting horizons, evaluation metrics, anomaly thresholds, uncertainty interval algorithms, data exclusions, and promotion criteria must be completely declared and frozen before evaluating the holdout TEST partition.
+2. **No Tuning Against TEST:** Never use TEST performance to select, adjust, or change model families, load drivers, parameters, bounds, horizons, metrics, thresholds, uncertainty intervals, exclusions, or promotion criteria.
+3. **Accept Model Weaknesses:** If TEST evaluation reveals a genuine model weakness, accept the result and allow the capability qualification / fallback architecture to activate honestly, rather than tuning the model or altering thresholds against TEST.
+4. **Software Defect Remediation vs. Methodological Changes:** If a verified software defect invalidates TEST (e.g. a CLI crash, logging exception, indexing typo, or reporting dictionary key lookup bug), document the invalid run, fix the software defect with the smallest possible code change, and rerun the *exact same* frozen methodology. Do NOT redesign or retune the methodology based on the TEST result.
+5. **Burned TEST Holdout Policy:** If TEST results are ever used to redesign, tune, or select the methodology, that TEST partition is permanently considered burned and a later, genuinely unseen holdout dataset is required for final scientific evaluation.
+
+**Deterministic Replay Authorization:**
+Deterministic replay of held-out / TEST partition telemetry (via `POST /v1/replay` or CLI replay) is explicitly authorized for live runtime simulation, state propagation, and interactive operator demonstration. Replay executes the frozen runtime twin state engine (ingestion, reduction, anomaly detection, fallback gating) and does not train, calibrate, optimize, or modify model parameters or thresholds.
 
 Long gaps greater than the hard stale limit terminate a residual sequence. The next good top-oil measurement reinitializes state and starts a warm-up period of `max(4 samples, tau)` before model residuals can escalate.
 
@@ -435,7 +444,7 @@ Use a 90% **block-calibrated empirical path interval** for the eight 15-minute s
 
 4. Take the finite-sample 90th percentile of block scores and expand each horizon by that score times its horizon scale.
 
-5. Report realized marginal and whole-path coverage and mean width on the untouched test set.
+5. Report realized marginal and whole-path coverage and mean width on the test partition.
 
 Block conformal methods explicitly address serial dependence, but no unconditional 90% guarantee is claimed under regime change [S7]. The UI and reports therefore say **empirical 90% interval; test coverage X%**, not “90% confidence.” Quality problems, extrapolation beyond the calibrated load range, a gap, or a low evidence grade widen the band with a documented multiplier or disable the projection.
 
@@ -448,7 +457,7 @@ Outputs are peak projected top-oil, empirical band, earliest threshold crossing 
 ### Baselines and promotion
 
 #### Primary Operational Evaluation (2-Hour Multi-Step Trajectory)
-The primary evaluation horizon on the untouched TEST lockbox is the **2-hour / 8-step conditional forward trajectory projection** ($h = 1 \dots 8 \times 15\,\text{min}$ steps):
+The primary evaluation horizon on the TEST partition is the **2-hour / 8-step conditional forward trajectory projection** ($h = 1 \dots 8 \times 15\,\text{min}$ steps):
 - **Forecast origin:** Initialized from the actual observed top-oil temperature at the forecast origin ($T_{o,0} = T_{o,\text{obs}}$).
 - **Forward rollout:** 8 steps forward without receiving future observed top-oil feedback during the rollout.
 - **Scenario inputs:** Ambient temperature and load index held constant over the 2-hour window following standard Digital Twin scenario projection semantics.
@@ -462,15 +471,15 @@ As a secondary sanity-check diagnostic, 1-step (15-minute) closed-loop predictio
 #### Evaluation-Methodology Correction Rationale
 Comparing a multi-week/50-day free-running open-loop simulation error against a 15-minute 1-step persistence baseline was methodologically invalid and asymmetric. When evaluated fairly across identical forecasting horizons, the grey-box ODE outperforms persistence across all horizons ($h=1 \dots 8$) and attains an aggregate 2-hour path MAE improvement of **$+18.59\%$** ($1.6527\,^\circ\text{C}$ vs $2.0300\,^\circ\text{C}$).
 
-#### Promotion Criteria
+#### Promotion Criteria & Current Model Status
 The model is promoted on TEST if:
-1. **MAE Improvement:** 2-hour trajectory aggregate MAE improves on 8-step persistence by at least **5%** ($MAE_{\text{greybox}} \le 0.95 \cdot MAE_{\text{persistence}}$).
-2. **Bias Criterion:** Absolute signed bias on the 2-hour trajectory is acceptable ($\le |\text{bias}_{\text{persistence}}| + 0.10\,^\circ\text{C}$).
-3. **Conformal Coverage:** Test empirical 90% conformal path coverage falls within the expected $[80\%, 98\%]$ band.
-4. **Identifiability Criterion:** Fitted parameters do not sit on artificial optimization bounds and satisfy stability across rolling folds.
-5. **Scenario Safety:** No safety-critical threshold crossing is missed in labeled scenario tests.
+1. **MAE Improvement:** 2-hour trajectory aggregate MAE improves on 8-step persistence by at least **5%** ($MAE_{\text{greybox}} \le 0.95 \cdot MAE_{\text{persistence}}$). *(Passed: $+18.59\%$)*
+2. **Bias Criterion:** Absolute signed bias on the 2-hour trajectory is acceptable ($\le |\text{bias}_{\text{persistence}}| + 0.10\,^\circ\text{C}$). *(Failed: $+0.25\,^\circ\text{C}$ vs $+0.05\,^\circ\text{C}$)*
+3. **Conformal Coverage:** Test empirical 90% conformal path coverage falls within the expected $[80\%, 98\%]$ band. *(Passed: $97.33\%$)*
+4. **Identifiability Criterion:** Fitted parameters do not sit on artificial optimization bounds and satisfy stability across rolling folds. *(Failed: $\tau = 0.5000\,\text{h}$ hits boundary)*
+5. **Scenario Safety:** No safety-critical threshold crossing is missed in labeled scenario tests. *(Passed)*
 
-Failure to promote downgrades capability (`C3` predictive capability disabled / fallback invoked); it does not stop the rest of the twin.
+**Current Tripura Status:** `NOT_PROMOTED`. Because criteria (2) and (4) are not satisfied, capability qualification cleanly disables autonomous forecasting (`C3` disabled / fallback invoked) while preserving descriptive monitoring and electrical analytics. This honest capability gating proves the architecture works as intended without masking model limitations.
 
 
 ## E. AI/ML scope reconciliation
@@ -1014,7 +1023,7 @@ The system is “working” only when all of the following pass:
 
 4. The primary thermal model meets its promotion tests; otherwise the capability manifest correctly falls back without false predictive claims.
 
-5. The reported empirical 90% interval coverage and width match the untouched test computation exactly.
+5. The reported empirical 90% interval coverage and width match the holdout test computation exactly.
 
 6. Every hard-limit and direct-trip golden scenario produces the intended severity and safe wording; no model-only evidence creates CRITICAL.
 
@@ -1153,7 +1162,7 @@ The backend exposes the 12 canonical MVP endpoints:
 | Development data | Keep Tripura as primary development data; audit semantics before use. | It contains relevant electrical and thermal indicators over a long 15-minute series. | [S22] | High |
 | Final demo data | Use the CPRI/hackathon-provided simulated dataset as the final demo target through the canonical adapter. | The official problem statement explicitly requires the solution to work with simulated datasets provided during the hackathon. | Official problem statement | High |
 | External data | Do not merge datasets. A Norwegian 2024 direct-monitoring dataset may be used only as a separate external robustness benchmark if needed; no parameters transfer and raw redistribution is not assumed. | It contains voltage/current, ambient, top-oil and winding-temperature measurements plus clamping-force data from a 40 MVA ONAN transformer in southern Norway. | [S21] | Medium |
-| Data split | Per-asset chronological 60/20/20 with two-hour embargo. | Separates fit, calibration, and untouched evaluation. | Time-series design; [S7]. | High |
+| Data split | Per-asset chronological 60/20/20 with two-hour embargo. | Separates fit, calibration, and frozen test evaluation. | Time-series design; [S7]. | High |
 | Synthetic scenarios | Use controlled injection for logic/sensitivity only, clearly labeled synthetic. | Necessary for failure paths, but not real-fault accuracy evidence. | Validation decision. | High |
 | Production path | Keep canonical contracts, reducer, models, rules, facts, APIs, and UI; replace local transport/storage/orchestration. | Protects hackathon investment without pretending DuckDB is a fleet platform. | Architecture decision. | High |
 
@@ -1167,7 +1176,7 @@ The following wording is safe for the presentation, demo, and documentation **on
 
 - “It estimates expected top-oil behavior and shows a two-hour conditional thermal projection under explicit load and ambient assumptions.”
 
-- “When the thermal model is promoted, its 90% band is empirically block-calibrated, and we report the actual untouched-test coverage.”
+- “When the thermal model is promoted, its 90% band is empirically block-calibrated, and we report the actual holdout test coverage.”
 
 - “When CUSUM passes its calibration gate, it detects persistent contextual deviations with robust residuals and CUSUM; otherwise CUSUM is explicitly disabled while direct checks remain active.”
 

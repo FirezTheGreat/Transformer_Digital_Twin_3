@@ -96,20 +96,25 @@ def main() -> None:
     print("-" * 78)
     if artifact.metadata and "secondary_1step_closed_loop" in artifact.metadata:
         sec = artifact.metadata["secondary_1step_closed_loop"]
+        sec_g_mae = sec.get("greybox_mae_degc", sec.get("greybox_1step_mae_degc", 0.0))
+        sec_g_rmse = sec.get("greybox_rmse_degc", sec.get("greybox_1step_rmse_degc", 0.0))
+        sec_g_bias = sec.get("greybox_bias_degc", sec.get("greybox_1step_bias_degc", 0.0))
+        sec_p_mae = sec.get("persistence_mae_degc", sec.get("persistence_1step_mae_degc", 0.0))
+        sec_imp = sec.get("mae_improvement_pct", 0.0)
         print(f"SECONDARY SANITY CHECK:    1-Step (15-min) Closed-Loop Prediction")
-        print(f"  Grey-Box ODE 1-Step MAE:         {sec.get('greybox_1step_mae_degc', 0.0):.4f} °C  (RMSE: {sec.get('greybox_1step_rmse_degc', 0.0):.4f} °C, Bias: {sec.get('greybox_1step_bias_degc', 0.0):+.4f} °C)")
-        print(f"  Persistence 1-Step MAE:          {sec.get('persistence_1step_mae_degc', 0.0):.4f} °C")
-        print(f"  1-Step MAE Improvement:          {sec.get('mae_improvement_pct', 0.0):+.2f}%")
+        print(f"  Grey-Box ODE 1-Step MAE:         {sec_g_mae:.4f} °C  (RMSE: {sec_g_rmse:.4f} °C, Bias: {sec_g_bias:+.4f} °C)")
+        print(f"  Persistence 1-Step MAE:          {sec_p_mae:.4f} °C")
+        print(f"  1-Step MAE Improvement:          {sec_imp:+.2f}%")
     print("-" * 78)
     if artifact.metadata and "horizon_breakdown" in artifact.metadata:
         print("HORIZON BREAKDOWN (h = 1..8 steps / 15..120 min):")
         print(f"  {'Horizon':<10} | {'Grey-Box MAE':<14} | {'Persist MAE':<14} | {'Diff (°C)':<12} | {'Improvement':<12}")
         for h_info in artifact.metadata["horizon_breakdown"]:
             h = h_info["horizon_step"]
-            g_mae = h_info["mae_degc"]
-            p_mae = h_info["persistence_mae_degc"]
+            g_mae = h_info.get("model_mae_degc", h_info.get("mae_degc", 0.0))
+            p_mae = h_info.get("persistence_mae_degc", 0.0)
             diff = g_mae - p_mae
-            imp = ((p_mae - g_mae) / p_mae) * 100 if p_mae > 0 else 0.0
+            imp = h_info.get("mae_improvement_pct", ((p_mae - g_mae) / p_mae) * 100 if p_mae > 0 else 0.0)
             print(f"  h={h:<8} | {g_mae:<14.4f} | {p_mae:<14.4f} | {diff:<+12.4f} | {imp:<+11.2f}%")
     print("-" * 78)
     print(f"PROMOTION DECISION:        {artifact.promotion.status}")

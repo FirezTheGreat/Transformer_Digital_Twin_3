@@ -13,7 +13,7 @@
 
 > [!NOTE]
 > **PREREQUISITE DATA-VOLUME & CALIBRATION FEASIBILITY: PASS**  
-> The Tripura dataset satisfies prerequisite criteria (valid sample count >= 500, calendar span >= 7 days, continuous 2-hour calibration origins >= 30, and dynamic load variation) to attempt first-order grey-box thermal calibration in Phase 4. Thermal model parameter fitting, validation, and holdout promotion remain strictly pending Phase 4. C3 predictive capability remains pending model promotion. C4 thermal exposure is unavailable unless supportable hot-spot semantics and verified insulation class are established.
+> The Tripura dataset (`tripura_dt_01`) satisfies prerequisite criteria (valid sample count >= 500, calendar span >= 7 days, continuous 2-hour calibration origins >= 30, and dynamic load variation) to attempt first-order grey-box thermal calibration. This dataset serves as the project's engineering development and calibration dataset (with acknowledged historical exposure during early methodology development), while unseen simulated datasets will serve as the final hackathon evaluation target. On the frozen Tripura evaluation, the model achieved +18.59% 2-hour MAE improvement but remains `NOT_PROMOTED` due to boundary hit $\tau = 0.5\,\text{h}$ and trajectory bias, cleanly exercising the `C3` fallback gating.
 
 ---
 
@@ -174,8 +174,9 @@
 
 ---
 
-## 8. Preserved Raw Data Integrity
+## 8. Preserved Raw Data Integrity & Development Partitioning
 
 - All raw CSV files under `data/tripura_raw/` remain untouched and bit-exact.
 - No raw data has been renamed, interpolated, imputed, or modified.
-- Downstream processing in Phase 1, Substep 1.2 will create versioned, immutable partitioned Parquet files in `data/processed/` with strict embargo gaps.
+- Downstream processing created versioned, immutable partitioned Parquet files in `data/processed/` (`tripura_fit.parquet`, `tripura_calibration.parquet`, `tripura_test.parquet`) with strict two-hour embargo gaps.
+- The Tripura dataset is the development/calibration baseline for Phase 1–7 engineering; holdout evaluations on unseen simulated datasets will serve as the final competition benchmarks.

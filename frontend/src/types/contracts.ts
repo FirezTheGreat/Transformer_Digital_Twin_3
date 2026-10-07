@@ -337,3 +337,79 @@ export interface FactBundle {
   provenance_hash: string;
   bundle_version: string;
 }
+
+// ==========================================
+// 9. API Request & Response Contracts
+// ==========================================
+
+export interface TelemetryIngestionRequest {
+  event?: CanonicalEvent | null;
+  events?: CanonicalEvent[];
+  frame?: RawTelemetryFrame | null;
+  frames?: RawTelemetryFrame[];
+  asset_id?: string | null;
+}
+
+export interface TelemetryIngestionResponse {
+  status: string;
+  ingested_count: number;
+  asset_id: string;
+  latest_state_sequence?: number | null;
+  latest_state_hash?: string | null;
+  latest_watermark_utc?: string | null;
+}
+
+export interface ReplayControlRequest {
+  action: 'start' | 'pause' | 'resume' | 'step' | 'reset' | 'seek';
+  speed_multiplier?: number;
+  batch_size?: number;
+  start_time_utc?: string | null;
+  end_time_utc?: string | null;
+  seek_position?: number | null;
+  asset_id?: string | null;
+}
+
+export interface ReplayStatusResponse {
+  status: string;
+  current_time_utc?: string | null;
+  speed_multiplier: number;
+  processed_events: number;
+  total_events: number;
+  is_completed: boolean;
+  current_state_sequence?: number | null;
+  highest_tier?: CapabilityTier | null;
+}
+
+export interface AssetStateResponse {
+  asset_id: string;
+  state_time_utc: string;
+  highest_tier: CapabilityTier;
+  twin_state: TwinState;
+  fact_bundle?: FactBundle | null;
+}
+
+export interface HistoryResponse {
+  asset_id: string;
+  start_time_utc?: string | null;
+  end_time_utc?: string | null;
+  event_count: number;
+  events: CanonicalEvent[];
+}
+
+export interface OperatorFeedbackRequest {
+  feedback_id?: string | null;
+  asset_id: string;
+  timestamp_utc?: string | null;
+  recommendation_id?: string | null;
+  merge_key?: string | null;
+  action: string;
+  operator_id: string;
+  actor_id?: string | null;
+  reason_code?: string | null;
+  notes?: string | null;
+  rationale?: string | null;
+  inspection_outcome?: Record<string, unknown> | null;
+  authorized_role?: string | null;
+  override_expiry_utc?: string | null;
+}
+

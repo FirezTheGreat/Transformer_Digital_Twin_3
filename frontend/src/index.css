@@ -2,13 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
+@layer base {
+  body {
+    margin: 0;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #eff5fb;
+    color: #0e1824;
+    background-image: 
+      radial-gradient(circle at 15% 10%, rgba(214, 233, 248, 0.7) 0%, transparent 40%),
+      radial-gradient(circle at 85% 15%, rgba(220, 237, 250, 0.6) 0%, transparent 45%),
+      radial-gradient(circle at 50% 85%, rgba(225, 240, 252, 0.5) 0%, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, .font-editorial {
+    font-family: 'Newsreader', 'Instrument Serif', Georgia, serif;
+    font-feature-settings: 'opsz' 72, 'calt' 1, 'liga' 1;
+    letter-spacing: -0.02em;
+  }
 }
 
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  background-color: #020617;
-  color: #f8fafc;
+/* Custom crisp scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eaf1f8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c3d7e8;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a4c2db;
 }

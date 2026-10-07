@@ -69,9 +69,6 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               className="bg-transparent text-xs font-mono font-bold text-[#0e1824] focus:outline-none cursor-pointer pr-1"
             >
               <option value="tripura_dt_01">tripura_dt_01 (Agartala Substation · Unverified Nameplate)</option>
-              <option value="DT-TRIPURA-001">DT-TRIPURA-001 (Legacy Alias)</option>
-              <option value="TX_MOCK_STATIC_01">TX_MOCK_STATIC_01 (Trip Fixture)</option>
-              <option value="CPRI_MOCK_TX_01">CPRI_MOCK_TX_01 (CPRI SCADA)</option>
             </select>
           </div>
 

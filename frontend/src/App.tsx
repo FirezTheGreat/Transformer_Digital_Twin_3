@@ -342,9 +342,13 @@ export default function App(): React.ReactElement {
           <DataModelCardView modelCard={modelCard} />
         )}
 
-        {/* View 7: 3D Twin Workspace (Dedicated Space for Three.js Transformer Model) */}
+        {/* View 7: 3D Twin Workspace (State-Linked Component Navigator) */}
         {activeTab === 'twin-3d' && (
-          <Transformer3DView twinState={twinState} />
+          <Transformer3DView
+            twinState={twinState}
+            health={health}
+            onNavigateTab={(tab) => setActiveTab(tab as any)}
+          />
         )}
       </main>
 

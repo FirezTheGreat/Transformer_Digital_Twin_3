@@ -7,7 +7,6 @@ import {
   ShieldAlert,
   ArrowRight,
   TrendingUp,
-  Box,
   Layers,
 } from 'lucide-react';
 
@@ -352,69 +351,6 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* 5. RESERVED 3D MODEL VIEWPORT (Per User Request: "leave a space because i will add a 3d model of a transformer AT THE END not now") */}
-      <div className="mt-8 bg-gradient-to-b from-[#f4f8fc] to-[#e8f1f8] rounded-3xl p-8 border-2 border-dashed border-[#b8d4eb] shadow-sm relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#d0e2f2] gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#0e1824] text-white flex items-center justify-center shadow-sm">
-              <Box className="w-5 h-5 stroke-[2]" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#5d768f] block">
-                PHASE 8.4 (P3 STRETCH) 3D VIEWPORT
-              </span>
-              <h4 className="font-editorial text-2xl font-bold text-[#0e1824]">
-                Digital Twin 3D Transformer Model Space
-              </h4>
-            </div>
-          </div>
-
-          <button
-            onClick={() => onNavigateTab('twin-3d')}
-            className="text-xs bg-white px-3.5 py-1.5 rounded-full border border-[#c4dcf0] text-[#1c3c5c] font-semibold hover:bg-[#eff5fb] transition-colors"
-          >
-            Open 3D Model Explorer Workspace →
-          </button>
-        </div>
-
-        {/* 3D Transformer Workspace Canvas Area */}
-        <div className="h-64 sm:h-80 mt-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-[#cfdfef] flex flex-col items-center justify-center text-center p-6 relative">
-          {/* Blueprint Grid Watermark */}
-          <div
-            className="absolute inset-0 opacity-[0.04] pointer-events-none rounded-2xl"
-            style={{
-              backgroundImage: 'radial-gradient(#0e1824 1px, transparent 1px)',
-              backgroundSize: '16px 16px',
-            }}
-          />
-
-          <div className="w-16 h-16 rounded-2xl bg-[#eff5fb] border border-[#d2e2ef] flex items-center justify-center text-[#0284c7] mb-3 shadow-inner">
-            <Box className="w-8 h-8" />
-          </div>
-
-          <h5 className="font-editorial text-xl font-bold text-[#0e1824]">
-            3D Transformer Model Container (Reserved)
-          </h5>
-
-          <p className="text-xs text-[#5d768f] max-w-md mt-1 leading-relaxed">
-            Reserved space for your Three.js / React Three Fiber interactive 3D transformer model.
-            Pre-wired for hot-spot coordinates, HV/LV bushings telemetry, and radiator cooling fin status.
-          </p>
-
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono">
-            <span className="bg-[#eff5fb] px-3 py-1 rounded-lg border border-[#d8e6f2] text-[#2b4c6f]">
-              Top-Oil: {String(topOilObs)}°C
-            </span>
-            <span className="bg-[#eff5fb] px-3 py-1 rounded-lg border border-[#d8e6f2] text-[#2b4c6f]">
-              Bushings: L1, L2, L3, Neutral
-            </span>
-            <span className="bg-[#eff5fb] px-3 py-1 rounded-lg border border-[#d8e6f2] text-[#2b4c6f]">
-              Radiator: Active ONAN
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

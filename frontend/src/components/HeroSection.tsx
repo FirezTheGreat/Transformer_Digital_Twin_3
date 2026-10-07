@@ -87,9 +87,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               className="w-full bg-[#f8fbfe] hover:bg-[#eff5fb] border border-[#d2e2ef] rounded-xl px-3.5 py-2.5 text-[#0e1824] font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#0284c7]/30 transition-all font-mono"
             >
               <option value="tripura_dt_01">tripura_dt_01 (Agartala Substation · Unverified Nameplate)</option>
-              <option value="DT-TRIPURA-001">DT-TRIPURA-001 (Legacy Alias)</option>
-              <option value="TX_MOCK_STATIC_01">TX_MOCK_STATIC_01 (Trip Fixture Asset)</option>
-              <option value="CPRI_MOCK_TX_01">CPRI_MOCK_TX_01 (CPRI SCADA Multi-Source)</option>
             </select>
           </div>
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ShieldAlert, Info, Sparkles } from 'lucide-react';
+import { Info, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export type HonestyBadgeType =
   | 'DEMO_DEFAULT'
@@ -23,55 +23,55 @@ export const UIHonestyBadge: React.FC<UIHonestyBadgeProps> = ({
     case 'DEMO_DEFAULT':
       return (
         <span
-          title="Demonstration parameter clearly distinguished from site-calibrated standards per UI-Honesty rules."
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#e8f1f8] text-[#1c3c5c] border border-[#d2e2ef] ${className}`}
+          title="Standard reference parameter applied for baseline demonstration."
+          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200 ${className}`}
         >
-          <Info className="w-3 h-3 text-[#0284c7]" />
-          {customText || 'Standard Parameter'}
+          <Info className="w-3 h-3 text-slate-500" />
+          <span>{customText || 'Standard Baseline'}</span>
         </span>
       );
 
     case 'relative_load_index':
       return (
         <span
-          title="Relative load index reported because rated kVA nameplate is unverified, avoiding ungrounded per-unit claims."
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#eff5fb] text-[#354e6b] border border-[#d2e2ef] ${className}`}
+          title="Relative load index computed against empirical dataset 95th percentile loading (142.9 kVA). Manufacturer nameplate rating is unverified."
+          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200 ${className}`}
         >
-          <Info className="w-3 h-3 text-[#0284c7]" />
-          {customText || 'Load (relative)'}
+          <Info className="w-3 h-3 text-slate-500" />
+          <span>{customText || 'Ref: 142.9 kVA (non-nameplate)'}</span>
         </span>
       );
 
     case 'SYNTHETIC_SCENARIO':
       return (
         <span
-          title="Synthetic what-if forward projection or injected test anomaly scenario, not live historical telemetry."
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-50 text-amber-900 border border-amber-200 ${className}`}
+          title="Synthetic what-if forward projection or injected test condition, not real-time telemetry."
+          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-900 border border-amber-200 ${className}`}
         >
-          <Sparkles className="w-3 h-3 text-amber-600" />
-          {customText || 'Synthetic Scenario'}
+          <AlertTriangle className="w-3 h-3 text-amber-600" />
+          <span>{customText || 'Simulated Scenario'}</span>
         </span>
       );
 
     case 'GATED_EVIDENCE':
       return (
         <span
-          title="Health score calculation gated: requires at least 2 current domains with medium-or-better evidence quality or 1 decisive direct protection trip."
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-rose-50 text-rose-900 border border-rose-200 ${className}`}
+          title="Health score calculation gated: requires multi-domain evidence corroboration or direct protection flag."
+          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-800 border border-rose-200 ${className}`}
         >
-          <AlertCircle className="w-3 h-3 text-rose-600" />
-          {customText || 'Health Score Unavailable (Insufficient Evidence)'}
+          <AlertTriangle className="w-3 h-3 text-rose-600" />
+          <span>{customText || 'Evaluation Gated'}</span>
         </span>
       );
 
     case 'FALLBACK_PERSISTENCE':
       return (
         <span
-          title="Thermal model degraded to last-value persistence with empirical conformal band due to unpromoted model or missing inputs."
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-50 text-amber-900 border border-amber-200 ${className}`}
+          title="Thermal model operating in last-observed persistence mode due to missing inputs or unpromoted model status."
+          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200 ${className}`}
         >
-          <ShieldAlert className="w-3 h-3 text-amber-600" />
-          {customText || 'Using Last Observed Value'}
+          <ShieldCheck className="w-3 h-3 text-amber-600" />
+          <span>{customText || 'Persistence Mode'}</span>
         </span>
       );
 

@@ -5,39 +5,41 @@
 @layer base {
   body {
     margin: 0;
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: #eff5fb;
-    color: #0e1824;
-    background-image: 
-      radial-gradient(circle at 15% 10%, rgba(214, 233, 248, 0.7) 0%, transparent 40%),
-      radial-gradient(circle at 85% 15%, rgba(220, 237, 250, 0.6) 0%, transparent 45%),
-      radial-gradient(circle at 50% 85%, rgba(225, 240, 252, 0.5) 0%, transparent 50%);
-    background-attachment: fixed;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f6f8fb;
+    color: #0f172a;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
   }
 
-  h1, h2, h3, h4, h5, .font-editorial {
-    font-family: 'Newsreader', 'Instrument Serif', Georgia, serif;
-    font-feature-settings: 'opsz' 72, 'calt' 1, 'liga' 1;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.015em;
+    color: #0f172a;
+  }
+
+  /* Specific selective class for rare editorial accents if needed */
+  .font-editorial {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     letter-spacing: -0.02em;
   }
 }
 
-/* Custom crisp scrollbars */
+/* Crisp Industrial Scrollbars */
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #eaf1f8;
+  background: #edf2f7;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c3d7e8;
-  border-radius: 9999px;
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a4c2db;
+  background: #94a3b8;
 }

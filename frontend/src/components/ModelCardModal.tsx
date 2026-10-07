@@ -1,5 +1,5 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, Cpu } from 'lucide-react';
 import { ModelCardData } from '../services/api';
 
 interface ModelCardModalProps {
@@ -61,139 +61,116 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
   const isPromoted = card.promotion.status === 'PROMOTED';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0e1824]/40 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-[#d8e6f2] relative my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white rounded-lg p-6 max-w-xl w-full shadow-elevated border border-slate-200 relative my-8 text-xs">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-5 top-5 p-2 rounded-full text-[#5d768f] hover:text-[#0e1824] hover:bg-[#eff5fb] transition-colors"
+          className="absolute right-4 top-4 p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
         {/* Modal Header */}
-        <div className="mb-6">
+        <div className="mb-4 pb-3 border-b border-slate-200 pr-8">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#5d768f]">
-              PHYSICAL MODEL CARD
+            <Cpu className="w-4 h-4 text-sky-600" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+              Model Specification
             </span>
             <span
-              className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+              className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
                 isPromoted
                   ? 'bg-emerald-100 text-emerald-800'
                   : 'bg-amber-100 text-amber-900 border border-amber-300'
               }`}
             >
-              {isPromoted ? 'Model Promoted' : 'Not Validated for Prediction'} ({card.promotion.status} · Shadow Twin)
+              {card.promotion.status}
             </span>
           </div>
-          <h3 className="text-3xl font-editorial font-bold text-[#0e1824]">
-            First-Order Grey-Box ODE
+          <h3 className="text-lg font-bold text-slate-900">
+            First-Order Grey-Box Thermal ODE
           </h3>
-          <p className="text-xs text-[#5d768f] mt-1 font-mono">
-            Model: {card.model_version} · Asset: {card.asset_id} · Schema: {card.schema_version}
+          <p className="text-slate-500 mt-0.5 font-mono text-[11px]">
+            Model: {card.model_version} · Asset: {card.asset_id}
           </p>
         </div>
 
         {/* 1. ODE Equation & Parameters */}
-        <div className="bg-[#eff5fb] rounded-2xl p-5 border border-[#d2e3f1] mb-6">
-          <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#5d768f] block mb-2">
-            PHYSICAL DIFFERENTIAL EQUATION
+        <div className="bg-slate-50 rounded p-3 border border-slate-200 mb-4">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+            ODE Formulation
           </span>
-          <p className="font-mono text-sm text-[#0e1824] bg-white p-3 rounded-xl border border-[#dce8f3]">
-            dθ_oil/dt = (1/τ) · [ (θ_amb + β₀ + β₁·u²) - θ_oil ]
-          </p>
-
-          <div className="grid grid-cols-3 gap-4 mt-4 text-center">
-            <div className="bg-white p-3 rounded-xl border border-[#dce8f3]">
-              <span className="text-[10px] font-bold text-[#5d768f] block">NO-LOAD RISE (β₀)</span>
-              <span className="text-base font-bold font-mono text-[#0e1824]">
-                {card.parameters.beta_0.toFixed(2)} °C
-              </span>
+          <div className="font-mono text-xs text-slate-900 bg-white p-2 rounded border border-slate-200">
+            dθ_o / dt = (1 / τ) · (β₀ + β₁ · u² - θ_o)
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
+            <div>
+              <span className="text-slate-400 block">τ (time const)</span>
+              <strong className="font-mono text-slate-900">{card.parameters.tau_hours.toFixed(2)}h</strong>
             </div>
-            <div className="bg-white p-3 rounded-xl border border-[#dce8f3]">
-              <span className="text-[10px] font-bold text-[#5d768f] block">FULL-LOAD RISE (β₁)</span>
-              <span className="text-base font-bold font-mono text-[#0e1824]">
-                {card.parameters.beta_1.toFixed(2)} °C
-              </span>
+            <div>
+              <span className="text-slate-400 block">β₀ (ambient offset)</span>
+              <strong className="font-mono text-slate-900">{card.parameters.beta_0.toFixed(4)}°C</strong>
             </div>
-            <div className="bg-white p-3 rounded-xl border border-[#dce8f3]">
-              <span className="text-[10px] font-bold text-[#5d768f] block">TIME CONSTANT (τ)</span>
-              <span className="text-base font-bold font-mono text-[#0e1824]">
-                {card.parameters.tau_hours.toFixed(2)} hrs
-              </span>
+            <div>
+              <span className="text-slate-400 block">β₁ (load coeff)</span>
+              <strong className="font-mono text-slate-900">{card.parameters.beta_1.toFixed(4)}°C</strong>
             </div>
           </div>
         </div>
 
-        {/* 2. Validation Metrics & Conformal Uncertainty */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <div className="p-4 rounded-2xl border border-[#d8e6f2] bg-white">
-            <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#5d768f] block mb-3">
-              TEST PARTITION ACCURACY
+        {/* 2. Validation Metrics & Test Partition */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="p-3 bg-slate-50 rounded border border-slate-200">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+              Test Accuracy
             </span>
-            <div className="space-y-2 text-xs">
+            <div className="space-y-1 text-[11px]">
               <div className="flex justify-between">
-                <span className="text-[#486581]">Mean Absolute Error (MAE):</span>
-                <span className="font-mono font-bold text-[#0e1824]">{card.test_metrics.mae_degc} °C</span>
+                <span className="text-slate-500">MAE:</span>
+                <span className="font-mono font-bold text-slate-900">{card.test_metrics.mae_degc.toFixed(2)}°C</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#486581]">Root Mean Squared Error (RMSE):</span>
-                <span className="font-mono font-bold text-[#0e1824]">{card.test_metrics.rmse_degc} °C</span>
+                <span className="text-slate-500">RMSE:</span>
+                <span className="font-mono font-bold text-slate-900">{card.test_metrics.rmse_degc.toFixed(2)}°C</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#486581]">Marginal Coverage (90% Nominal):</span>
-                <span className="font-mono font-bold text-emerald-700">
-                  {card.test_metrics.marginal_coverage_90_pct}%
-                </span>
+                <span className="text-slate-500">90% Coverage:</span>
+                <span className="font-mono font-bold text-emerald-700">{card.test_metrics.marginal_coverage_90_pct.toFixed(1)}%</span>
               </div>
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl border border-[#d8e6f2] bg-white">
-            <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#5d768f] block mb-3">
-              CONFORMAL HALF-WIDTHS (W_h)
+          <div className="p-3 bg-slate-50 rounded border border-slate-200">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+              Qualification Status
             </span>
-            <div className="space-y-2 text-xs font-mono">
+            <div className="space-y-1 text-[11px]">
               <div className="flex justify-between">
-                <span className="text-[#486581] font-sans">15m Step (W₁):</span>
-                <span className="font-bold text-[#0e1824]">±{card.conformal_uncertainty.horizon_half_widths_degc[0]} °C</span>
+                <span className="text-slate-500">Interpretability:</span>
+                <span className="font-mono text-slate-800">{card.qualification.parameter_interpretability}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#486581] font-sans">60m Step (W₄):</span>
-                <span className="font-bold text-[#0e1824]">±{card.conformal_uncertainty.horizon_half_widths_degc[3]} °C</span>
+                <span className="text-slate-500">Forecast Gate:</span>
+                <span className="font-mono text-slate-800">{card.qualification.forecast_qualification}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#486581] font-sans">120m Step (W₈):</span>
-                <span className="font-bold text-[#0e1824]">±{card.conformal_uncertainty.horizon_half_widths_degc[7]} °C</span>
+                <span className="text-slate-500">Status:</span>
+                <span className="font-mono font-bold text-amber-800">{card.promotion.status}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* 3. Promotion & Qualification Matrix */}
-        <div className="border-t border-[#edf4fa] pt-4">
-          <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#5d768f] block mb-2">
-            RIGOROUS QUALIFICATION CHECKS
-          </span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-            {Object.entries(card.qualification).map(([k, v]) => (
-              <div key={k} className="p-2.5 rounded-xl bg-[#eff5fb] text-center border border-[#dce9f4]">
-                <div className="text-[10px] text-[#5d768f] uppercase font-semibold truncate" title={k}>
-                  {k.replace(/_/g, ' ')}
-                </div>
-                <div
-                  className={`font-mono font-bold text-[11px] mt-0.5 px-1.5 py-0.5 rounded ${
-                    v === 'QUALIFIED'
-                      ? 'text-emerald-800 bg-emerald-50'
-                      : 'text-amber-800 bg-amber-50'
-                  }`}
-                >
-                  {v}
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* Footer */}
+        <div className="pt-3 border-t border-slate-200 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
+          >
+            Close Specification
+          </button>
         </div>
       </div>
     </div>

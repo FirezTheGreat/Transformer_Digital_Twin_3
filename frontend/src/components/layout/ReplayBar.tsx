@@ -7,7 +7,6 @@ import {
   Clock,
   Database,
 } from 'lucide-react';
-
 import { ReplayStatusResponse } from '../../types/contracts';
 
 interface ReplayBarProps {
@@ -43,102 +42,92 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
   const total = replayStatus?.total_events && replayStatus.total_events > 0 ? replayStatus.total_events : '—';
 
   const formattedTime = watermarkUtc
-    ? new Date(watermarkUtc).toLocaleTimeString('en-US', {
-        timeZone: 'UTC',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }) + ' UTC'
-    : '2026-10-04 12:00 UTC';
+    ? new Date(watermarkUtc).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+    : '2026-10-04 12:00:00 UTC';
 
   return (
-    <div className="bg-white/95 backdrop-blur-md border border-[#d8e6f2] rounded-2xl p-3 sm:px-5 sm:py-3.5 shadow-sm mb-6 transition-all">
+    <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-subtle mb-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        {/* Left: Asset Selector + Live UTC Watermark */}
+        {/* Left: Asset Selector & UTC Watermark */}
         <div className="flex items-center gap-3">
-          <div className="h-10 flex items-center gap-2 bg-[#f4f8fc] border border-[#d2e2ef] rounded-xl px-3 text-xs font-mono font-bold text-[#0e1824] shadow-inner">
+          <div className="flex items-center gap-2">
             <span
-              className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                isBackendHealthy ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)] animate-pulse' : 'bg-amber-500'
-              }`}
-              title={isBackendHealthy ? 'Digital Twin Reducer Connected' : 'Degraded State'}
+              className={`w-2 h-2 rounded-full ${isBackendHealthy ? 'bg-emerald-500' : 'bg-rose-500'}`}
+              title={isBackendHealthy ? 'Connected to digital twin server' : 'Backend offline'}
             />
+            <label htmlFor="replay-asset-select" className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              Asset:
+            </label>
             <select
+              id="replay-asset-select"
               value={assetId}
               onChange={(e) => onAssetChange(e.target.value)}
-              className="bg-transparent text-xs font-mono font-bold text-[#0e1824] focus:outline-none cursor-pointer pr-1"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1 text-xs font-mono font-medium text-slate-900 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
             >
-              <option value="tripura_dt_01">tripura_dt_01 (Agartala Substation · Unverified Nameplate)</option>
+              <option value="tripura_dt_01">DT-TRIPURA-001 (Agartala Substation · 33/11kV)</option>
             </select>
           </div>
 
-          <div className="hidden md:flex h-10 items-center gap-2 text-xs text-[#5d768f] bg-[#f8fbfe] px-3 rounded-xl border border-[#e2edf6]">
-            <Clock className="w-3.5 h-3.5 text-[#0284c7]" />
-            <span className="font-mono text-xs font-semibold text-[#0e1824]">
-              {formattedTime}
-            </span>
+          <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 pl-3 border-l border-slate-200">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-mono text-[11px] text-slate-700">{formattedTime}</span>
           </div>
         </div>
 
-        {/* Center: Replay Engine Deterministic Controller */}
-        <div className="flex items-center gap-2">
-          {/* Play / Pause Toggle */}
+        {/* Center: Replay Controls */}
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => onReplayAction(isRunning ? 'pause' : 'resume')}
-            className={`h-10 inline-flex items-center gap-2 px-4 rounded-xl text-xs font-semibold shadow-sm transition-all active:scale-95 ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
               isRunning
-                ? 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
-                : 'bg-[#0e1824] text-white hover:bg-[#1a2c3f]'
+                ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                : 'bg-slate-900 text-white hover:bg-slate-800'
             }`}
           >
             {isRunning ? (
               <>
-                <Pause className="w-3.5 h-3.5 text-amber-600 fill-current" />
+                <Pause className="w-3 h-3 text-amber-700" />
                 <span>Pause</span>
               </>
             ) : (
               <>
-                <Play className="w-3.5 h-3.5 fill-current text-sky-400" />
+                <Play className="w-3 h-3 text-sky-400 fill-current" />
                 <span>Play Replay</span>
               </>
             )}
           </button>
 
-          {/* Stepper Control Group */}
-          <div className="h-10 flex items-center bg-[#f1f6fb] border border-[#d2e2ef] rounded-xl overflow-hidden p-0.5">
+          <div className="flex items-center border border-slate-200 rounded overflow-hidden">
             <button
               onClick={() => onReplayAction('step', 1)}
-              title="Advance exactly 1 telemetry step through deterministic reducer"
-              className="h-full px-2.5 rounded-lg text-xs font-semibold text-[#0e1824] hover:bg-white hover:shadow-sm transition-all flex items-center gap-1 active:scale-95"
+              title="Step forward 1 frame"
+              className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1 border-r border-slate-200"
             >
-              <StepForward className="w-3.5 h-3.5 text-[#0284c7]" />
+              <StepForward className="w-3 h-3 text-sky-600" />
               <span>+1</span>
             </button>
-            <div className="w-px h-4 bg-[#d2e2ef] mx-0.5" />
             <button
               onClick={() => onReplayAction('step', 5)}
-              title="Advance 5 telemetry steps"
-              className="h-full px-2.5 rounded-lg text-xs font-semibold text-[#0e1824] hover:bg-white hover:shadow-sm transition-all active:scale-95"
+              title="Step forward 5 frames"
+              className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold"
             >
               +5
             </button>
           </div>
 
-          {/* Speed Multipliers Segment */}
-          <div className="hidden sm:flex h-10 items-center bg-[#f1f6fb] p-0.5 rounded-xl border border-[#d2e2ef]">
+          <div className="hidden sm:flex items-center border border-slate-200 rounded overflow-hidden">
             {[
-              { val: 1, label: '1×' },
-              { val: 5, label: '5×' },
-              { val: 10, label: '10×' },
-              { val: 0, label: 'MAX' },
+              { val: 1, label: '1x' },
+              { val: 5, label: '5x' },
+              { val: 10, label: '10x' },
             ].map(({ val, label }) => (
               <button
                 key={label}
                 onClick={() => onSpeedChange(val)}
-                className={`h-full px-2.5 rounded-lg text-[11px] font-mono font-bold transition-all ${
+                className={`px-2 py-1.5 text-[11px] font-mono transition-colors ${
                   speedMultiplier === val
-                    ? 'bg-white text-[#0e1824] shadow-sm'
-                    : 'text-[#5d768f] hover:text-[#0e1824]'
+                    ? 'bg-slate-900 text-white font-bold'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 {label}
@@ -146,38 +135,31 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
             ))}
           </div>
 
-          {/* Reset Button */}
           <button
             onClick={() => onReplayAction('reset')}
-            title="Reset Replay & State Reducer"
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-[#5d768f] hover:text-[#0e1824] bg-[#f1f6fb] hover:bg-[#e4eff8] border border-[#d2e2ef] transition-colors active:scale-95"
+            title="Reset replay to initial state"
+            className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 border border-slate-200 transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Right: Chronology Buffer & Seed Trigger */}
-        <div className="flex items-center gap-2.5">
-          <div className="h-10 flex items-center gap-2 px-3 rounded-xl bg-[#f8fbfe] border border-[#e2edf6]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#0284c7]" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] tracking-wider uppercase font-bold text-[#627d98]">
-                CHRONO:
-              </span>
-              <span className="text-xs font-mono font-bold text-[#0e1824]">
-                {processed} / {total} frames
-              </span>
-            </div>
+        {/* Right: Chronology Buffer & Ingestion */}
+        <div className="flex items-center gap-3">
+          <div className="text-[11px] font-mono text-slate-600">
+            <span className="text-slate-400 uppercase text-[10px] font-sans font-semibold mr-1">Progress:</span>
+            <span className="font-semibold text-slate-900">{processed}</span>
+            <span className="text-slate-400"> / {total} frames</span>
           </div>
 
           <button
             onClick={onSeedDemoData}
             disabled={isSeeding}
-            title="Feed canonical telemetry frames into DuckDB storage"
-            className="h-10 inline-flex items-center gap-1.5 px-3.5 rounded-xl bg-white hover:bg-[#f0f7fd] text-[#0369a1] text-xs font-semibold border border-[#b9d9f2] shadow-sm transition-all active:scale-95"
+            title="Ingest canonical SCADA dataset into DuckDB storage"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-medium border border-slate-300 transition-colors disabled:opacity-50"
           >
-            <Database className="w-3.5 h-3.5 text-[#0284c7]" />
-            <span className="hidden sm:inline">{isSeeding ? 'Feeding...' : 'Seed Data'}</span>
+            <Database className="w-3 h-3 text-sky-600" />
+            <span>{isSeeding ? 'Ingesting...' : 'Ingest Dataset'}</span>
           </button>
         </div>
       </div>

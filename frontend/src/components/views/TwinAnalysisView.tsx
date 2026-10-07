@@ -1,5 +1,5 @@
-import React from 'react';
-import { Cpu } from 'lucide-react';
+import React, { useState } from 'react';
+import { Cpu, ChevronDown, ChevronUp } from 'lucide-react';
 
 import { TwinState, OTHIBundle } from '../../types/contracts';
 import { ScenarioSimulator } from '../ScenarioSimulator';
@@ -17,91 +17,136 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
   twinState,
   onOpenModelCard,
 }) => {
+  const [showMathDetails, setShowMathDetails] = useState<boolean>(false);
+
   const obs = twinState?.current_observations ?? {};
   const topOilObs = obs['top_oil_temperature']?.value ?? 74.8;
   const topOilExpected = twinState?.thermal_latent?.top_oil_expected_degc ?? 70.5;
-  const residual = twinState?.derived_electrical?.thermal_residual_degc ?? 4.3;
+  const residual = typeof topOilObs === 'number' && typeof topOilExpected === 'number'
+    ? (topOilObs - topOilExpected).toFixed(1)
+    : '4.3';
   const tauHours = twinState?.thermal_latent?.time_constant_tau_hours ?? 0.5;
   const cusumPos = twinState?.detector_state?.cusum_pos ?? 3.82;
   const cusumAlarmActive = twinState?.detector_state?.cusum_alarm_active ?? true;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* View Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between pb-4 border-b border-[#d8e6f2] gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#5d768f]">
-              PHYSICS & SHADOW TWIN ANALYSIS
-            </span>
-            <UIHonestyBadge type="SYNTHETIC_SCENARIO" customText="SHADOW WHAT-IF" />
+      <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-subtle">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">
+                Thermal Condition
+              </span>
+              <UIHonestyBadge type="SYNTHETIC_SCENARIO" customText="Forward Scenario Gated" />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Thermal Behavior & Scenario Analysis
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Real-time top-oil monitoring compared against calibrated grey-box thermal ODE expectations.
+            </p>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-editorial font-bold text-[#0e1824] tracking-tight">
-            Twin Analysis & What-If.
-          </h2>
-          <p className="text-xs sm:text-sm text-[#5d768f] font-light mt-0.5">
-            Real vs. grey-box expected top-oil temperatures, free-running CUSUM residuals, and conditional 2-hour forward projections.
-          </p>
-        </div>
 
-        <button
-          onClick={onOpenModelCard}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#eff5fb] text-[#1c3c5c] text-xs font-semibold border border-[#d2e2ef] shadow-sm transition-all"
-        >
-          <Cpu className="w-3.5 h-3.5 text-[#0284c7]" />
-          Calibrated Model Card (β₀, β₁, τ) →
-        </button>
+          <button
+            onClick={onOpenModelCard}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-300 transition-colors self-start sm:self-auto"
+          >
+            <Cpu className="w-3.5 h-3.5 text-sky-600" />
+            <span>Model Calibration Card →</span>
+          </button>
+        </div>
       </div>
 
-      {/* Top Cards: Residual & CUSUM Tracking Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-[#d8e6f2] shadow-sm">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-[#5d768f] block mb-1">
-            OBSERVED TOP-OIL (T_O)
+      {/* Primary Thermal Metrics (Plain Engineering Hierarchy) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
+          <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-400 block mb-1">
+            Observed Temperature
           </span>
-          <div className="text-2xl font-bold font-sans text-[#0e1824] tracking-tight">
+          <div className="text-2xl font-bold font-mono text-slate-900">
             {String(topOilObs)} °C
           </div>
-          <span className="text-[11px] text-[#5d768f] mt-1 block font-mono">
-            Direct PT100 sensor reading
+          <span className="text-[11px] text-slate-500 mt-1 block">
+            Direct PT100 probe reading
           </span>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-[#d8e6f2] shadow-sm">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-[#5d768f] block mb-1">
-            ODE EXPECTED (θ̂_O)
+        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
+          <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-400 block mb-1">
+            Model Expected Temperature
           </span>
-          <div className="text-2xl font-bold font-sans text-[#0e1824] tracking-tight">
+          <div className="text-2xl font-bold font-mono text-slate-900">
             {topOilExpected} °C
           </div>
-          <span className="text-[11px] text-[#5d768f] mt-1 block font-mono">
-            First-order ODE (τ = {tauHours}h)
+          <span className="text-[11px] text-slate-500 mt-1 block">
+            First-order ODE baseline
           </span>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-[#d8e6f2] shadow-sm">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-[#5d768f] block mb-1">
-            THERMAL RESIDUAL (r_k)
+        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
+          <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-400 block mb-1">
+            Temperature Difference
           </span>
-          <div className={`text-2xl font-bold font-sans tracking-tight ${residual > 3 ? 'text-amber-700' : 'text-emerald-700'}`}>
+          <div className={`text-2xl font-bold font-mono ${Number(residual) > 3 ? 'text-amber-700' : 'text-emerald-700'}`}>
             +{residual} °C
           </div>
-          <span className="text-[11px] text-[#5d768f] mt-1 block font-mono">
-            r_k = T_o - θ̂_o (Free-running)
+          <span className="text-[11px] text-slate-500 mt-1 block">
+            {Number(residual) > 3 ? 'Running above expected model' : 'Within normal tolerance'}
           </span>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-[#d8e6f2] shadow-sm">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-[#5d768f] block mb-1">
-            CUSUM ALARM STATE
+        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
+          <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-400 block mb-1">
+            Thermal Trend
           </span>
-          <div className={`text-xl font-bold font-sans tracking-tight ${cusumAlarmActive ? 'text-amber-700' : 'text-emerald-700'}`}>
-            {cusumAlarmActive ? 'Warning Shift Active' : 'Normal Accumulator'}
+          <div className={`text-base font-bold mt-1 ${cusumAlarmActive ? 'text-amber-800' : 'text-emerald-800'}`}>
+            {cusumAlarmActive ? 'Persistent Elevated Drift' : 'Stable Thermal Equilibrium'}
           </div>
-          <span className="text-[11px] text-[#5d768f] mt-1 block font-mono">
-            C⁺ = {cusumPos.toFixed(2)} (Threshold: 3.50)
+          <span className="text-[11px] text-slate-500 mt-1 block">
+            Statistical debounce active
           </span>
         </div>
+      </div>
+
+      {/* Progressive Disclosure: Mathematical Formulation & CUSUM Statistics */}
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs">
+        <button
+          onClick={() => setShowMathDetails(!showMathDetails)}
+          className="w-full flex items-center justify-between text-slate-700 font-semibold hover:text-slate-900"
+        >
+          <span>Mathematical Formulation & Detection Details</span>
+          {showMathDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+
+        {showMathDetails && (
+          <div className="mt-3 pt-3 border-t border-slate-200 text-slate-600 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="font-semibold text-slate-900 mb-1">Thermal Differential Equation (ODE)</h4>
+                <p className="font-mono text-[11px] bg-white p-2 rounded border border-slate-200 text-slate-800">
+                  dθ_o / dt = (1 / τ) · (β₀ + β₁ · u² - θ_o)
+                </p>
+                <ul className="mt-1.5 space-y-0.5 text-[11px]">
+                  <li>• Thermal time constant: <strong>τ = {tauHours} hours</strong></li>
+                  <li>• Ambient baseline offset: <strong>β₀ = 1.09 °C</strong></li>
+                  <li>• Load heating coefficient: <strong>β₁ = 2.90 °C</strong></li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-slate-900 mb-1">CUSUM Drift Detection State</h4>
+                <ul className="space-y-1 text-[11px]">
+                  <li>• Positive accumulator: <span className="font-mono font-bold text-amber-800">C⁺ = {cusumPos.toFixed(2)}</span> (Alarm threshold: h = 3.50)</li>
+                  <li>• Negative accumulator: <span className="font-mono">C⁻ = 0.00</span></li>
+                  <li>• Residual definition: <span className="font-mono">r_k = T_observed - θ̂_expected</span></li>
+                  <li>• Calibration notice: Parameters sit on lower domain boundary (0.50h). Model active as shadow descriptive twin only.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2-Hour What-If Scenario Simulator Engine */}

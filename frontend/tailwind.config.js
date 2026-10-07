@@ -7,40 +7,37 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['"Newsreader"', '"Instrument Serif"', 'Georgia', 'serif'],
-        editorial: ['"Newsreader"', '"Instrument Serif"', 'Georgia', 'serif'],
-        display: ['"Newsreader"', '"Instrument Serif"', 'Georgia', 'serif'],
-        sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
+        sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        display: ['"Plus Jakarta Sans"', 'sans-serif'],
       },
       colors: {
-        ink: {
-          950: '#070d16',
-          900: '#0e1824',
-          800: '#19283a',
-          700: '#253a52',
-          600: '#354e6b',
+        slate: {
+          850: '#151f32',
+          950: '#090e17',
         },
-        skybg: {
-          50: '#f8fbfe',
-          100: '#eff5fb',
-          150: '#e5f0f8',
-          200: '#dceaf5',
-          300: '#c5dded',
-          400: '#9bc4e2',
+        brand: {
+          50: '#f0f7ff',
+          100: '#e0effe',
+          500: '#0284c7',
+          600: '#0369a1',
+          700: '#075985',
         },
-        ice: {
-          surface: '#ffffff',
-          tint: '#e7f1f9',
-          border: '#d4e3f0',
-          borderStrong: '#c2d7e8',
-          textMuted: '#5d768f',
+        panel: {
+          bg: '#ffffff',
+          subtle: '#f8fafc',
+          border: '#e2e8f0',
+          borderStrong: '#cbd5e1',
+          textMuted: '#64748b',
         }
       },
       boxShadow: {
-        'card': '0 8px 30px -8px rgba(35, 75, 115, 0.07), 0 2px 6px rgba(35, 75, 115, 0.03)',
-        'card-hover': '0 16px 40px -10px rgba(35, 75, 115, 0.12), 0 4px 10px rgba(35, 75, 115, 0.05)',
-        'pill': '0 4px 12px rgba(14, 24, 36, 0.1)',
+        'subtle': '0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04)',
+        'card': '0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05)',
+        'elevated': '0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05)',
+      },
+      borderRadius: {
+        'card': '10px',
       }
     },
   },

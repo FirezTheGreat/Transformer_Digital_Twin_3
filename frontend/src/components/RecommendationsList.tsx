@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wrench, ShieldAlert, CheckCircle, Clock, ArrowRight, ShieldCheck } from 'lucide-react';
+import { ShieldAlert, Wrench, Clock, CheckCircle2, ArrowRight } from 'lucide-react';
 import { MaintenanceRecommendation } from '../types/contracts';
 
 interface RecommendationsListProps {
@@ -12,52 +12,48 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
   onOpenFeedback,
 }) => {
   return (
-    <section className="mt-14 pb-16">
-      {/* Header section matching "ROOMS ... Choose your room." */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 pb-4 border-b border-[#d8e6f2]">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
         <div>
-          <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[#5d768f] block mb-2">
-            RECOMMENDED ACTIONS
-          </span>
-          <p className="text-sm text-[#5d768f]">
-            Deterministic rule-based policies adhering to IEEE C57.91 & CBIP standards.
+          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider text-[11px]">
+            Actionable Maintenance Advisories ({recommendations.length})
+          </h3>
+          <p className="text-xs text-slate-500">
+            Ranked by operational priority and risk severity.
           </p>
         </div>
-        <h3 className="mt-3 sm:mt-0 text-3xl sm:text-5xl font-normal font-editorial text-[#0e1824] tracking-tight">
-          Prioritized advisories.
-        </h3>
       </div>
 
       {recommendations.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 text-center border border-[#d8e6f2] shadow-card">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
-            <ShieldCheck className="w-6 h-6" />
+        <div className="bg-white rounded-lg p-8 text-center border border-slate-200 shadow-subtle text-slate-500">
+          <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
+            <CheckCircle2 className="w-5 h-5" />
           </div>
-          <h4 className="font-editorial text-2xl text-[#0e1824]">All systems within nominal operating limits</h4>
-          <p className="text-sm text-[#5d768f] mt-1 max-w-md mx-auto">
-            No active maintenance advisories or threshold trips flagged by the deterministic engine.
+          <h4 className="text-sm font-bold text-slate-900">All systems operating within standard parameters</h4>
+          <p className="text-xs text-slate-400 mt-0.5 max-w-sm mx-auto">
+            No active maintenance actions or safety limit excursions flagged.
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {recommendations.map((rec) => {
             const isP0 = rec.priority === 'P0';
             const isP1 = rec.priority === 'P1';
 
-
             return (
               <div
                 key={rec.recommendation_id}
-                className="bg-white rounded-3xl p-6 sm:p-7 shadow-card border border-[#d8e6f2] hover:border-[#bcd5eb] hover:shadow-card-hover transition-all flex flex-col md:flex-row md:items-center justify-between gap-6"
+                className="bg-white rounded-lg p-5 border border-slate-200 shadow-subtle hover:border-slate-300 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
-                {/* Left Column: Icon + Details */}
-                <div className="flex items-start gap-5 max-w-2xl">
-                  {/* Soft diamond icon badge matching Photo 2 */}
+                {/* Left: Details */}
+                <div className="flex items-start gap-4 max-w-2xl">
                   <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 border ${
-                      isP0 || isP1
-                        ? 'bg-amber-50/70 border-amber-200 text-amber-700'
-                        : 'bg-[#eff5fb] border-[#d2e3f1] text-[#2b4c6f]'
+                    className={`p-2.5 rounded-lg flex-shrink-0 mt-0.5 ${
+                      isP0
+                        ? 'bg-rose-100 text-rose-800'
+                        : isP1
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-slate-100 text-slate-700'
                     }`}
                   >
                     {isP0 ? (
@@ -65,63 +61,67 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
                     ) : isP1 ? (
                       <Wrench className="w-5 h-5 text-amber-700" />
                     ) : (
-                      <Clock className="w-5 h-5 text-[#0284c7]" />
+                      <Clock className="w-5 h-5 text-slate-600" />
                     )}
                   </div>
 
                   <div>
-                    {/* Priority Tier subhead matching "ROOM TYPE" */}
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#5d768f]">
-                        {rec.priority_label || `PRIORITY ${rec.priority}`}
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span
+                        className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${
+                          isP0
+                            ? 'bg-rose-100 text-rose-800'
+                            : isP1
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {rec.priority_label || `Priority ${rec.priority}`}
                       </span>
+
                       {rec.acknowledged && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          <CheckCircle className="w-3 h-3" /> Acknowledged
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Acknowledged in Ledger</span>
                         </span>
                       )}
+
+                      <span className="text-[11px] font-mono text-slate-400">
+                        Rule: {rec.rule_id}
+                      </span>
                     </div>
 
-                    {/* Headline in bold serif font matching "Deluxe" */}
-                    <h4 className="text-xl sm:text-2xl font-editorial font-bold text-[#0e1824] leading-snug">
+                    <h4 className="text-base font-bold text-slate-900">
                       {rec.title}
                     </h4>
 
-                    {/* Advisory description */}
-                    <p className="mt-2 text-sm text-[#486581] leading-relaxed font-light">
+                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">
                       {rec.advisory_wording}
                     </p>
 
-                    {/* Technical rationale and standard citation */}
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[#5d768f]">
-                      <span className="bg-[#eff5fb] px-2.5 py-1 rounded-lg border border-[#dce8f3] font-mono">
-                        Rule: {rec.rule_id}
-                      </span>
-                      <span className="italic">
-                        {rec.source_reference}
-                      </span>
+                    <div className="mt-2 text-[11px] text-slate-400">
+                      Standard Reference: <span className="text-slate-600 font-medium">{rec.source_reference}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Column: Window Badge + Solid Black Pill Button matching "Book →" */}
-                <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center gap-4 flex-shrink-0 pt-4 md:pt-0 border-t md:border-t-0 border-[#f0f4f8]">
-                  <div className="text-left md:text-right">
-                    <span className="text-xs uppercase font-bold tracking-wider text-[#5d768f] block">
-                      ACTION WINDOW
+                {/* Right: Action Window & Button */}
+                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 flex-shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                  <div className="text-left sm:text-right">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
+                      Action Window
                     </span>
-                    <span className="text-base sm:text-lg font-bold font-editorial text-[#0e1824]">
+                    <span className="text-xs font-semibold font-mono text-slate-800 mt-0.5 block">
                       {rec.action_window.replace(/_/g, ' ')}
                     </span>
                   </div>
 
-                  {/* Black Pill Button matching "Book →" */}
                   <button
                     onClick={() => onOpenFeedback(rec)}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#0e1824] hover:bg-[#1a2c3f] text-white text-xs font-semibold shadow-pill hover:shadow-md transition-all active:scale-95 group"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
                   >
-                    <span>{rec.acknowledged ? 'Operator Record' : 'Acknowledge'}</span>
-                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                    <span>{rec.acknowledged ? 'Operator Record' : 'Acknowledge Advisory'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -129,6 +129,6 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
           })}
         </div>
       )}
-    </section>
+    </div>
   );
 };

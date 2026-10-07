@@ -251,16 +251,16 @@ export default function App(): React.ReactElement {
   const watermarkUtc = twinState?.event_time_watermark_utc || twinState?.state_time_utc;
 
   return (
-    <div className="min-h-screen text-[#0e1824] flex flex-col justify-between selection:bg-[#d0e5f7]">
+    <div className="min-h-screen text-slate-900 flex flex-col justify-between bg-[#f6f8fb]">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#0e1824] text-white px-5 py-3 rounded-2xl shadow-2xl text-xs font-semibold flex items-center gap-2 border border-slate-700 animate-slide-up">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-elevated text-xs font-semibold flex items-center gap-2 border border-slate-700">
           <span className="w-2 h-2 rounded-full bg-sky-400"></span>
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Top Editorial Navbar */}
+      {/* Top Application Navbar */}
       <Navbar
         isBackendHealthy={isBackendHealthy}
         activeTab={activeTab}
@@ -270,7 +270,7 @@ export default function App(): React.ReactElement {
       />
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-6 w-full flex-grow pt-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 w-full flex-grow pt-5 pb-10">
         {/* Persistent Replay & Asset Control Bar */}
         <ReplayBar
           assetId={assetId}
@@ -285,7 +285,7 @@ export default function App(): React.ReactElement {
           isSeeding={isSeeding}
         />
 
-        {/* View 1: Overview (Compact, Zero Endless Scrolling, with Reserved 3D Model space at the end) */}
+        {/* View 1: Overview */}
         {activeTab === 'overview' && (
           <OverviewView
             assetId={assetId}
@@ -299,7 +299,7 @@ export default function App(): React.ReactElement {
           />
         )}
 
-        {/* View 2: Twin Analysis (Residuals & 2-Hour What-If Simulator) */}
+        {/* View 2: Twin Analysis & What-If */}
         {activeTab === 'twin-analysis' && (
           <TwinAnalysisView
             assetId={assetId}
@@ -309,7 +309,7 @@ export default function App(): React.ReactElement {
           />
         )}
 
-        {/* View 3: Anomaly Timeline (6-State FSM Episodes & CUSUM Tracker) */}
+        {/* View 3: Anomaly Timeline */}
         {activeTab === 'anomalies' && (
           <AnomalyTimelineView
             episodes={episodes}
@@ -319,7 +319,7 @@ export default function App(): React.ReactElement {
           />
         )}
 
-        {/* View 4: Maintenance Advisories (Prioritized Rules & Operator Feedback) */}
+        {/* View 4: Maintenance Advisories */}
         {activeTab === 'maintenance' && (
           <MaintenanceView
             recommendations={recommendations}
@@ -327,7 +327,7 @@ export default function App(): React.ReactElement {
           />
         )}
 
-        {/* View 5: Telemetry & Capabilities (3-Phase Metrics, C0-C4 Tier Manifest & DuckDB Storage Log) */}
+        {/* View 5: Telemetry & Capabilities */}
         {activeTab === 'telemetry' && (
           <TelemetryView
             assetId={assetId}
@@ -337,12 +337,12 @@ export default function App(): React.ReactElement {
           />
         )}
 
-        {/* View 6: Data & Model Card (Transparency, Calibration Metrics, Qualification) */}
+        {/* View 6: Data & Model Card */}
         {activeTab === 'model-card' && (
           <DataModelCardView modelCard={modelCard} />
         )}
 
-        {/* View 7: 3D Twin Workspace (State-Linked Component Navigator) */}
+        {/* View 7: 3D Twin Workspace */}
         {activeTab === 'twin-3d' && (
           <Transformer3DView
             twinState={twinState}
@@ -368,21 +368,21 @@ export default function App(): React.ReactElement {
         modelCard={modelCard}
       />
 
-      {/* Minimal Footer */}
-      <footer className="mt-16 border-t border-[#d8e6f2] bg-white/60 py-6 text-xs text-[#5d768f]">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Industrial Footer */}
+      <footer className="border-t border-slate-200 bg-white py-4 text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-[#0e1824] font-sans">
-              Grid<span className="text-[#0284c7]">Pulse</span>
+            <span className="font-bold text-slate-900 font-sans">
+              GridPulse
             </span>
-            <span>· POWERNext-AI Hackathon 2026 (Track 2: Digital Twin Health Monitoring)</span>
+            <span>· Distribution Transformer Digital Twin · POWERNext-AI Hackathon 2026 (Track 2)</span>
           </div>
-          <div className="flex items-center gap-4 text-[11px] font-mono">
-            <span>Phase 8 React Dashboard</span>
+          <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
+            <span>DT-TRIPURA-001</span>
             <span>·</span>
-            <span>Gated OTHI</span>
+            <span>Multi-Domain OTHI</span>
             <span>·</span>
-            <span>90% Conformal Bounds</span>
+            <span>Conformal Bounds (90%)</span>
           </div>
         </div>
       </footer>

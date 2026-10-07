@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   AlertTriangle,
   ShieldAlert,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 import { AnomalyEpisode, TwinState } from '../../types/contracts';
@@ -20,117 +22,141 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
   onSeedTripData,
   isSeeding,
 }) => {
+  const [showDetectorMath, setShowDetectorMath] = useState<boolean>(false);
+
   const cusumPos = twinState?.detector_state?.cusum_pos ?? 3.82;
   const cusumNeg = twinState?.detector_state?.cusum_neg ?? 0.0;
   const persistenceTimer = twinState?.detector_state?.persistence_timers?.['cusum_thermal_shift'] ?? 3600.0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* View Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between pb-4 border-b border-[#d8e6f2] gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#5d768f]">
-              DIAGNOSTIC EVIDENCE & FSM EPISODES
-            </span>
-            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[#e8f1f8] text-[#1c3c5c]">
-              6-State Lifecycle FSM
-            </span>
+      <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-subtle">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">
+                Diagnostic Evidence
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                8 Anomaly Detector Families
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Anomaly Episodes & Evidence Ledger
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Multi-domain anomaly detection tracking statistical rate-of-change, thermal residual drift, and discrete protection trips.
+            </p>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-editorial font-bold text-[#0e1824] tracking-tight">
-            Anomaly Episodes & CUSUM.
-          </h2>
-          <p className="text-xs sm:text-sm text-[#5d768f] font-light mt-0.5">
-            Deterministic multi-domain anomaly evidence across 8 detector categories with CUSUM drift detection.
-          </p>
-        </div>
 
-        {/* Dynamic Anomaly Injectors */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onSeedTripData}
-            disabled={isSeeding}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#fff5f5] hover:bg-[#fee2e2] text-rose-800 text-xs font-semibold border border-rose-200 transition-all shadow-sm"
-          >
-            <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-            <span>Inject Protection Trip Fixture</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={onSeedTripData}
+              disabled={isSeeding}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-semibold border border-rose-300 transition-colors disabled:opacity-50"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+              <span>{isSeeding ? 'Injecting...' : 'Inject Protection Trip Fixture'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* CUSUM Residual Tracker Summary */}
-      <div className="bg-white rounded-3xl p-6 shadow-card border border-[#d8e6f2]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#edf4fa] gap-3">
+      {/* CUSUM Statistical Drift Tracker */}
+      <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
-            <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#5d768f] block">
-              TWO-SIDED ROBUST CUSUM ACCUMULATOR
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+              Statistical Drift Detector
             </span>
-            <h4 className="font-editorial text-xl font-bold text-[#0e1824]">
-              Persistent Thermal Drift Detector
-            </h4>
+            <h3 className="text-sm font-bold text-slate-900">
+              Two-Sided Robust CUSUM Accumulator (Thermal Residual)
+            </h3>
           </div>
-          <UIHonestyBadge type="DEMO_DEFAULT" customText="h = 3.50 Threshold" />
+          <UIHonestyBadge type="DEMO_DEFAULT" customText="Alarm Threshold: h = 3.50" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
-          <div className="bg-[#eff5fb] p-4 rounded-2xl border border-[#dce9f4]">
-            <span className="text-[10px] font-bold text-[#5d768f] block mb-1">
-              POSITIVE CUSUM (C⁺)
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+            <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
+              Positive Accumulator (C⁺)
             </span>
-            <div className="text-3xl font-extrabold font-sans tracking-tight text-amber-800">
+            <div className="text-xl font-bold font-mono text-amber-800">
               {cusumPos.toFixed(2)}
             </div>
-            <span className="text-[11px] text-[#5d768f] font-mono mt-1 block">
-              Warning threshold: h = 3.50 (Exceeded)
+            <span className="text-[10px] text-slate-500 mt-0.5 block">
+              Threshold: h = 3.50 ({cusumPos > 3.5 ? 'Shift Flagged' : 'Normal'})
             </span>
           </div>
 
-          <div className="bg-[#eff5fb] p-4 rounded-2xl border border-[#dce9f4]">
-            <span className="text-[10px] font-bold text-[#5d768f] block mb-1">
-              NEGATIVE CUSUM (C⁻)
+          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+            <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
+              Negative Accumulator (C⁻)
             </span>
-            <div className="text-3xl font-extrabold font-sans tracking-tight text-emerald-800">
+            <div className="text-xl font-bold font-mono text-emerald-800">
               {cusumNeg.toFixed(2)}
             </div>
-            <span className="text-[11px] text-[#5d768f] font-mono mt-1 block">
+            <span className="text-[10px] text-slate-500 mt-0.5 block">
               Lower threshold: h = -3.50 (Nominal)
             </span>
           </div>
 
-          <div className="bg-[#eff5fb] p-4 rounded-2xl border border-[#dce9f4]">
-            <span className="text-[10px] font-bold text-[#5d768f] block mb-1">
-              PERSISTENCE DURATION
+          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+            <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
+              Persistence Window
             </span>
-            <div className="text-3xl font-extrabold font-sans tracking-tight text-[#0e1824]">
-              {(persistenceTimer / 60).toFixed(0)} mins
+            <div className="text-xl font-bold font-mono text-slate-900">
+              {(persistenceTimer / 60).toFixed(0)} min
             </div>
-            <span className="text-[11px] text-[#5d768f] font-mono mt-1 block">
-              Active persistence debounce window
+            <span className="text-[10px] text-slate-500 mt-0.5 block">
+              Continuous debounce timer
             </span>
           </div>
         </div>
+
+        <div className="mt-3 pt-2 border-t border-slate-100">
+          <button
+            onClick={() => setShowDetectorMath(!showDetectorMath)}
+            className="text-xs text-sky-600 hover:text-sky-800 flex items-center gap-1 font-medium"
+          >
+            <span>{showDetectorMath ? 'Hide detector details' : 'How does the CUSUM detector work?'}</span>
+            {showDetectorMath ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+
+          {showDetectorMath && (
+            <div className="mt-2 text-xs text-slate-600 bg-slate-50 p-3 rounded border border-slate-200 space-y-1">
+              <p>
+                <strong>Algorithm:</strong> Cumulative sum of normalized thermal residuals: <span className="font-mono text-slate-800">C⁺_k = max(0, C⁺_{`k-1`} + (r_k - μ) / σ - k_drift)</span>.
+              </p>
+              <p>
+                Filters out high-frequency sensor noise while reliably detecting sustained upward or downward thermal shifts caused by overloading or cooling degradation.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 6-State Episode FSM Timeline */}
-      <div className="space-y-4">
+      {/* Active & Tracked Episodes Event Ledger */}
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[#5d768f]">
-            ACTIVE & TRACKED EPISODES ({episodes.length})
-          </span>
-          <span className="text-xs text-[#5d768f] font-mono">
-            Lifecycle: NORMAL → WATCH → WARNING → CRITICAL → RECOVERING → CLOSED
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">
+            Active Anomaly Episodes ({episodes.length})
+          </h3>
+          <span className="text-xs text-slate-400 font-mono">
+            FSM: OPEN → CORROBORATED → RESOLVED / CLOSED
           </span>
         </div>
 
         {episodes.length === 0 ? (
-          <div className="bg-white rounded-3xl p-12 text-center border border-[#d8e6f2] shadow-card">
-            <h4 className="font-editorial text-2xl text-[#0e1824]">No open anomaly episodes</h4>
-            <p className="text-xs text-[#5d768f] mt-1">
-              All detectors reporting nominal operating state without active limit excursions.
+          <div className="bg-white rounded-lg p-8 text-center border border-slate-200 shadow-subtle text-slate-500">
+            <p className="text-sm font-semibold text-slate-800">No active anomaly episodes</p>
+            <p className="text-xs text-slate-400 mt-1">
+              All multi-domain detectors are operating within nominal thresholds.
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="bg-white border border-slate-200 rounded-lg shadow-subtle divide-y divide-slate-100 overflow-hidden">
             {episodes.map((ep) => {
               const state = ep.state;
               const isCrit = state === 'CRITICAL';
@@ -139,12 +165,12 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
               return (
                 <div
                   key={ep.episode_id}
-                  className="bg-white rounded-3xl p-6 sm:p-7 shadow-card border border-[#d8e6f2] hover:border-[#bcd5eb] transition-all"
+                  className="p-4 hover:bg-slate-50/70 transition-colors"
                 >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#edf4fa]">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
                       <div
-                        className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                        className={`p-1.5 rounded mt-0.5 ${
                           isCrit
                             ? 'bg-rose-100 text-rose-800'
                             : isWarn
@@ -152,13 +178,13 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
                             : 'bg-sky-100 text-sky-800'
                         }`}
                       >
-                        <AlertTriangle className="w-5 h-5" />
+                        <AlertTriangle className="w-4 h-4" />
                       </div>
 
                       <div>
                         <div className="flex items-center gap-2">
                           <span
-                            className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full ${
+                            className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${
                               isCrit
                                 ? 'bg-rose-100 text-rose-800'
                                 : isWarn
@@ -168,39 +194,39 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
                           >
                             {state}
                           </span>
-                          <span className="text-xs font-mono font-semibold text-[#5d768f]">
+                          <span className="text-[11px] font-mono text-slate-400">
                             {ep.episode_id}
                           </span>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-xs font-semibold text-slate-600">
+                            {ep.category}
+                          </span>
                         </div>
-                        <h4 className="text-xl font-editorial font-bold text-[#0e1824] mt-1">
+                        <h4 className="text-sm font-bold text-slate-900 mt-1">
                           {ep.primary_reason}
                         </h4>
                       </div>
                     </div>
 
-                    <div className="text-left md:text-right text-xs text-[#5d768f] font-mono">
-                      <div>Severity Score: <strong>{(ep.severity_score * 100).toFixed(0)}%</strong></div>
-                      <div>Category: {ep.category}</div>
+                    <div className="text-left sm:text-right text-xs text-slate-500 font-mono">
+                      <div>Severity: <strong className="text-slate-900">{(ep.severity_score * 100).toFixed(0)}%</strong></div>
+                      <div className="text-[10px] text-slate-400">
+                        Seen: {new Date(ep.start_time_utc).toISOString().replace('T', ' ').slice(0, 19)}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Hypothesis Codes & Timing */}
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] uppercase font-bold text-[#5d768f]">HYPOTHESES:</span>
-                      {ep.hypothesis_codes.map((code) => (
-                        <span
-                          key={code}
-                          className="bg-[#eff5fb] text-[#1c3c5c] px-2.5 py-0.5 rounded-md font-mono text-[11px] border border-[#dce8f3]"
-                        >
-                          {code}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="text-[11px] text-[#829ab1] font-mono">
-                      First Observed: {new Date(ep.start_time_utc).toISOString()}
-                    </div>
+                  {/* Hypothesis Codes */}
+                  <div className="mt-2.5 pl-8 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Hypotheses:</span>
+                    {ep.hypothesis_codes.map((code) => (
+                      <span
+                        key={code}
+                        className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded font-mono text-[11px] border border-slate-200"
+                      >
+                        {code}
+                      </span>
+                    ))}
                   </div>
                 </div>
               );

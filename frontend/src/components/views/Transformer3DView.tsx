@@ -338,73 +338,75 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
   return (
     <div className="space-y-6">
       {/* View Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between pb-4 border-b border-[#d8e6f2] gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#5d768f]">
-              3D TWIN
-            </span>
-            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[#e8f1f8] text-[#1c3c5c]">
-              Transformer Digital Twin · Component View
-            </span>
+      <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-subtle">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">
+                Component Navigator
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                2.5D Schematic & Telemetry Linkage
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              Physical Component State Explorer
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Interactive physical component mapping linked directly to active telemetry vectors and diagnostic domains.
+            </p>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-editorial font-bold text-[#0e1824] tracking-tight">
-            Component State Navigator.
-          </h2>
-          <p className="text-xs sm:text-sm text-[#5d768f] font-light mt-0.5">
-            Interactive state-linked physical component inspection with authoritative telemetry lineage.
-          </p>
-        </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-[#d2e2ef] shadow-sm text-xs">
-          <span className="text-[10px] font-bold text-[#5d768f] uppercase tracking-wider mr-1">
-            STATE:
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            <span className="text-[#354e6b] font-medium">Normal</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-            <span className="text-[#354e6b] font-medium">Watch</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
-            <span className="text-[#354e6b] font-medium">Warning</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-            <span className="text-[#354e6b] font-medium">Critical</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full border border-slate-400 bg-slate-200" />
-            <span className="text-[#5d768f] font-medium">Unknown / Gated</span>
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-3 bg-slate-50 px-3 py-1.5 rounded border border-slate-200 text-xs self-start sm:self-auto">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Status:
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-slate-700 text-[11px]">Normal</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span className="text-slate-700 text-[11px]">Watch</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              <span className="text-slate-700 text-[11px]">Warning</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              <span className="text-slate-700 text-[11px]">Critical</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full border border-slate-400 bg-slate-200" />
+              <span className="text-slate-500 text-[11px]">Unavailable</span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Workspace Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Left/Center Column: Stylized Transformer Visualizer Canvas (8 cols) */}
-        <div className="lg:col-span-8 bg-white rounded-3xl p-6 shadow-card border border-[#d8e6f2] flex flex-col justify-between">
-          <div className="flex items-center justify-between pb-3 border-b border-[#eef5fa] mb-4">
+        {/* Left/Center Column: Transformer Visualizer Canvas (8 cols) */}
+        <div className="lg:col-span-8 bg-white rounded-lg p-5 shadow-subtle border border-slate-200 flex flex-col justify-between">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
             <div className="flex items-center gap-2">
-              <Box className="w-4 h-4 text-[#0284c7]" />
-              <span className="text-xs font-mono font-bold text-[#1c3c5c]">
-                2.5D Isometric Component Twin · Engineering CAD View
+              <Box className="w-4 h-4 text-sky-600" />
+              <span className="text-xs font-mono font-bold text-slate-800">
+                2.5D Isometric Component Layout
               </span>
             </div>
-            <span className="text-[11px] font-mono text-[#5d768f]">
+            <span className="text-[11px] font-mono text-slate-400">
               {timestamp}
             </span>
           </div>
 
           {/* Isometric SVG Transformer Visualizer */}
-          <div className="relative w-full aspect-[16/10] min-h-[380px] bg-gradient-to-b from-[#f8fbfe] to-[#edf4fa] rounded-2xl border border-[#d2e2ef] flex items-center justify-center p-4 overflow-hidden select-none">
+          <div className="relative w-full aspect-[16/10] min-h-[360px] bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center p-4 overflow-hidden select-none">
             {/* Engineering Blueprint Grid */}
             <svg
-              className="absolute inset-0 w-full h-full opacity-15 pointer-events-none"
+              className="absolute inset-0 w-full h-full opacity-10 pointer-events-none"
               xmlns="http://www.w3.org/2000/svg"
             >
               <defs>
@@ -417,7 +419,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
                   <path
                     d="M 24 0 L 0 0 0 24"
                     fill="none"
-                    stroke="#0e1824"
+                    stroke="#0f172a"
                     strokeWidth="0.75"
                   />
                 </pattern>
@@ -791,61 +793,61 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
         </div>
 
         {/* Right Column: Selected Component Engineering Inspector Panel (4 cols) */}
-        <div className="lg:col-span-4 bg-[#f8fbfe] rounded-3xl p-6 border border-[#d8e6f2] shadow-sm flex flex-col justify-between">
-          <div className="space-y-5">
+        <div className="lg:col-span-4 bg-white rounded-lg p-5 border border-slate-200 shadow-subtle flex flex-col justify-between">
+          <div className="space-y-4">
             {/* Component Header & Status Banner */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#5d768f]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
                   {currentComp.category}
                 </span>
                 <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusBadge.bg}`}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${statusBadge.bg}`}
                 >
                   {statusBadge.icon}
-                  {statusBadge.label}
+                  <span>{statusBadge.label}</span>
                 </span>
               </div>
 
-              <h3 className="text-2xl font-editorial font-bold text-[#0e1824]">
+              <h3 className="text-lg font-bold text-slate-900">
                 {currentComp.name}
               </h3>
-              <p className="text-xs text-[#5d768f] mt-1 leading-relaxed">
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                 {currentComp.description}
               </p>
             </div>
 
             {/* Metrics List */}
-            <div className="space-y-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#5d768f] block">
-                STATE-LINKED TELEMETRY & CONDITIONS
+            <div className="space-y-2.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                State-Linked Telemetry
               </span>
 
               {currentComp.metrics.map((m, idx) => (
                 <div
                   key={idx}
-                  className={`p-3.5 rounded-2xl border transition-all ${
+                  className={`p-3 rounded border text-xs ${
                     m.isUnavailable
-                      ? 'bg-white/40 border-[#e2edf6]'
-                      : 'bg-white border-[#d2e2ef] shadow-sm'
+                      ? 'bg-slate-50/50 border-slate-200'
+                      : 'bg-slate-50 border-slate-200'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#5d768f] font-medium">
+                    <span className="text-slate-600 font-medium">
                       {m.label}
                     </span>
                     <span
-                      className={`text-sm font-mono font-bold ${
+                      className={`font-mono font-bold ${
                         m.isUnavailable
-                          ? 'text-slate-400 italic text-xs'
-                          : 'text-[#0e1824]'
+                          ? 'text-slate-400 italic text-[11px]'
+                          : 'text-slate-900'
                       }`}
                     >
                       {m.value}
                     </span>
                   </div>
                   {m.sublabel && (
-                    <span className="text-[10px] text-[#71889f] block mt-1">
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
                       {m.sublabel}
                     </span>
                   )}
@@ -855,20 +857,20 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
           </div>
 
           {/* Context Action Link (2D/3D Bridge) */}
-          <div className="pt-5 mt-5 border-t border-[#d8e6f2] space-y-3">
+          <div className="pt-4 mt-4 border-t border-slate-200 space-y-2">
             {onNavigateTab && (
               <button
                 onClick={() => onNavigateTab(currentComp.targetTab)}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-[#eff5fb] text-xs font-bold text-[#0284c7] border border-[#cbe0f1] shadow-sm transition-all group"
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-white transition-colors"
               >
                 <span>{currentComp.targetTabLabel}</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
 
             <div className="text-center">
-              <span className="text-[11px] text-[#5d768f] leading-tight block">
-                Authoritative data linked directly from <strong>FactBundle</strong> and <strong>TwinState</strong>.
+              <span className="text-[10px] text-slate-400 block">
+                Telemetry synchronized from active FactBundle state vector.
               </span>
             </div>
           </div>

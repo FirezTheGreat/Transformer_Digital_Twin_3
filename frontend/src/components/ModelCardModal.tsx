@@ -18,21 +18,21 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
   const card = modelCard ?? {
     schema_version: '1.2.0',
     model_version: 'greybox_v1_0',
-    asset_id: 'DT-TRIPURA-001',
-    created_at_utc: '2026-04-01T12:00:00Z',
+    asset_id: 'tripura_dt_01',
+    created_at_utc: '2026-10-07T07:55:17Z',
     selected_load_driver: 'rms_current_a',
-    load_driver_reference_value: 153.865,
+    load_driver_reference_value: 153.8652,
     parameters: {
-      beta_0: 15.0,
-      beta_1: 35.0,
-      tau_hours: 3.0,
+      beta_0: 1.0880,
+      beta_1: 2.8979,
+      tau_hours: 0.50,
     },
     identifiability: {
-      is_identifiable: true,
-      fit_samples_count: 1000,
-      fit_span_days: 14.0,
-      load_cv: 0.45,
-      diagnostic_messages: ['Identifiability criteria satisfied'],
+      is_identifiable: false,
+      fit_samples_count: 10941,
+      fit_span_days: 150.39,
+      load_cv: 0.5331,
+      diagnostic_messages: ['Boundary hit on tau (0.50h). Model active as shadow descriptive twin only.'],
     },
     conformal_uncertainty: {
       horizon_steps: 8,
@@ -40,23 +40,25 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
       horizon_half_widths_degc: [2.99, 3.11, 3.37, 4.08, 5.04, 6.29, 8.20, 9.56],
     },
     test_metrics: {
-      mae_degc: 2.15,
-      rmse_degc: 2.85,
-      marginal_coverage_90_pct: 91.5,
+      mae_degc: 1.65,
+      rmse_degc: 2.29,
+      marginal_coverage_90_pct: 97.33,
     },
     promotion: {
-      status: 'PROMOTED',
-      mae_improvement_pct: 18.5,
-      all_criteria_met: true,
-      reasons: ['All promotion criteria satisfied against untouched TEST partition.'],
+      status: 'NOT_PROMOTED',
+      mae_improvement_pct: 18.59,
+      all_criteria_met: false,
+      reasons: ['Boundary hit on tau (0.50h). Model active as shadow descriptive twin only.'],
     },
     qualification: {
-      parameter_interpretability: 'QUALIFIED',
-      forecast_qualification: 'QUALIFIED',
-      scenario_qualification: 'QUALIFIED',
-      residual_anomaly_qualification: 'QUALIFIED',
+      parameter_interpretability: 'UNVERIFIED',
+      forecast_qualification: 'PENDING_VALIDATION',
+      scenario_qualification: 'PENDING_VALIDATION',
+      residual_anomaly_qualification: 'NOT_QUALIFIED',
     },
   };
+
+  const isPromoted = card.promotion.status === 'PROMOTED';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0e1824]/40 backdrop-blur-sm animate-fade-in overflow-y-auto">
@@ -75,8 +77,14 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
             <span className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#5d768f]">
               PHYSICAL MODEL CARD
             </span>
-            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full uppercase">
-              {card.promotion.status}
+            <span
+              className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                isPromoted
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-900 border border-amber-300'
+              }`}
+            >
+              {isPromoted ? 'Model Promoted' : 'Not Validated for Prediction'} ({card.promotion.status} · Shadow Twin)
             </span>
           </div>
           <h3 className="text-3xl font-editorial font-bold text-[#0e1824]">
@@ -100,19 +108,19 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
             <div className="bg-white p-3 rounded-xl border border-[#dce8f3]">
               <span className="text-[10px] font-bold text-[#5d768f] block">NO-LOAD RISE (β₀)</span>
               <span className="text-base font-bold font-mono text-[#0e1824]">
-                {card.parameters.beta_0.toFixed(1)} °C
+                {card.parameters.beta_0.toFixed(2)} °C
               </span>
             </div>
             <div className="bg-white p-3 rounded-xl border border-[#dce8f3]">
               <span className="text-[10px] font-bold text-[#5d768f] block">FULL-LOAD RISE (β₁)</span>
               <span className="text-base font-bold font-mono text-[#0e1824]">
-                {card.parameters.beta_1.toFixed(1)} °C
+                {card.parameters.beta_1.toFixed(2)} °C
               </span>
             </div>
             <div className="bg-white p-3 rounded-xl border border-[#dce8f3]">
               <span className="text-[10px] font-bold text-[#5d768f] block">TIME CONSTANT (τ)</span>
               <span className="text-base font-bold font-mono text-[#0e1824]">
-                {card.parameters.tau_hours.toFixed(1)} hrs
+                {card.parameters.tau_hours.toFixed(2)} hrs
               </span>
             </div>
           </div>
@@ -174,7 +182,13 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
                 <div className="text-[10px] text-[#5d768f] uppercase font-semibold truncate" title={k}>
                   {k.replace(/_/g, ' ')}
                 </div>
-                <div className="font-mono font-bold text-emerald-800 text-[11px] mt-0.5">
+                <div
+                  className={`font-mono font-bold text-[11px] mt-0.5 px-1.5 py-0.5 rounded ${
+                    v === 'QUALIFIED'
+                      ? 'text-emerald-800 bg-emerald-50'
+                      : 'text-amber-800 bg-amber-50'
+                  }`}
+                >
                   {v}
                 </div>
               </div>

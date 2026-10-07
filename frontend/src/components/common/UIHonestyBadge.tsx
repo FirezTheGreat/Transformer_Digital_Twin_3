@@ -27,7 +27,7 @@ export const UIHonestyBadge: React.FC<UIHonestyBadgeProps> = ({
           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#e8f1f8] text-[#1c3c5c] border border-[#d2e2ef] ${className}`}
         >
           <Info className="w-3 h-3 text-[#0284c7]" />
-          {customText || 'DEMO_DEFAULT'}
+          {customText || 'Standard Parameter'}
         </span>
       );
 
@@ -38,7 +38,7 @@ export const UIHonestyBadge: React.FC<UIHonestyBadgeProps> = ({
           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#eff5fb] text-[#354e6b] border border-[#d2e2ef] ${className}`}
         >
           <Info className="w-3 h-3 text-[#0284c7]" />
-          {customText || 'relative_load_index'}
+          {customText || 'Load (relative)'}
         </span>
       );
 
@@ -49,18 +49,18 @@ export const UIHonestyBadge: React.FC<UIHonestyBadgeProps> = ({
           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-50 text-amber-900 border border-amber-200 ${className}`}
         >
           <Sparkles className="w-3 h-3 text-amber-600" />
-          {customText || 'SYNTHETIC_SCENARIO'}
+          {customText || 'Synthetic Scenario'}
         </span>
       );
 
     case 'GATED_EVIDENCE':
       return (
         <span
-          title="OTHI calculation gated: requires at least 2 current domains with medium-or-better evidence quality or 1 decisive direct protection trip."
+          title="Health score calculation gated: requires at least 2 current domains with medium-or-better evidence quality or 1 decisive direct protection trip."
           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-rose-50 text-rose-900 border border-rose-200 ${className}`}
         >
           <AlertCircle className="w-3 h-3 text-rose-600" />
-          {customText || 'GATED: INSUFFICIENT EVIDENCE'}
+          {customText || 'Health Score Unavailable (Insufficient Evidence)'}
         </span>
       );
 
@@ -71,7 +71,7 @@ export const UIHonestyBadge: React.FC<UIHonestyBadgeProps> = ({
           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-50 text-amber-900 border border-amber-200 ${className}`}
         >
           <ShieldAlert className="w-3 h-3 text-amber-600" />
-          {customText || 'FALLBACK: PERSISTENCE ONLY'}
+          {customText || 'Using Last Observed Value'}
         </span>
       );
 

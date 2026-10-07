@@ -17,9 +17,9 @@ export const AssetProfileHeader: React.FC<AssetProfileHeaderProps> = ({
   capabilities,
   onOpenModelCard,
 }) => {
-  const othiScore = health?.othi_score ?? 100;
-  const healthStatus = health?.status ?? 'NORMAL';
-  const highestTier = capabilities?.highest_tier ?? 'C3';
+  const othiScore = health?.othi_score ?? null;
+  const healthStatus = health?.status ?? 'WATCH';
+  const highestTier = capabilities?.highest_tier ?? 'C2';
 
   // Derived metrics
   const topOilObs = twinState?.current_observations?.top_oil_temperature?.value;
@@ -59,7 +59,7 @@ export const AssetProfileHeader: React.FC<AssetProfileHeaderProps> = ({
 
       {/* Location / Technical Subtitle matching "Navi Mumbai" */}
       <p className="mt-2 text-base sm:text-lg text-[#5d768f] font-light">
-        11 kV / 433 V · 250 kVA ONAN Oil-Immersed Distribution Transformer · Agartala Feeder
+        Rated kVA: UNVERIFIED · ONAN Distribution Substation · Agartala Feeder
       </p>
 
       {/* Middle Grid: ABOUT THE ASSET + OTHI HEALTH SCORE Card */}
@@ -79,10 +79,10 @@ export const AssetProfileHeader: React.FC<AssetProfileHeaderProps> = ({
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#e4eff8] text-[#1c3c5c] border border-[#cfdfed]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#0284c7]"></span>
-              Grey-Box ODE (τ = {twinState?.thermal_latent?.time_constant_tau_hours ?? 3.0}h)
+              Grey-Box ODE (τ = {twinState?.thermal_latent?.time_constant_tau_hours ?? 0.5}h)
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#e4eff8] text-[#1c3c5c] border border-[#cfdfed]">
-              Conformal Coverage 91.5%
+              Conformal Coverage 97.3%
             </span>
             <button
               onClick={onOpenModelCard}

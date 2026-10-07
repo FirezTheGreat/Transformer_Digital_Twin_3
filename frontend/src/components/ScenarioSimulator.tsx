@@ -9,7 +9,7 @@ import {
   ComposedChart,
   ReferenceLine,
 } from 'recharts';
-import { Play, TrendingUp, Sliders } from 'lucide-react';
+import { Play, TrendingUp, Sliders, AlertTriangle } from 'lucide-react';
 
 import { api, ScenarioProjectionResultData } from '../services/api';
 
@@ -64,11 +64,16 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
       {/* Editorial Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 pb-4 border-b border-[#d8e6f2]">
         <div>
-          <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[#5d768f] block mb-2">
-            PREDICTIVE WHAT-IF ENGINE
-          </span>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[#5d768f]">
+              SHADOW TWIN · WHAT-IF SCENARIO SIMULATOR
+            </span>
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
+              Descriptive / Step Response
+            </span>
+          </div>
           <p className="text-sm text-[#5d768f]">
-            2-Hour forward thermal ODE projection with 90% conformal uncertainty intervals.
+            Conditional 2-hour forward ODE step projection with empirical 90% conformal uncertainty bounds (Not a failure or RUL forecast).
           </p>
         </div>
         <h3 className="mt-3 sm:mt-0 text-3xl sm:text-5xl font-normal font-editorial text-[#0e1824] tracking-tight">
@@ -198,16 +203,47 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
             </div>
 
             {result && (
-              <div className="flex items-center gap-3">
-                <span className="text-xs bg-[#eff5fb] border border-[#d2e2ef] px-3 py-1 rounded-full text-[#1c3c5c] font-medium">
-                  Peak: <strong className="font-mono">{result.peak_projected_top_oil_degc?.toFixed(1)}°C</strong>
+              result.is_enabled ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs bg-[#eff5fb] border border-[#d2e2ef] px-3 py-1 rounded-full text-[#1c3c5c] font-medium">
+                    Peak: <strong className="font-mono">{result.peak_projected_top_oil_degc?.toFixed(1)}°C</strong>
+                  </span>
+                  <span className="text-xs bg-[#eff5fb] border border-[#d2e2ef] px-3 py-1 rounded-full text-[#1c3c5c] font-medium">
+                    Steady: <strong className="font-mono">{result.asymptotic_steady_state_degc?.toFixed(1)}°C</strong>
+                  </span>
+                  {result.is_extrapolated && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-700" /> Extrapolated
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1 rounded-full flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 text-amber-700" /> GATED
                 </span>
-                <span className="text-xs bg-[#eff5fb] border border-[#d2e2ef] px-3 py-1 rounded-full text-[#1c3c5c] font-medium">
-                  Steady: <strong className="font-mono">{result.asymptotic_steady_state_degc?.toFixed(1)}°C</strong>
-                </span>
-              </div>
+              )
             )}
           </div>
+
+          {result && !result.is_enabled && (
+            <div className="mt-4 p-3.5 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-900 text-xs flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-semibold block text-[#0e1824]">Scenario Capability Gated</strong>
+                <span className="text-[11px] text-amber-900 mt-0.5 block">{result.disabled_reason || 'Thermal scenario projection disabled for current model trust state.'}</span>
+              </div>
+            </div>
+          )}
+
+          {result?.is_enabled && result?.is_extrapolated && result?.extrapolation_warning && (
+            <div className="mt-4 p-3 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-semibold block">Extrapolation Notice (Conformal Bounds Broadened)</strong>
+                <span className="text-[11px] text-amber-800">{result.extrapolation_warning}</span>
+              </div>
+            </div>
+          )}
 
           {/* Chart area */}
           <div className="h-72 mt-6">
@@ -290,6 +326,16 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                   />
                 </ComposedChart>
               </ResponsiveContainer>
+            ) : result && !result.is_enabled ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-amber-300 rounded-2xl bg-amber-50/50">
+                <AlertTriangle className="w-8 h-8 text-amber-600 mb-2" />
+                <p className="text-sm font-editorial font-bold text-[#0e1824]">
+                  Scenario Projection Gated
+                </p>
+                <p className="text-xs text-amber-900 mt-1 max-w-sm font-medium">
+                  {result.disabled_reason || 'Thermal model is in shadow descriptive mode. Projection capability is disabled.'}
+                </p>
+              </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-[#e2edf6] rounded-2xl bg-[#f8fbfe]">
                 <TrendingUp className="w-8 h-8 text-[#0284c7] mb-2" />
@@ -304,7 +350,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
           </div>
 
           {/* Key Metric Pills */}
-          {result && (
+          {result && result.is_enabled && (
             <div className="mt-6 pt-4 border-t border-[#edf4fa] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="bg-[#eff5fb] p-3 rounded-xl border border-[#dbe8f3]">
                 <span className="text-[#5d768f] text-[10px] uppercase font-bold tracking-wider block">

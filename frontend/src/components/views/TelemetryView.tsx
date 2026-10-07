@@ -53,7 +53,7 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
               CONTINUOUS OBSERVABILITY & CAPABILITY CONFINEMENT
             </span>
             <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[#e8f1f8] text-[#1c3c5c]">
-              Tier {capabilities?.highest_tier ?? 'C3'}
+              Tier {capabilities?.highest_tier ?? 'C2'}
             </span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-editorial font-bold text-[#0e1824] tracking-tight">

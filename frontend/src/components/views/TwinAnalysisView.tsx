@@ -21,7 +21,7 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
   const topOilObs = obs['top_oil_temperature']?.value ?? 74.8;
   const topOilExpected = twinState?.thermal_latent?.top_oil_expected_degc ?? 70.5;
   const residual = twinState?.derived_electrical?.thermal_residual_degc ?? 4.3;
-  const tauHours = twinState?.thermal_latent?.time_constant_tau_hours ?? 3.2;
+  const tauHours = twinState?.thermal_latent?.time_constant_tau_hours ?? 0.5;
   const cusumPos = twinState?.detector_state?.cusum_pos ?? 3.82;
   const cusumAlarmActive = twinState?.detector_state?.cusum_alarm_active ?? true;
 
@@ -32,15 +32,15 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#5d768f]">
-              PHYSICS & PREDICTIVE TWIN ANALYSIS
+              PHYSICS & SHADOW TWIN ANALYSIS
             </span>
-            <UIHonestyBadge type="SYNTHETIC_SCENARIO" customText="WHAT-IF ENGINE" />
+            <UIHonestyBadge type="SYNTHETIC_SCENARIO" customText="SHADOW WHAT-IF" />
           </div>
           <h2 className="text-3xl sm:text-4xl font-editorial font-bold text-[#0e1824] tracking-tight">
             Twin Analysis & What-If.
           </h2>
           <p className="text-xs sm:text-sm text-[#5d768f] font-light mt-0.5">
-            Real vs. grey-box expected top-oil temperatures, free-running CUSUM residuals, and 2-hour forward projections.
+            Real vs. grey-box expected top-oil temperatures, free-running CUSUM residuals, and conditional 2-hour forward projections.
           </p>
         </div>
 

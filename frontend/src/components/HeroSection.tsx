@@ -46,13 +46,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         empirical 90% conformal uncertainty, and deterministic maintenance policies.
       </p>
 
-      {/* Meta Line matching "Discover stays across India. ... 74 stays" */}
+      {/* Meta Line */}
       <div className="mt-8 flex flex-wrap items-center justify-between text-sm text-[#486581] border-b border-[#d8e6f2] pb-6 gap-4">
         <div className="flex items-center gap-3">
           <span className="inline-block w-2 h-2 rounded-full bg-[#0284c7]"></span>
           <span className="font-medium text-[#102a43]">Tripura Distribution Grid</span>
           <span className="text-[#829ab1]">·</span>
-          <span>11 kV / 433 V ONAN Substation</span>
+          <span>Rated kVA: UNVERIFIED · ONAN Substation</span>
           <span className="text-[#829ab1]">·</span>
           <span className="text-xs bg-[#e2edf6] px-2.5 py-0.5 rounded-full text-[#1c3c5c] font-mono">
             Agartala Feeder
@@ -60,7 +60,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         </div>
         <div className="flex items-center gap-2 text-right">
           <span className="font-editorial text-2xl font-bold text-[#0e1824]">
-            {replayStatus?.total_events || totalEventsCount || 74}
+            {replayStatus?.total_events || (totalEventsCount > 0 ? totalEventsCount : '—')}
           </span>
           <span className="text-xs tracking-wider uppercase font-semibold text-[#5d768f]">
             telemetry frames
@@ -86,7 +86,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               onChange={(e) => onAssetChange(e.target.value)}
               className="w-full bg-[#f8fbfe] hover:bg-[#eff5fb] border border-[#d2e2ef] rounded-xl px-3.5 py-2.5 text-[#0e1824] font-medium text-sm focus:outline-none focus:ring-2 focus:ring-[#0284c7]/30 transition-all font-mono"
             >
-              <option value="DT-TRIPURA-001">DT-TRIPURA-001 (Agartala Substation 250kVA)</option>
+              <option value="tripura_dt_01">tripura_dt_01 (Agartala Substation · Unverified Nameplate)</option>
+              <option value="DT-TRIPURA-001">DT-TRIPURA-001 (Legacy Alias)</option>
               <option value="TX_MOCK_STATIC_01">TX_MOCK_STATIC_01 (Trip Fixture Asset)</option>
               <option value="CPRI_MOCK_TX_01">CPRI_MOCK_TX_01 (CPRI SCADA Multi-Source)</option>
             </select>

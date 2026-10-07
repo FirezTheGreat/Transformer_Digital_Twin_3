@@ -193,7 +193,7 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
             </h4>
           </div>
           <span className="text-xs text-[#5d768f]">
-            Highest Active: <strong className="text-[#0e1824] font-mono">{capabilities?.highest_tier ?? 'C3'}</strong>
+            Highest Active: <strong className="text-[#0e1824] font-mono">{capabilities?.highest_tier ?? 'C2'}</strong>
           </span>
         </div>
 
@@ -206,7 +206,7 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
             { tier: 'C4', name: 'Ageing', desc: 'Paper Loss-of-Life Hotspot' },
           ].map((item) => {
             const cap = tierMap[item.tier];
-            const isEnabled = cap?.enabled ?? (item.tier !== 'C4');
+            const isEnabled = cap ? cap.enabled : (item.tier === 'C0' || item.tier === 'C1' || item.tier === 'C2');
             const grade = cap?.evidence_grade ?? (isEnabled ? 'A' : 'U');
 
             return (

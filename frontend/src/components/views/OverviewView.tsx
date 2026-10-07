@@ -45,7 +45,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const isGated = health?.is_gated ?? false;
   const healthStatus = health?.status ?? 'WATCH';
   const evidenceGrade = health?.evidence_grade ?? 'A';
-  const highestTier = capabilities?.highest_tier ?? 'C3';
+  const highestTier = capabilities?.highest_tier ?? 'C2';
 
   const obs = twinState?.current_observations ?? {};
   const derived = twinState?.derived_electrical;
@@ -57,7 +57,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const reactivePowerKvar = obs['reactive_power_total']?.value ?? 24.1;
   const powerFactor = derived?.power_factor_derived ?? 0.951;
   const relativeLoad = derived?.relative_load_index ?? 0.78;
-  const tauHours = twinState?.thermal_latent?.time_constant_tau_hours ?? 3.0;
+  const tauHours = twinState?.thermal_latent?.time_constant_tau_hours ?? 0.5;
 
   const activeRecsCount = recommendations.length;
   const openEpisodesCount = episodes.length;
@@ -72,7 +72,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               DISTRIBUTION ASSET OVERVIEW
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#0e1824] text-white text-[11px] font-semibold shadow-sm">
-              ★ {highestTier} Dynamic Tier
+              Tier {highestTier} Active
             </span>
             {isGated && <UIHonestyBadge type="GATED_EVIDENCE" />}
           </div>
@@ -80,7 +80,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             {assetId} Substation
           </h2>
           <p className="text-xs sm:text-sm text-[#627d98] font-normal mt-1">
-            11 kV / 433 V · 250 kVA ONAN Oil-Immersed Distribution Transformer · Agartala Feeder
+            Rated kVA: UNVERIFIED · ONAN Distribution Substation · Agartala Feeder
           </p>
         </div>
 
@@ -227,17 +227,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div className="bg-white rounded-2xl p-5 border border-[#d8e6f2] shadow-sm flex flex-col justify-between hover:border-[#b8d4eb] hover:shadow-md transition-all">
             <div>
               <div className="flex items-center justify-between text-[#627d98] mb-2.5">
-                <span className="text-[10px] uppercase font-bold tracking-wider">TIME CONSTANT (τ)</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider">THERMAL INERTIA (τ)</span>
                 <div className="w-7 h-7 rounded-lg bg-sky-50 border border-sky-100 flex items-center justify-center flex-shrink-0">
                   <TrendingUp className="w-3.5 h-3.5 text-[#0284c7]" />
                 </div>
               </div>
               <div className="text-2xl sm:text-3xl font-extrabold font-sans text-[#0e1824] tracking-tight">
-                {Number(tauHours).toFixed(1)} hrs
+                {Number(tauHours).toFixed(2)} hrs
               </div>
             </div>
             <div className="text-[11px] text-[#627d98] mt-3.5 pt-2.5 border-t border-[#f1f6fb] font-mono">
-              β₀: 15°C · β₁: 35°C
+              β₀: 1.09°C · β₁: 2.90°C
             </div>
           </div>
 
@@ -254,8 +254,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 {highestTier}
               </div>
             </div>
-            <div className="text-[11px] text-emerald-700 font-semibold mt-3.5 pt-2.5 border-t border-[#f1f6fb]">
-              Predictive Active
+            <div className="text-[11px] text-[#486581] font-mono mt-3.5 pt-2.5 border-t border-[#f1f6fb]">
+              {highestTier === 'C2' ? 'C2 Top-Oil Monitoring (Predictive Gated)' : 'C3 Predictive Active'}
             </div>
           </div>
         </div>

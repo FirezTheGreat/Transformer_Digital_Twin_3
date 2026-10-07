@@ -40,7 +40,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
 }) => {
   const isRunning = replayStatus?.status === 'running';
   const processed = replayStatus?.processed_events ?? 0;
-  const total = replayStatus?.total_events ?? 74;
+  const total = replayStatus?.total_events && replayStatus.total_events > 0 ? replayStatus.total_events : '—';
 
   const formattedTime = watermarkUtc
     ? new Date(watermarkUtc).toLocaleTimeString('en-US', {
@@ -68,7 +68,8 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               onChange={(e) => onAssetChange(e.target.value)}
               className="bg-transparent text-xs font-mono font-bold text-[#0e1824] focus:outline-none cursor-pointer pr-1"
             >
-              <option value="DT-TRIPURA-001">DT-TRIPURA-001 (Agartala 250kVA)</option>
+              <option value="tripura_dt_01">tripura_dt_01 (Agartala Substation · Unverified Nameplate)</option>
+              <option value="DT-TRIPURA-001">DT-TRIPURA-001 (Legacy Alias)</option>
               <option value="TX_MOCK_STATIC_01">TX_MOCK_STATIC_01 (Trip Fixture)</option>
               <option value="CPRI_MOCK_TX_01">CPRI_MOCK_TX_01 (CPRI SCADA)</option>
             </select>
@@ -128,17 +129,22 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
 
           {/* Speed Multipliers Segment */}
           <div className="hidden sm:flex h-10 items-center bg-[#f1f6fb] p-0.5 rounded-xl border border-[#d2e2ef]">
-            {[1, 5, 10].map((s) => (
+            {[
+              { val: 1, label: '1×' },
+              { val: 5, label: '5×' },
+              { val: 10, label: '10×' },
+              { val: 0, label: 'MAX' },
+            ].map(({ val, label }) => (
               <button
-                key={s}
-                onClick={() => onSpeedChange(s)}
+                key={label}
+                onClick={() => onSpeedChange(val)}
                 className={`h-full px-2.5 rounded-lg text-[11px] font-mono font-bold transition-all ${
-                  speedMultiplier === s
+                  speedMultiplier === val
                     ? 'bg-white text-[#0e1824] shadow-sm'
                     : 'text-[#5d768f] hover:text-[#0e1824]'
                 }`}
               >
-                {s}×
+                {label}
               </button>
             ))}
           </div>

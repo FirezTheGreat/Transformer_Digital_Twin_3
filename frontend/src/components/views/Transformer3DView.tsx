@@ -18,9 +18,9 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({ twinState 
       id: 'hotspot',
       label: 'Winding Hot-Spot',
       coords: 'Core Midpoint (Layer 4)',
-      value: `${(Number(topOilObs) + 12.3).toFixed(1)} °C (Est)`,
-      desc: 'Estimated hottest point of copper conductors inside high-voltage winding.',
-      color: 'bg-rose-500',
+      value: 'UNAVAILABLE (Gated)',
+      desc: 'C4 hot-spot estimation gated: no qualified loss-of-life or winding gradient model.',
+      color: 'bg-slate-400',
     },
     {
       id: 'topoil',
@@ -32,10 +32,10 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({ twinState 
     },
     {
       id: 'bushings',
-      label: '11 kV HV Bushings',
+      label: 'HV Bushings',
       coords: 'Phase L1, L2, L3 Top Cover',
       value: `${currentL1} A Load`,
-      desc: 'Porcelain condenser bushings interfacing external 11 kV grid feeders.',
+      desc: 'Porcelain condenser bushings interfacing external primary grid feeders.',
       color: 'bg-[#0284c7]',
     },
     {

@@ -6,12 +6,12 @@ import {
 
 export const INITIAL_FACT_BUNDLE: FactBundle = {
   fact_bundle_id: "fb-20261004-001",
-  asset_id: "DT-TRIPURA-001",
+  asset_id: "tripura_dt_01",
   timestamp_utc: "2026-10-04T12:00:00Z",
   bundle_version: "1.0.0",
   provenance_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   twin_state: {
-    asset_id: "DT-TRIPURA-001",
+    asset_id: "tripura_dt_01",
     state_time_utc: "2026-10-04T12:00:00Z",
     last_processed_event_id: "evt-20261004-048",
     event_time_watermark_utc: "2026-10-04T11:50:00Z",
@@ -167,9 +167,9 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
     thermal_latent: {
       top_oil_expected_degc: 70.5,
       last_free_running_top_oil_degc: 70.5,
-      time_constant_tau_hours: 3.2,
+      time_constant_tau_hours: 0.5,
       warmup_samples_remaining: 0,
-      model_status: "PROMOTED",
+      model_status: "SHADOW_DESCRIPTIVE",
       conformal_interval_lower_degc: 68.1,
       conformal_interval_upper_degc: 72.9
     },
@@ -183,7 +183,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
     open_episodes: [
       {
         episode_id: "ep-20261004-001",
-        asset_id: "DT-TRIPURA-001",
+        asset_id: "tripura_dt_01",
         state: "WARNING",
         category: "THERMAL_DEVIATION",
         severity_score: 0.55,
@@ -198,7 +198,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
       }
     ],
     health_bundle: {
-      asset_id: "DT-TRIPURA-001",
+      asset_id: "tripura_dt_01",
       timestamp_utc: "2026-10-04T12:00:00Z",
       othi_score: 67,
       status: "WATCH",
@@ -304,10 +304,10 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
     }
   },
   capabilities: {
-    asset_id: "DT-TRIPURA-001",
+    asset_id: "tripura_dt_01",
     evaluated_at_utc: "2026-10-04T12:00:00Z",
     evaluation_window_s: 86400,
-    highest_tier: "C3",
+    highest_tier: "C2",
     available_signal_ids: [
       "top_oil_temperature",
       "ambient_temperature",
@@ -322,7 +322,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
       "reactive_power_total",
       "frequency"
     ],
-    verified_metadata_ids: ["rated_kva", "rated_voltage_hv_v", "rated_voltage_lv_v", "cooling_class"],
+    verified_metadata_ids: ["cooling_class"],
     expected_cadence_s: 900,
     current_freshness_s: 12.0,
     capabilities: {
@@ -357,13 +357,13 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
         extrapolation: false
       },
       C3: {
-        enabled: true,
-        evidence_grade: "A",
+        enabled: false,
+        evidence_grade: "U",
         required_inputs: ["top_oil_temperature", "ambient_temperature", "load_driver", "promoted_thermal_model"],
-        missing_inputs: [],
-        disabled_reason_codes: [],
-        coverage_pct: 100.0,
-        model_status: "PROMOTED",
+        missing_inputs: ["promoted_thermal_model"],
+        disabled_reason_codes: ["MODEL_NOT_PROMOTED"],
+        coverage_pct: 0.0,
+        model_status: "SHADOW_DESCRIPTIVE",
         extrapolation: false
       },
       C4: {
@@ -382,7 +382,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
     model_version: "tripura_fit_20261003"
   },
   health: {
-    asset_id: "DT-TRIPURA-001",
+    asset_id: "tripura_dt_01",
     timestamp_utc: "2026-10-04T12:00:00Z",
     othi_score: 67,
     status: "WATCH",
@@ -440,7 +440,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
   open_episodes: [
     {
       episode_id: "ep-20261004-001",
-      asset_id: "DT-TRIPURA-001",
+      asset_id: "tripura_dt_01",
       state: "WARNING",
       category: "THERMAL_DEVIATION",
       severity_score: 0.55,
@@ -481,7 +481,7 @@ export const SEED_TELEMETRY_EVENTS: CanonicalEvent[] = [
   {
     schema_version: "1.0.0",
     event_id: "evt-seed-001",
-    asset_id: "DT-TRIPURA-001",
+    asset_id: "tripura_dt_01",
     event_time_utc: "2026-10-04T11:30:00Z",
     received_time_utc: "2026-10-04T11:30:02Z",
     source: {
@@ -543,7 +543,7 @@ export const SEED_TELEMETRY_EVENTS: CanonicalEvent[] = [
   {
     schema_version: "1.0.0",
     event_id: "evt-seed-002",
-    asset_id: "DT-TRIPURA-001",
+    asset_id: "tripura_dt_01",
     event_time_utc: "2026-10-04T11:45:00Z",
     received_time_utc: "2026-10-04T11:45:02Z",
     source: {

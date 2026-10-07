@@ -24,7 +24,7 @@ import { api, ModelCardData } from './services/api';
 import { INITIAL_FACT_BUNDLE, SEED_TELEMETRY_EVENTS } from './data/initialData';
 
 export default function App(): React.ReactElement {
-  const [assetId, setAssetId] = useState<string>('DT-TRIPURA-001');
+  const [assetId, setAssetId] = useState<string>('tripura_dt_01');
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('overview');
 
@@ -57,82 +57,57 @@ export default function App(): React.ReactElement {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // 1. Fetch Backend Health and State (joins all 12 API endpoints completely)
+  // 1. Fetch Backend Health, Asset State/FactBundle, History, and Model-Card in parallel
   const loadState = useCallback(async (currentAssetId: string) => {
     setIsRefreshing(true);
     try {
-      // 1. Check health
-      try {
-        const healthRes = await api.getHealthz();
-        setIsBackendHealthy(healthRes.is_ready);
-      } catch {
+      const [healthRes, stateRes, historyRes, modelCardRes] = await Promise.allSettled([
+        api.getHealthz(),
+        api.getAssetState(currentAssetId),
+        api.getAssetHistory(currentAssetId, { limit: 50 }),
+        api.getAssetModelCard(currentAssetId),
+      ]);
+
+      // 1. Process Health
+      if (healthRes.status === 'fulfilled') {
+        setIsBackendHealthy(healthRes.value.is_ready);
+      } else {
         setIsBackendHealthy(false);
       }
 
-      // 2. Fetch primary state from API
-      try {
-        const stateRes = await api.getAssetState(currentAssetId);
-        if (stateRes.twin_state) {
-          if (
-            stateRes.twin_state.current_observations &&
-            Object.keys(stateRes.twin_state.current_observations).length > 0
-          ) {
-            setTwinState(stateRes.twin_state);
+      // 2. Process Asset State & FactBundle
+      if (stateRes.status === 'fulfilled' && stateRes.value) {
+        const data = stateRes.value;
+        if (
+          data.twin_state?.current_observations &&
+          Object.keys(data.twin_state.current_observations).length > 0
+        ) {
+          setTwinState(data.twin_state);
+        }
+        if (data.fact_bundle) {
+          if (data.fact_bundle.health) {
+            setHealth(data.fact_bundle.health);
+          }
+          if (data.fact_bundle.active_recommendations?.length > 0) {
+            setRecommendations(data.fact_bundle.active_recommendations);
+          }
+          if (data.fact_bundle.open_episodes?.length > 0) {
+            setEpisodes(data.fact_bundle.open_episodes);
+          }
+          if (data.fact_bundle.capabilities) {
+            setCapabilities(data.fact_bundle.capabilities);
           }
         }
-        if (stateRes.fact_bundle) {
-          if (stateRes.fact_bundle.health) {
-            setHealth(stateRes.fact_bundle.health);
-          }
-          if (stateRes.fact_bundle.active_recommendations?.length > 0) {
-            setRecommendations(stateRes.fact_bundle.active_recommendations);
-          }
-          if (stateRes.fact_bundle.open_episodes?.length > 0) {
-            setEpisodes(stateRes.fact_bundle.open_episodes);
-          }
-          if (stateRes.fact_bundle.capabilities) {
-            setCapabilities(stateRes.fact_bundle.capabilities);
-          }
-        }
-      } catch {
-        // Fallback gracefully to high-fidelity initial facts
       }
 
-      // 3. Complete endpoint joins: Query multi-domain health, episodes, recommendations, capabilities, and history
-      try {
-        const [healthRes, episodesRes, recsRes, capsRes, historyRes] = await Promise.allSettled([
-          api.getAssetHealth(currentAssetId),
-          api.getAssetEpisodes(currentAssetId),
-          api.getAssetRecommendations(currentAssetId),
-          api.getAssetCapabilities(currentAssetId),
-          api.getAssetHistory(currentAssetId, { limit: 50 }),
-        ]);
-
-        if (healthRes.status === 'fulfilled' && healthRes.value) {
-          setHealth(healthRes.value);
-        }
-        if (episodesRes.status === 'fulfilled' && episodesRes.value && episodesRes.value.length > 0) {
-          setEpisodes(episodesRes.value);
-        }
-        if (recsRes.status === 'fulfilled' && recsRes.value && recsRes.value.length > 0) {
-          setRecommendations(recsRes.value);
-        }
-        if (capsRes.status === 'fulfilled' && capsRes.value) {
-          setCapabilities(capsRes.value);
-        }
-        if (historyRes.status === 'fulfilled' && historyRes.value && historyRes.value.events) {
-          setHistoryEvents(historyRes.value.events);
-        }
-      } catch {
-        // Individual endpoint errors gracefully handled
+      // 3. Process History Events
+      if (historyRes.status === 'fulfilled' && historyRes.value?.events) {
+        setHistoryEvents(historyRes.value.events);
       }
 
-      // 4. Fetch calibrated model card
-      try {
-        const mc = await api.getAssetModelCard(currentAssetId);
-        setModelCard(mc);
-      } catch {
-        // Fallback model card used in modal
+      // 4. Process Calibrated Model Card
+      if (modelCardRes.status === 'fulfilled' && modelCardRes.value) {
+        setModelCard(modelCardRes.value);
       }
     } finally {
       setIsRefreshing(false);
@@ -146,14 +121,16 @@ export default function App(): React.ReactElement {
   // 2. Replay Controller
   const handleReplayAction = async (
     action: 'start' | 'pause' | 'resume' | 'step' | 'reset',
-    batchSize: number = 1
+    batchSize: number = 1,
+    overrideSpeed?: number
   ) => {
+    const activeSpeed = overrideSpeed !== undefined ? overrideSpeed : speedMultiplier;
     try {
       const res = await api.controlReplay({
         action,
         batch_size: batchSize,
         asset_id: assetId,
-        speed_multiplier: speedMultiplier,
+        speed_multiplier: activeSpeed,
       });
       setReplayStatus(res);
       showToast(`Replay ${action.toUpperCase()} action executed.`);
@@ -166,7 +143,7 @@ export default function App(): React.ReactElement {
 
   const handleSpeedChange = (speed: number) => {
     setSpeedMultiplier(speed);
-    handleReplayAction('resume', speed);
+    handleReplayAction('resume', 1, speed);
   };
 
   // 3. Seed Telemetry Ingestion

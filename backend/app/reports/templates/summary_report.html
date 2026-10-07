@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Digital Twin Engineering Audit Report - {{ report.asset.asset_id }}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 1.5cm 1.2cm 2.0cm 1.2cm;
+      @bottom-left {
+        content: "Transformer Digital Twin · Track 2 (POWERNext-AI 2026)";
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #718096;
+      }
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #718096;
+      }
+    }
+
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 9pt;
+      line-height: 1.4;
+      color: #1a202c;
+      margin: 0;
+      padding: 0;
+    }
+
+    .page-break {
+      page-break-after: always;
+    }
+
+    /* Header & Branding */
+    .report-header {
+      border-bottom: 2px solid #0284c7;
+      padding-bottom: 10px;
+      margin-bottom: 16px;
+    }
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .header-table td {
+      vertical-align: middle;
+    }
+    .brand-title {
+      font-size: 18pt;
+      font-weight: bold;
+      color: #0e1824;
+      margin: 0;
+    }
+    .brand-subtitle {
+      font-size: 9pt;
+      color: #0284c7;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 2px 0 0 0;
+    }
+    .meta-box {
+      text-align: right;
+      font-size: 8pt;
+      color: #4a5568;
+    }
+
+    /* Section Styling */
+    h2 {
+      font-size: 12pt;
+      font-weight: bold;
+      color: #0e1824;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 4px;
+      margin-top: 16px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    h3 {
+      font-size: 10pt;
+      font-weight: bold;
+      color: #1e293b;
+      margin-top: 12px;
+      margin-bottom: 6px;
+    }
+
+    /* Key Performance Metric Cards */
+    .kpi-grid {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 6px;
+      margin-bottom: 12px;
+    }
+    .kpi-card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      vertical-align: top;
+      width: 25%;
+    }
+    .kpi-label {
+      font-size: 7pt;
+      text-transform: uppercase;
+      font-weight: bold;
+      color: #64748b;
+      letter-spacing: 0.05em;
+    }
+    .kpi-value {
+      font-size: 14pt;
+      font-weight: bold;
+      color: #0e1824;
+      margin: 3px 0;
+    }
+    .kpi-sub {
+      font-size: 7.5pt;
+      color: #64748b;
+    }
+
+    /* Status Badges */
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 7.5pt;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .badge-normal { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .badge-watch { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .badge-warning { background-color: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+    .badge-critical { background-color: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3; }
+    .badge-unavailable { background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+    /* Tables */
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      font-size: 8pt;
+    }
+    table.data-table th {
+      background-color: #f1f5f9;
+      color: #334155;
+      font-weight: bold;
+      text-align: left;
+      padding: 5px 6px;
+      border: 1px solid #cbd5e1;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    table.data-table td {
+      padding: 5px 6px;
+      border: 1px solid #e2e8f0;
+      color: #1e293b;
+      vertical-align: top;
+    }
+    table.data-table tr:nth-child(even) td {
+      background-color: #f8fafc;
+    }
+
+    .callout-box {
+      background-color: #f0fdf4;
+      border-left: 4px solid #16a34a;
+      padding: 8px 10px;
+      margin: 10px 0;
+      font-size: 8pt;
+    }
+    .callout-box.alert {
+      background-color: #fffbeb;
+      border-left-color: #d97706;
+    }
+    .callout-box.critical {
+      background-color: #fef2f2;
+      border-left-color: #dc2626;
+    }
+
+    .chart-container {
+      text-align: center;
+      margin: 10px 0;
+    }
+    .chart-container img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+    }
+
+    .mono {
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* Footer audit line */
+    .audit-footer {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 6px;
+      margin-top: 14px;
+      font-size: 7pt;
+      color: #64748b;
+      font-family: 'Courier New', Courier, monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===================================================================== -->
+  <!-- PAGE 1: EXECUTIVE SUMMARY -->
+  <!-- ===================================================================== -->
+  <div class="report-header">
+    <table class="header-table">
+      <tr>
+        <td>
+          <h1 class="brand-title">DIGITAL TWIN AUDIT REPORT</h1>
+          <div class="brand-subtitle">POWERNext-AI Hackathon 2026 · Track 2 Engineering Asset Summary</div>
+        </td>
+        <td class="meta-box">
+          <div><strong>Asset ID:</strong> <span class="mono">{{ report.asset.asset_id }}</span></div>
+          <div><strong>Report ID:</strong> <span class="mono">{{ report.metadata.report_id }}</span></div>
+          <div><strong>State Timestamp:</strong> {{ report.timestamps.state_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC') }}</div>
+          <div><strong>Watermark:</strong> {{ report.timestamps.event_time_watermark_utc.strftime('%Y-%m-%d %H:%M:%S UTC') }}</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>1. Executive Health & Operating Summary</h2>
+
+  <table class="kpi-grid">
+    <tr>
+      <!-- OTHI Score -->
+      <td class="kpi-card">
+        <div class="kpi-label">OPERATIONAL HEALTH INDEX</div>
+        {% if report.health.is_gated or report.health.othi_score is none %}
+          <div class="kpi-value" style="font-size: 11pt; color: #64748b;">UNAVAILABLE</div>
+          <div class="kpi-sub">Gated: {{ report.health.gate_reason or "Multi-domain criteria" }}</div>
+        {% else %}
+          <div class="kpi-value">{{ report.health.othi_score }}<span style="font-size: 9pt; color: #64748b;">/100</span></div>
+          <div class="kpi-sub">
+            <span class="badge badge-{{ report.health.status.value.lower() if report.health.status else 'normal' }}">
+              {{ report.health.status.value if report.health.status else 'NORMAL' }}
+            </span>
+          </div>
+        {% endif %}
+      </td>
+
+      <!-- Evidence Grade -->
+      <td class="kpi-card">
+        <div class="kpi-label">EVIDENCE GRADE</div>
+        <div class="kpi-value">GRADE {{ report.health.evidence_grade.value }}</div>
+        <div class="kpi-sub">{{ report.capabilities.highest_tier.value }} Capability Tier</div>
+      </td>
+
+      <!-- Thermal Status -->
+      <td class="kpi-card">
+        <div class="kpi-label">TOP-OIL TEMPERATURE</div>
+        <div class="kpi-value">
+          {% if report.thermal.top_oil_observed_degc is not none %}
+            {{ "%.1f"|format(report.thermal.top_oil_observed_degc) }} °C
+          {% else %}
+            <span style="font-size: 11pt; color: #64748b;">UNAVAILABLE</span>
+          {% endif %}
+        </div>
+        <div class="kpi-sub">
+          Expected: {% if report.thermal.top_oil_expected_degc is not none %}{{ "%.1f"|format(report.thermal.top_oil_expected_degc) }} °C{% else %}Unavailable{% endif %}
+          (dT: {% if report.thermal.thermal_residual_degc is not none %}{{ "%+.1f"|format(report.thermal.thermal_residual_degc) }} °C{% else %}N/A{% endif %})
+        </div>
+      </td>
+
+      <!-- Loading Status -->
+      <td class="kpi-card">
+        <div class="kpi-label">LOADING & APPARENT POWER</div>
+        <div class="kpi-value">
+          {% if report.electrical and report.electrical.apparent_power_derived_kva is not none %}
+            {{ "%.1f"|format(report.electrical.apparent_power_derived_kva) }} kVA
+          {% else %}
+            <span style="font-size: 11pt; color: #64748b;">UNAVAILABLE</span>
+          {% endif %}
+        </div>
+        <div class="kpi-sub">
+          Load Index u: {% if report.electrical and report.electrical.relative_load_index is not none %}{{ "%.2f"|format(report.electrical.relative_load_index) }} p.u.{% else %}Unverified{% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Active Incident / Recommendation Summary Banner -->
+  {% if report.active_recommendations %}
+    {% set top_rec = report.active_recommendations[0] %}
+    <div class="callout-box {% if top_rec.priority.value in ['P0', 'P1'] %}critical{% else %}alert{% endif %}">
+      <strong>PRIMARY ACTION REQUIRED [{{ top_rec.priority.value }} · {{ top_rec.action_window.value }}]:</strong>
+      {{ top_rec.title }} — {{ top_rec.advisory_wording }}
+    </div>
+  {% else %}
+    <div class="callout-box">
+      <strong>SYSTEM NOMINAL:</strong> No high-priority active maintenance advisories or critical thermal alarms.
+    </div>
+  {% endif %}
+
+  <p style="font-size: 8.5pt; color: #334155; margin-top: 6px;">
+    <strong>Asset Profile & Lineage Context:</strong> This report represents an authoritative point-in-time digital twin state assessment
+    for asset <span class="mono">{{ report.asset.asset_id }}</span>. Telemetry is evaluated using a calibrated first-order thermal ODE
+    (tau = {{ "%.2f"|format(report.thermal.time_constant_tau_hours) }} h) with locked 90% empirical conformal bounds and multi-domain OTHI penalty aggregation.
+  </p>
+
+  <!-- ===================================================================== -->
+  <!-- 2. DETAILED ENGINEERING ASSESSMENT -->
+  <!-- ===================================================================== -->
+  <h2>2. Engineering State Assessment</h2>
+
+  <table style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td style="width: 50%; vertical-align: top; padding-right: 8px;">
+        <h3>Thermal Dynamics & Latent State</h3>
+        <table class="data-table">
+          <tr><th>Parameter</th><th>Observed / Derived Value</th></tr>
+          <tr><td>Top-Oil Observed Temperature</td><td><strong>{% if report.thermal.top_oil_observed_degc is not none %}{{ "%.1f"|format(report.thermal.top_oil_observed_degc) }} °C{% else %}Unavailable{% endif %}</strong></td></tr>
+          <tr><td>Top-Oil ODE Expected Temperature</td><td>{% if report.thermal.top_oil_expected_degc is not none %}{{ "%.1f"|format(report.thermal.top_oil_expected_degc) }} °C{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Thermal Residual (T_obs - T_exp)</td><td>{% if report.thermal.thermal_residual_degc is not none %}{{ "%+.2f"|format(report.thermal.thermal_residual_degc) }} °C{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Thermal Time Constant (tau)</td><td>{{ "%.2f"|format(report.thermal.time_constant_tau_hours) }} hours</td></tr>
+          <tr><td>Thermal Model Promotion Status</td><td><span class="mono">{{ report.thermal.model_status }}</span></td></tr>
+          <tr><td>90% Conformal Interval (Lower)</td><td>{% if report.thermal.conformal_interval_lower_degc is not none %}{{ "%.1f"|format(report.thermal.conformal_interval_lower_degc) }} °C{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>90% Conformal Interval (Upper)</td><td>{% if report.thermal.conformal_interval_upper_degc is not none %}{{ "%.1f"|format(report.thermal.conformal_interval_upper_degc) }} °C{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Hot-Spot / WTI Temperature</td><td><span class="badge badge-unavailable">UNAVAILABLE (C4 GATED)</span></td></tr>
+        </table>
+      </td>
+
+      <td style="width: 50%; vertical-align: top; padding-left: 8px;">
+        <h3>Electrical Measurements & Features</h3>
+        <table class="data-table">
+          <tr><th>Signal / Feature</th><th>Value</th></tr>
+          <tr><td>Active Power (P Total)</td><td>{% if report.current_observations.active_power_total_w is defined and report.current_observations.active_power_total_w.value is not none %}{{ "%.1f"|format(report.current_observations.active_power_total_w.value / 1000.0) }} kW{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Reactive Power (Q Total)</td><td>{% if report.current_observations.reactive_power_total_var is defined and report.current_observations.reactive_power_total_var.value is not none %}{{ "%.1f"|format(report.current_observations.reactive_power_total_var.value / 1000.0) }} kvar{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Apparent Power (S Derived)</td><td>{% if report.electrical and report.electrical.apparent_power_derived_kva is not none %}{{ "%.1f"|format(report.electrical.apparent_power_derived_kva) }} kVA{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Derived Power Factor (P/S)</td><td>{% if report.electrical and report.electrical.power_factor_derived is not none %}{{ "%.3f"|format(report.electrical.power_factor_derived) }}{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Mean 3-Phase RMS Current</td><td>{% if report.electrical and report.electrical.current_mean_a is not none %}{{ "%.1f"|format(report.electrical.current_mean_a) }} A{% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Current Magnitude Imbalance</td><td>{% if report.electrical and report.electrical.current_magnitude_imbalance_pct is not none %}{{ "%.2f"|format(report.electrical.current_magnitude_imbalance_pct) }} % (NEMA){% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Voltage Magnitude Imbalance</td><td>{% if report.electrical and report.electrical.voltage_magnitude_imbalance_pct is not none %}{{ "%.2f"|format(report.electrical.voltage_magnitude_imbalance_pct) }} % (NEMA){% else %}Unavailable{% endif %}</td></tr>
+          <tr><td>Neutral Conductor Current</td><td>{% if report.current_observations.neutral_current is defined and report.current_observations.neutral_current.value is not none %}{{ "%.1f"|format(report.current_observations.neutral_current.value) }} A{% else %}Unavailable{% endif %}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <div class="audit-footer">
+    PROVENANCE: State Hash: {{ report.state_hash }} | FactBundle Hash: {{ report.provenance_hash }} | Seq: {{ report.state_sequence }}
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ===================================================================== -->
+  <!-- PAGE 2: MULTI-DOMAIN OTHI HEALTH ASSESSMENT -->
+  <!-- ===================================================================== -->
+  <div class="report-header">
+    <table class="header-table">
+      <tr>
+        <td><h1 class="brand-title">MULTI-DOMAIN HEALTH BREAKDOWN</h1></td>
+        <td class="meta-box"><div><strong>Asset ID:</strong> <span class="mono">{{ report.asset.asset_id }}</span></div></td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>3. Operational Transformer Health Index (OTHI)</h2>
+
+  <p style="font-size: 8pt; color: #475569; margin-bottom: 8px;">
+    OTHI aggregates 5 canonical operational domains via a non-linear gated max-plus-secondary penalty formula:
+    <em>Penalty = min(1.0, max(s_d) + 0.20 * sum(other s_d))</em>.
+  </p>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 18%;">Domain</th>
+        <th style="width: 12%;">Status</th>
+        <th style="width: 12%;">Severity (s_d)</th>
+        <th style="width: 12%;">Freshness</th>
+        <th style="width: 20%;">Contributing Families</th>
+        <th style="width: 26%;">Engineering Explanation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d_name, d in report.health.domains.items() %}
+      <tr>
+        <td><strong>{{ d.domain_name }}</strong></td>
+        <td><span class="badge badge-{{ d.status.value.lower() }}">{{ d.status.value }}</span></td>
+        <td>{{ "%.2f"|format(d.severity) }}</td>
+        <td>{{ d.freshness.value }}</td>
+        <td><span class="mono" style="font-size: 7pt;">{{ d.contributing_families|join(', ') or 'None' }}</span></td>
+        <td style="font-size: 7.5pt;">{{ d.details }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+    <tr>
+      <td style="width: 50%; vertical-align: top; padding-right: 8px;">
+        <h3>Health Gating & Anti-Uplift Guarantee</h3>
+        <p style="font-size: 8pt; color: #334155;">
+          <strong>Is Gated:</strong> {{ "YES (Score Withheld)" if report.health.is_gated else "NO (Score Active)" }}<br>
+          <strong>Gating Reason:</strong> {{ report.health.gate_reason or "Multi-domain evidence threshold satisfied." }}<br>
+          <strong>Driving Domain:</strong> {{ report.health.driving_domain or "None" }}<br>
+          <strong>Base Penalty:</strong> {{ "%.3f"|format(report.health.base_penalty) }}<br>
+          <strong>Secondary Penalty:</strong> {{ "%.3f"|format(report.health.secondary_penalty) }}<br>
+          <strong>Total Penalty:</strong> {{ "%.3f"|format(report.health.total_penalty) }}
+        </p>
+      </td>
+      <td style="width: 50%; vertical-align: top; padding-left: 8px;">
+        <h3>Statistical Detectors & CUSUM</h3>
+        <p style="font-size: 8pt; color: #334155;">
+          <strong>CUSUM Pos Accumulator:</strong> {{ "%.3f"|format(report.detectors.cusum_pos) }}<br>
+          <strong>CUSUM Neg Accumulator:</strong> {{ "%.3f"|format(report.detectors.cusum_neg) }}<br>
+          <strong>Decision Threshold Tripped:</strong> {{ "ACTIVE ALARM" if report.detectors.cusum_alarm_active else "CLEAR" }}<br>
+          <strong>Active Persistence Timers:</strong> {{ report.detectors.persistence_timers|length }} active counters
+        </p>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ===================================================================== -->
+  <!-- 4. ACTIVE ANOMALY EPISODES -->
+  <!-- ===================================================================== -->
+  <h2>4. Active Anomaly Incidents (6-State FSM)</h2>
+
+  {% if report.open_episodes %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Episode ID</th>
+          <th>Category</th>
+          <th>State</th>
+          <th>Severity</th>
+          <th>Start (UTC)</th>
+          <th>Primary Reason & Hypotheses</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ep in report.open_episodes %}
+        <tr>
+          <td><span class="mono">{{ ep.episode_id }}</span></td>
+          <td>{{ ep.category.value }}</td>
+          <td><span class="badge badge-{{ ep.state.value.lower() }}">{{ ep.state.value }}</span></td>
+          <td>{{ "%.2f"|format(ep.severity_score) }}</td>
+          <td>{{ ep.start_time_utc.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>
+            <strong>{{ ep.primary_reason }}</strong>
+            {% if ep.hypothesis_codes %}
+              <div style="font-size: 7pt; color: #64748b;">Hypotheses: {{ ep.hypothesis_codes|join(', ') }}</div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p style="font-size: 8pt; color: #64748b; font-style: italic;">No active or recovering anomaly episodes recorded in current twin state.</p>
+  {% endif %}
+
+  <!-- ===================================================================== -->
+  <!-- 5. MAINTENANCE ADVISORIES -->
+  <!-- ===================================================================== -->
+  <h2>5. Prioritized Maintenance Action Plan</h2>
+
+  {% if report.active_recommendations %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 12%;">Priority</th>
+          <th style="width: 14%;">Window</th>
+          <th style="width: 24%;">Action Title</th>
+          <th style="width: 32%;">Advisory Wording & Rationale</th>
+          <th style="width: 18%;">Standard Ref</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in report.active_recommendations %}
+        <tr>
+          <td><span class="badge {% if rec.priority.value in ['P0', 'P1'] %}badge-critical{% elif rec.priority.value == 'P2' %}badge-warning{% else %}badge-watch{% endif %}">{{ rec.priority.value }}</span></td>
+          <td>{{ rec.action_window.value }}</td>
+          <td>
+            <strong>{{ rec.title }}</strong><br>
+            <span class="mono" style="font-size: 6.5pt; color: #475569;">ID: {{ rec.recommendation_id }}</span><br>
+            <span class="mono" style="font-size: 6.5pt; color: #64748b;">Rule: {{ rec.rule_id }}</span>
+          </td>
+          <td style="font-size: 7.5pt;">
+            {{ rec.advisory_wording }}<br>
+            <em style="color: #475569;">Rationale: {{ rec.rationale }}</em>
+            {% if rec.is_acknowledged %}
+              <div style="font-size: 6.5pt; color: #166534; margin-top: 2px;">✓ Acknowledged by {{ rec.acknowledged_by or 'Operator' }}</div>
+            {% endif %}
+          </td>
+          <td style="font-size: 7pt;">{{ rec.source_reference }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p style="font-size: 8pt; color: #64748b; font-style: italic;">No active maintenance recommendations.</p>
+  {% endif %}
+
+  <div class="audit-footer">
+    PROVENANCE: State Hash: {{ report.state_hash }} | FactBundle Hash: {{ report.provenance_hash }} | Seq: {{ report.state_sequence }}
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ===================================================================== -->
+  <!-- PAGE 3: HISTORICAL TREND CHARTS & ANNEX -->
+  <!-- ===================================================================== -->
+  <div class="report-header">
+    <table class="header-table">
+      <tr>
+        <td><h1 class="brand-title">HISTORICAL TRENDS & AUDIT ANNEX</h1></td>
+        <td class="meta-box"><div><strong>Asset ID:</strong> <span class="mono">{{ report.asset.asset_id }}</span></div></td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>6. Authoritative Historical Trends</h2>
+
+  {% if charts.thermal_chart %}
+    <div class="chart-container">
+      <img src="{{ charts.thermal_chart }}" alt="Thermal Trajectory Chart">
+    </div>
+  {% endif %}
+
+  {% if charts.electrical_chart %}
+    <div class="chart-container">
+      <img src="{{ charts.electrical_chart }}" alt="Electrical Dynamics Chart">
+    </div>
+  {% endif %}
+
+  {% if charts.current_chart %}
+    <div class="chart-container">
+      <img src="{{ charts.current_chart }}" alt="Phase Current Balance Chart">
+    </div>
+  {% endif %}
+
+  {% if not charts.thermal_chart and not charts.electrical_chart and not charts.current_chart %}
+    <p style="font-size: 8pt; color: #64748b; font-style: italic; padding: 20px 0; text-align: center;">
+      Historical telemetry frames unavailable for chart rendering in current storage context.
+    </p>
+  {% endif %}
+
+  <h2>7. Engineering Annex & Standards Compliance</h2>
+
+  <table style="width: 100%; border-collapse: collapse; font-size: 7.5pt; color: #334155;">
+    <tr>
+      <td style="width: 50%; vertical-align: top; padding-right: 8px;">
+        <h3>Standards & Citations</h3>
+        <p>
+          • <strong>IEEE C57.91-2011:</strong> Guide for Loading Mineral-Oil-Immersed Transformers (Thermal ODE reference & insulation aging models).<br>
+          • <strong>IEC 60076-7:</strong> Loading guide for oil-immersed power transformers.<br>
+          • <strong>NEMA MG-1:</strong> Phase voltage and current unbalance calculation conventions.
+        </p>
+      </td>
+      <td style="width: 50%; vertical-align: top; padding-left: 8px;">
+        <h3>Safety & Data Honesty Guarantees</h3>
+        <p>
+          • <strong>Zero Unsupported Claims:</strong> No numerical Remaining Useful Life (RUL) or autonomous trip commands.<br>
+          • <strong>Unverified Nameplate Rating:</strong> Relative load index (u) is reported in per-unit reference without fabricated kVA capacity.<br>
+          • <strong>Model Lineage:</strong> Thermal ODE is qualified under descriptive shadow monitoring.
+        </p>
+      </td>
+    </tr>
+  </table>
+
+  <div class="audit-footer">
+    PROVENANCE AUDIT: State Hash: {{ report.state_hash }} | FactBundle Hash: {{ report.provenance_hash }} | Generated At: {{ report.metadata.generated_at_utc.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+  </div>
+
+</body>
+</html>

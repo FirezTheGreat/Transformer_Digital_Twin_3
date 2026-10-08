@@ -1175,6 +1175,7 @@ def run_full_calibration_pipeline(
     artifact = CalibratedThermalModelArtifact(
         schema_version="1.2.0",
         model_version=model_version,
+        dataset_id="tripura_dev",
         asset_id=asset_id,
         created_at_utc=datetime.now(timezone.utc).isoformat(),
         selected_load_driver=selected_driver,

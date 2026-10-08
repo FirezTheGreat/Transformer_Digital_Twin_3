@@ -35,6 +35,20 @@ def calculate_apparent_power(
     return round(math.sqrt(p_kw * p_kw + q_kvar * q_kvar), 4)
 
 
+def calculate_reactive_power_magnitude(
+    p_kw: float | None,
+    s_kva: float | None,
+) -> float | None:
+    """Derive magnitude of reactive power |Q| = sqrt(max(0, S^2 - P^2)) in kvar from P and S.
+
+    Adheres strictly to electrical physics: returns magnitude only and never fabricates reactive sign.
+    """
+    if p_kw is None or s_kva is None:
+        return None
+    diff = max(0.0, s_kva * s_kva - p_kw * p_kw)
+    return round(math.sqrt(diff), 4)
+
+
 def calculate_power_factor(
     p_kw: float | None,
     s_kva: float | None,
@@ -311,12 +325,18 @@ def extract_electrical_features(
 
     # Relative Load Index: precedence (1) s_obs, (2) s_derived, (3) current-based proxy
     s_drive = s_obs if s_obs is not None else s_derived
+    ref_k = load_reference_kva
+    if profile and "load_reference_kva" in profile.fields:
+        field_val = profile.fields["load_reference_kva"].value
+        if isinstance(field_val, (int, float)) and field_val > 0:
+            ref_k = float(field_val)
+
     rated_k = (
         profile.rated_kva
         if (profile and profile.profile_status == ProfileVerificationStatus.VERIFIED and profile.rated_kva)
         else None
     )
-    u_load = calculate_relative_load_index(s_drive, rated_kva=rated_k, reference_kva=load_reference_kva)
+    u_load = calculate_relative_load_index(s_drive, rated_kva=rated_k, reference_kva=ref_k)
 
     return DerivedFeatures(
         timestamp_utc=event.event_time_utc,

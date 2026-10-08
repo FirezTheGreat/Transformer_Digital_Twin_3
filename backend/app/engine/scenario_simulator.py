@@ -83,17 +83,33 @@ class ScenarioSimulator:
         is_model_promoted_override: Optional[bool] = None,
     ) -> ScenarioSimulator:
         """Construct simulator directly from a frozen CalibratedThermalModelArtifact."""
-        params = ThermalModelParameters(
-            beta_0=artifact.parameters.beta_0,
-            beta_1=artifact.parameters.beta_1,
-            tau_hours=artifact.parameters.tau_hours,
-        )
+        if artifact.parameters is not None:
+            params = ThermalModelParameters(
+                beta_0=artifact.parameters.beta_0,
+                beta_1=artifact.parameters.beta_1,
+                tau_hours=artifact.parameters.tau_hours,
+            )
+            load_driver_ref = (
+                artifact.load_driver_reference_value
+                if artifact.load_driver_reference_value is not None
+                else 153.865
+            )
+            load_driver_t = artifact.selected_load_driver or "rms_current_a"
+        else:
+            params = ThermalModelParameters(beta_0=1.0, beta_1=1.0, tau_hours=1.0)
+            load_driver_ref = 100.0
+            load_driver_t = "uncalibrated"
+
         is_promoted = (
             is_model_promoted_override
             if is_model_promoted_override is not None
             else (artifact.promotion.status == "PROMOTED")
         )
-        if is_model_promoted_override is True:
+
+        if artifact.parameters is None or artifact.promotion.status == "UNCALIBRATED":
+            is_promoted = False
+            qualification = None
+        elif is_model_promoted_override is True:
             qualification = ThermalModelQualification(
                 parameter_interpretability=artifact.qualification.parameter_interpretability if artifact.qualification else QualificationStatus.QUALIFIED,
                 forecast_qualification=QualificationStatus.QUALIFIED,
@@ -116,22 +132,27 @@ class ScenarioSimulator:
         else:
             qualification = artifact.qualification
 
-        widths = (
-            artifact.conformal_uncertainty.horizon_half_widths_degc
-            if artifact.conformal_uncertainty.horizon_half_widths_degc
-            else DEFAULT_CONFORMAL_HALF_WIDTHS_DEGC
-        )
+        if artifact.conformal_uncertainty is not None:
+            widths = (
+                artifact.conformal_uncertainty.horizon_half_widths_degc
+                if artifact.conformal_uncertainty.horizon_half_widths_degc
+                else DEFAULT_CONFORMAL_HALF_WIDTHS_DEGC
+            )
+            q90 = artifact.conformal_uncertainty.block_quantile_90 or 5.9891
+        else:
+            widths = DEFAULT_CONFORMAL_HALF_WIDTHS_DEGC
+            q90 = 5.9891
 
         return cls(
             asset_id=artifact.asset_id,
             params=params,
-            load_driver_reference=artifact.load_driver_reference_value,
-            load_driver_type=artifact.selected_load_driver,
+            load_driver_reference=load_driver_ref,
+            load_driver_type=load_driver_t,
             is_model_promoted=is_promoted,
             qualification=qualification,
             conformal_half_widths_degc=widths,
             model_version=artifact.model_version,
-            conformal_quantile_90=artifact.conformal_uncertainty.block_quantile_90,
+            conformal_quantile_90=q90,
         )
 
     def run_projection(

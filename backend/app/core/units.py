@@ -131,6 +131,10 @@ UCUM_CANONICAL_MAP: dict[str, str] = {
     "%": "%",
     "pct": "%",
     "percent": "%",
+    # Acceleration / Vibration
+    "m/s2": "m/s**2",
+    "m/s^2": "m/s**2",
+    "m/s**2": "m/s**2",
 }
 
 

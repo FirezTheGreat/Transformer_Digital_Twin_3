@@ -33,11 +33,15 @@ from app.models.thermal_artifact import (
 from app.models.twin_state import TwinState
 
 
-def build_default_model_artifact(asset_id: str = "tripura_dt_01") -> CalibratedThermalModelArtifact:
+def build_default_model_artifact(
+    asset_id: str = "tripura_dt_01",
+    dataset_id: str = "tripura_dev",
+) -> CalibratedThermalModelArtifact:
     """Construct baseline fallback thermal model artifact when file is absent."""
     return CalibratedThermalModelArtifact(
         schema_version="1.2.0",
         model_version="greybox_v1_0",
+        dataset_id=dataset_id,
         asset_id=asset_id,
         created_at_utc="2026-10-07T07:55:17+00:00",
         selected_load_driver="rms_current_a",
@@ -162,11 +166,17 @@ def get_storage(state: AppState = Depends(get_app_state)) -> StorageEngine:
 def get_reducer(state: AppState = Depends(get_app_state)) -> TwinReducer:
     """Provide TwinReducer dependency."""
     if state.reducer is None:
+        from app.core.registry import resolve_asset_profile, resolve_model_artifact
         from app.engine.thermal_fallback import ThermalFallbackGate
-        artifact = state.model_artifact or build_default_model_artifact(asset_id=state.settings.default_asset_id)
-        thermal_gate = ThermalFallbackGate.from_artifact(artifact)
+        asset_id = state.settings.default_asset_id
+        profile = state.profile or resolve_asset_profile(asset_id=asset_id)
+        artifact = state.model_artifact or resolve_model_artifact(asset_id=asset_id)
+        thermal_gate = ThermalFallbackGate.from_artifact(
+            artifact,
+            nominal_cadence_s=profile.expected_cadence_s,
+        )
         state.reducer = TwinReducer(
-            profile=state.profile,
+            profile=profile,
             load_reference_kva=state.settings.load_reference_kva,
             thermal_gate=thermal_gate,
         )
@@ -207,14 +217,8 @@ def get_feedback_ledger(state: AppState = Depends(get_app_state)) -> OperatorFee
 def get_model_artifact(state: AppState = Depends(get_app_state)) -> CalibratedThermalModelArtifact:
     """Provide CalibratedThermalModelArtifact dependency."""
     if state.model_artifact is None:
-        artifact_path = Path("data/processed/calibrated_thermal_model.json")
-        if artifact_path.exists():
-            try:
-                state.model_artifact = CalibratedThermalModelArtifact.load_json(artifact_path)
-            except Exception:
-                state.model_artifact = build_default_model_artifact(state.settings.default_asset_id)
-        else:
-            state.model_artifact = build_default_model_artifact(state.settings.default_asset_id)
+        from app.core.registry import resolve_model_artifact
+        state.model_artifact = resolve_model_artifact(asset_id=state.settings.default_asset_id)
     return state.model_artifact
 
 

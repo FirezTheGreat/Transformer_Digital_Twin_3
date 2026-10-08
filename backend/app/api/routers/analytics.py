@@ -141,10 +141,14 @@ async def get_asset_recommendations(
 )
 async def get_asset_model_card(
     asset_id: str,
-    model_artifact: CalibratedThermalModelArtifact = Depends(get_model_artifact),
+    dataset_id: Optional[str] = None,
+    app_state: AppState = Depends(get_app_state),
 ) -> CalibratedThermalModelArtifact:
     """Return comprehensive calibrated model card including parameters, bounds, and qualification matrix."""
-    return model_artifact
+    from app.core.registry import resolve_model_artifact
+    if app_state.model_artifact and app_state.model_artifact.asset_id == asset_id:
+        return app_state.model_artifact
+    return resolve_model_artifact(dataset_id=dataset_id, asset_id=asset_id)
 
 
 @router.post(
@@ -156,10 +160,16 @@ async def get_asset_model_card(
 async def execute_what_if_scenario(
     asset_id: str,
     request: ScenarioRequest,
+    dataset_id: Optional[str] = None,
     app_state: AppState = Depends(get_app_state),
-    simulator: ScenarioSimulator = Depends(get_scenario_simulator),
 ) -> ScenarioProjectionResult:
     """Simulate 2-hour forward top-oil temperature trajectory with conformal uncertainty bounds."""
+    if app_state.scenario_simulator and app_state.scenario_simulator.asset_id == asset_id:
+        simulator = app_state.scenario_simulator
+    else:
+        from app.core.registry import resolve_model_artifact
+        artifact = resolve_model_artifact(dataset_id=dataset_id, asset_id=asset_id)
+        simulator = ScenarioSimulator.from_artifact(artifact)
     state = app_state.current_state
 
     # Extract origin values from active state if available

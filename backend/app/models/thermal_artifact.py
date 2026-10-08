@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ThermalModelParamsDict(BaseModel):
@@ -155,18 +155,29 @@ class CalibratedThermalModelArtifact(BaseModel):
 
     schema_version: str = Field(default="1.2.0", description="Artifact schema version")
     model_version: str = Field(default="greybox_v1_0", description="Model semantic version")
-    asset_id: str = Field(default="tripura_dt_01", description="Target transformer asset identifier")
+    dataset_id: str = Field(..., description="Source dataset identifier")
+    asset_id: str = Field(..., description="Target transformer asset identifier")
     created_at_utc: str = Field(..., description="ISO 8601 UTC creation timestamp")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _handle_legacy_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "dataset_id" not in data:
+                data["dataset_id"] = "tripura_dev"
+            if "asset_id" not in data:
+                data["asset_id"] = "tripura_dt_01"
+        return data
     
-    selected_load_driver: str = Field(..., description="Winning load driver: 'apparent_power_kva' or 'rms_current_a'")
-    load_driver_reference_value: float = Field(..., gt=0.0, description="P95 reference value on FIT partition")
+    selected_load_driver: Optional[str] = Field(default=None, description="Winning load driver: 'apparent_power_kva' or 'rms_current_a'")
+    load_driver_reference_value: Optional[float] = Field(default=None, gt=0.0, description="P95 reference value on FIT partition")
     
-    parameters: ThermalModelParamsDict = Field(..., description="Fitted beta_0, beta_1, tau")
-    identifiability: IdentifiabilityReport = Field(..., description="Identifiability diagnostics")
-    conformal_uncertainty: ConformalUncertaintyParams = Field(..., description="Calibrated empirical uncertainty bounds")
+    parameters: Optional[ThermalModelParamsDict] = Field(default=None, description="Fitted beta_0, beta_1, tau (None if uncalibrated)")
+    identifiability: Optional[IdentifiabilityReport] = Field(default=None, description="Identifiability diagnostics")
+    conformal_uncertainty: Optional[ConformalUncertaintyParams] = Field(default=None, description="Calibrated empirical uncertainty bounds")
     
     baselines: Dict[str, BaselineMetricEntry] = Field(default_factory=dict, description="Metrics for baseline models on TEST (2-hour path)")
-    test_metrics: BaselineMetricEntry = Field(..., description="Grey-box model metrics on untouched TEST (2-hour path)")
+    test_metrics: Optional[BaselineMetricEntry] = Field(default=None, description="Grey-box model metrics on untouched TEST (2-hour path)")
     promotion: PromotionDecision = Field(..., description="Locked promotion evaluation report based on 2-hour trajectory")
     qualification: ThermalModelQualification = Field(default_factory=ThermalModelQualification, description="Capability-specific qualification matrix")
     
@@ -189,3 +200,57 @@ class CalibratedThermalModelArtifact(BaseModel):
         with open(p, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls.model_validate(data)
+
+    @classmethod
+    def create_uncalibrated(cls, dataset_id: str, asset_id: str) -> CalibratedThermalModelArtifact:
+        """Construct deterministic uncalibrated artifact without fake numerical constants."""
+        now_str = datetime.now(timezone.utc).isoformat()
+        return cls(
+            schema_version="1.2.0",
+            model_version="uncalibrated",
+            dataset_id=dataset_id,
+            asset_id=asset_id,
+            created_at_utc=now_str,
+            selected_load_driver="uncalibrated",
+            load_driver_reference_value=None,
+            parameters=None,
+            identifiability=IdentifiabilityReport(
+                is_identifiable=False,
+                fit_samples_count=0,
+                fit_span_days=0.0,
+                load_cv=0.0,
+                load_range=0.0,
+                tau_cv_across_folds=0.0,
+                boundary_hit=False,
+                diagnostic_messages=["Model has not been calibrated for this dataset and asset."],
+            ),
+            conformal_uncertainty=None,
+            test_metrics=BaselineMetricEntry(
+                model_name="uncalibrated",
+                mae_degc=0.0,
+                rmse_degc=0.0,
+                bias_degc=0.0,
+            ),
+            promotion=PromotionDecision(
+                status="UNCALIBRATED",
+                primary_evaluation_horizon="uncalibrated",
+                mae_improvement_pct=0.0,
+                passes_mae_criterion=False,
+                passes_bias_criterion=False,
+                passes_coverage_criterion=False,
+                passes_scenario_criterion=False,
+                passes_identifiability_criterion=False,
+                all_criteria_met=False,
+                reasons=["No training/calibration partition processed for this asset."],
+            ),
+            qualification=ThermalModelQualification(
+                parameter_interpretability=QualificationStatus.UNVERIFIED,
+                forecast_qualification=QualificationStatus.NOT_QUALIFIED,
+                scenario_qualification=QualificationStatus.NOT_QUALIFIED,
+                residual_display_qualification=QualificationStatus.NOT_QUALIFIED,
+                residual_anomaly_qualification=QualificationStatus.NOT_QUALIFIED,
+                cusum_qualification=QualificationStatus.DISABLED,
+                maintenance_inference_qualification=QualificationStatus.DISABLED,
+                dimension_reasons={"all": "Uncalibrated asset; all thermal model capabilities disabled."},
+            ),
+        )

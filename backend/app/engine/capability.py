@@ -36,10 +36,16 @@ AMBIENT_SIGNAL_IDS = {
 # Discrete WTI alarm/trip contacts - strictly rejected as continuous temperature
 DISCRETE_WTI_SIGNAL_IDS = {
     "winding_temp_alarm_contact",
-    "winding_temperature",
     "wti",
     "wti_alarm",
     "wti_trip",
+}
+
+# Continuous winding temperature signals (analog sensor readings, not contact alarms)
+CONTINUOUS_WINDING_TEMP_SIGNAL_IDS = {
+    "winding_temperature",
+    "winding_temp",
+    "winding_temp_degc",
 }
 
 # Electrical Power signals
@@ -371,6 +377,72 @@ class CapabilityEvaluator:
             required_inputs=["active_power", "reactive_power", "apparent_power"],
             missing_inputs=pqs_missing,
             disabled_reason_codes=pqs_reasons,
+            model_status="NOT_APPLICABLE",
+        )
+
+        # Frequency
+        m_freq = _find_measurement(obs, {"frequency", "freq"})
+        capabilities["frequency_monitoring"] = CapabilityItem(
+            enabled=c0_enabled and (m_freq is not None),
+            evidence_grade="A" if (m_freq is not None and m_freq.quality.severity == QualitySeverity.GOOD) else ("B" if m_freq is not None else "U"),
+            required_inputs=["frequency"],
+            missing_inputs=[] if m_freq is not None else ["frequency"],
+            disabled_reason_codes=[] if m_freq is not None else ["MISSING_FREQUENCY"],
+            model_status="NOT_APPLICABLE",
+        )
+
+        # THD
+        m_thd = _find_measurement(obs, {"thd", "thd_pct", "thd_total"})
+        capabilities["thd_monitoring"] = CapabilityItem(
+            enabled=c0_enabled and (m_thd is not None),
+            evidence_grade="A" if (m_thd is not None and m_thd.quality.severity == QualitySeverity.GOOD) else ("B" if m_thd is not None else "U"),
+            required_inputs=["thd"],
+            missing_inputs=[] if m_thd is not None else ["thd"],
+            disabled_reason_codes=[] if m_thd is not None else ["MISSING_THD"],
+            model_status="NOT_APPLICABLE",
+        )
+
+        # Continuous Winding Temperature (observed-only; does not imply hotspot or ageing model)
+        m_w_temp = _find_measurement(obs, CONTINUOUS_WINDING_TEMP_SIGNAL_IDS)
+        capabilities["winding_temperature_monitoring"] = CapabilityItem(
+            enabled=c0_enabled and (m_w_temp is not None),
+            evidence_grade="A" if (m_w_temp is not None and m_w_temp.quality.severity == QualitySeverity.GOOD) else ("B" if m_w_temp is not None else "U"),
+            required_inputs=["winding_temperature"],
+            missing_inputs=[] if m_w_temp is not None else ["winding_temperature"],
+            disabled_reason_codes=[] if m_w_temp is not None else ["MISSING_WINDING_TEMPERATURE"],
+            model_status="NOT_APPLICABLE",
+        )
+
+        # Vibration
+        m_vib = _find_measurement(obs, {"vibration", "vibration_rms"})
+        capabilities["vibration_monitoring"] = CapabilityItem(
+            enabled=c0_enabled and (m_vib is not None),
+            evidence_grade="A" if (m_vib is not None and m_vib.quality.severity == QualitySeverity.GOOD) else ("B" if m_vib is not None else "U"),
+            required_inputs=["vibration_rms"],
+            missing_inputs=[] if m_vib is not None else ["vibration_rms"],
+            disabled_reason_codes=[] if m_vib is not None else ["MISSING_VIBRATION"],
+            model_status="NOT_APPLICABLE",
+        )
+
+        # Oil Level
+        m_oil_lvl = _find_measurement(obs, {"oil_level", "oil_level_pct"})
+        capabilities["oil_level_monitoring"] = CapabilityItem(
+            enabled=c0_enabled and (m_oil_lvl is not None),
+            evidence_grade="A" if (m_oil_lvl is not None and m_oil_lvl.quality.severity == QualitySeverity.GOOD) else ("B" if m_oil_lvl is not None else "U"),
+            required_inputs=["oil_level_pct"],
+            missing_inputs=[] if m_oil_lvl is not None else ["oil_level_pct"],
+            disabled_reason_codes=[] if m_oil_lvl is not None else ["MISSING_OIL_LEVEL"],
+            model_status="NOT_APPLICABLE",
+        )
+
+        # Bushing Temperature
+        m_bushing = _find_measurement(obs, {"bushing_temp", "bushing_temperature", "bushing_temp_degc"})
+        capabilities["bushing_temp_monitoring"] = CapabilityItem(
+            enabled=c0_enabled and (m_bushing is not None),
+            evidence_grade="A" if (m_bushing is not None and m_bushing.quality.severity == QualitySeverity.GOOD) else ("B" if m_bushing is not None else "U"),
+            required_inputs=["bushing_temperature"],
+            missing_inputs=[] if m_bushing is not None else ["bushing_temperature"],
+            disabled_reason_codes=[] if m_bushing is not None else ["MISSING_BUSHING_TEMP"],
             model_status="NOT_APPLICABLE",
         )
 

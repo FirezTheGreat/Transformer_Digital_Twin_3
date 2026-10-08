@@ -116,6 +116,7 @@ class ThermalFallbackGate:
         cusum_decision_limit_h: float = 4.50,
         max_gap_hours: float = 1.0,
         min_warmup_samples: Optional[int] = None,
+        nominal_cadence_s: Optional[int] = None,
     ) -> None:
         self.asset_id = str(asset_id)
         self.params = params
@@ -125,11 +126,13 @@ class ThermalFallbackGate:
         self.qualification = qualification
         self.conformal_half_width_1step = float(conformal_half_width_1step)
         self.max_gap_hours = float(max_gap_hours)
+        self.nominal_cadence_s = nominal_cadence_s
 
-        # Warmup sample count: max(4 samples, ceil(tau / 0.25h))
+        # Warmup sample count: preserve frozen warmup DURATION and make conversion cadence-aware
         if min_warmup_samples is None:
-            tau_samples = int(math.ceil(self.params.tau_hours / 0.25))
-            self.min_warmup_samples = max(4, tau_samples)
+            dt_cadence_hours = (nominal_cadence_s / 3600.0) if nominal_cadence_s and nominal_cadence_s > 0 else 0.25
+            warmup_duration_hours = max(1.0, self.params.tau_hours)
+            self.min_warmup_samples = max(1, int(math.ceil(warmup_duration_hours / dt_cadence_hours)))
         else:
             self.min_warmup_samples = max(1, int(min_warmup_samples))
 
@@ -154,19 +157,37 @@ class ThermalFallbackGate:
         cls,
         artifact: CalibratedThermalModelArtifact,
         is_model_promoted_override: Optional[bool] = None,
+        nominal_cadence_s: Optional[int] = None,
     ) -> ThermalFallbackGate:
         """Construct gate directly from a frozen CalibratedThermalModelArtifact."""
-        params = ThermalModelParameters(
-            beta_0=artifact.parameters.beta_0,
-            beta_1=artifact.parameters.beta_1,
-            tau_hours=artifact.parameters.tau_hours,
-        )
+        if artifact.parameters is not None:
+            params = ThermalModelParameters(
+                beta_0=artifact.parameters.beta_0,
+                beta_1=artifact.parameters.beta_1,
+                tau_hours=artifact.parameters.tau_hours,
+            )
+            load_driver_ref = (
+                artifact.load_driver_reference_value
+                if artifact.load_driver_reference_value is not None
+                else 153.865
+            )
+            load_driver_t = artifact.selected_load_driver or "rms_current_a"
+        else:
+            # Uncalibrated artifact: sentinel parameters, model strictly unpromoted
+            params = ThermalModelParameters(beta_0=1.0, beta_1=1.0, tau_hours=1.0)
+            load_driver_ref = 100.0
+            load_driver_t = "uncalibrated"
+
         is_promoted = (
             is_model_promoted_override
             if is_model_promoted_override is not None
             else (artifact.promotion.status == "PROMOTED")
         )
-        if is_model_promoted_override is True:
+
+        if artifact.parameters is None or artifact.promotion.status == "UNCALIBRATED":
+            is_promoted = False
+            qualification = None
+        elif is_model_promoted_override is True:
             qualification = ThermalModelQualification(
                 parameter_interpretability=artifact.qualification.parameter_interpretability if artifact.qualification else QualificationStatus.QUALIFIED,
                 forecast_qualification=QualificationStatus.QUALIFIED,
@@ -189,24 +210,30 @@ class ThermalFallbackGate:
         else:
             qualification = artifact.qualification
 
-        w1 = (
-            artifact.conformal_uncertainty.horizon_half_widths_degc[0]
-            if artifact.conformal_uncertainty.horizon_half_widths_degc
-            else 3.0
-        )
-        med = artifact.conformal_uncertainty.calibration_residual_median or 0.0
-        mad = artifact.conformal_uncertainty.calibration_residual_mad or 1.0
+        if artifact.conformal_uncertainty is not None:
+            w1 = (
+                artifact.conformal_uncertainty.horizon_half_widths_degc[0]
+                if artifact.conformal_uncertainty.horizon_half_widths_degc
+                else 3.0
+            )
+            med = artifact.conformal_uncertainty.calibration_residual_median or 0.0
+            mad = artifact.conformal_uncertainty.calibration_residual_mad or 1.0
+        else:
+            w1 = 3.0
+            med = 0.0
+            mad = 1.0
 
         return cls(
             asset_id=artifact.asset_id,
             params=params,
-            load_driver_type=artifact.selected_load_driver,
-            load_driver_reference=artifact.load_driver_reference_value,
+            load_driver_type=load_driver_t,
+            load_driver_reference=load_driver_ref,
             is_model_promoted=is_promoted,
             qualification=qualification,
             conformal_half_width_1step=w1,
             calibration_residual_median=med,
             calibration_residual_mad=mad,
+            nominal_cadence_s=nominal_cadence_s,
         )
 
     def reset(self) -> None:

@@ -11,7 +11,8 @@ ZERO METRIC RECALCULATION: All values are copied/referenced strictly from FactBu
 from __future__ import annotations
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.anomaly import AnomalyEpisode
 from app.models.capability import CapabilityManifest
@@ -42,6 +43,14 @@ class AssetIdentity(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     asset_id: str = Field(..., description="Transformer asset identifier")
+    dataset_id: str = Field(..., description="Source dataset identifier")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _handle_legacy(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "dataset_id" not in data:
+            data["dataset_id"] = "tripura_dev"
+        return data
 
 
 class ReportTimestamps(BaseModel):
@@ -147,6 +156,7 @@ class ReportData(BaseModel):
 def generate_report_data(
     fact_bundle: FactBundle,
     report_id: str | None = None,
+    dataset_id: str | None = None,
     generated_at_utc: datetime | None = None,
     schema_version: str = "1.0.0",
     generator_version: str = "1.0.0",
@@ -239,9 +249,15 @@ def generate_report_data(
     )
 
     # Construct unified immutable ReportData
+    resolved_ds = (
+        dataset_id
+        or state.versions.get("dataset_id")
+        or ("tripura_dev" if fact_bundle.asset_id in ("DT-TRIPURA-001", "tripura_dt_01") else "unspecified_dataset")
+    )
+
     return ReportData(
         metadata=metadata,
-        asset=AssetIdentity(asset_id=fact_bundle.asset_id),
+        asset=AssetIdentity(asset_id=fact_bundle.asset_id, dataset_id=resolved_ds),
         timestamps=timestamps,
         current_observations=dict(state.current_observations),
         thermal=thermal_summary,

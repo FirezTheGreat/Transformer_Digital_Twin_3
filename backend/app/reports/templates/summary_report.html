@@ -219,6 +219,7 @@
         </td>
         <td class="meta-box">
           <div><strong>Asset ID:</strong> <span class="mono">{{ report.asset.asset_id }}</span></div>
+          <div><strong>Dataset ID:</strong> <span class="mono">{{ report.asset.dataset_id }}</span></div>
           <div><strong>Report ID:</strong> <span class="mono">{{ report.metadata.report_id }}</span></div>
           <div><strong>State Timestamp:</strong> {{ report.timestamps.state_time_utc.strftime('%Y-%m-%d %H:%M:%S UTC') }}</div>
           <div><strong>Watermark:</strong> {{ report.timestamps.event_time_watermark_utc.strftime('%Y-%m-%d %H:%M:%S UTC') }}</div>

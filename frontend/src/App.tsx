@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { ReplayBar } from './components/layout/ReplayBar';
 import { OverviewView } from './components/views/OverviewView';
@@ -21,28 +21,47 @@ import {
   CanonicalEvent,
 } from './types/contracts';
 import { api, ModelCardData } from './services/api';
-import { INITIAL_FACT_BUNDLE, SEED_TELEMETRY_EVENTS } from './data/initialData';
 
 export default function App(): React.ReactElement {
-  const [assetId, setAssetId] = useState<string>('tripura_dt_01');
+  const [assetId] = useState<string>('DT-TRIPURA-001');
+  const [selectedDataset, setSelectedDataset] = useState<string>('tripura_dev');
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('overview');
 
-  // Core Twin State
-  const [twinState, setTwinState] = useState<TwinState | null>(INITIAL_FACT_BUNDLE.twin_state);
-  const [health, setHealth] = useState<OTHIBundle | null>(INITIAL_FACT_BUNDLE.health);
-  const [recommendations, setRecommendations] = useState<MaintenanceRecommendation[]>(
-    INITIAL_FACT_BUNDLE.active_recommendations
-  );
-  const [episodes, setEpisodes] = useState<AnomalyEpisode[]>(INITIAL_FACT_BUNDLE.open_episodes);
-  const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(
-    INITIAL_FACT_BUNDLE.capabilities
-  );
-
-  const [historyEvents, setHistoryEvents] = useState<CanonicalEvent[]>([]);
+  // Digital Twin Lifecycle & Playback State
+  const [isTwinStarted, setIsTwinStarted] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [replayStatus, setReplayStatus] = useState<ReplayStatusResponse | null>(null);
   const [speedMultiplier, setSpeedMultiplier] = useState<number>(1);
+  const isSteppingRef = useRef<boolean>(false);
+
+  // Core Twin State (begins unseeded / ready)
+  const [twinState, setTwinState] = useState<TwinState | null>(null);
+  const [health, setHealth] = useState<OTHIBundle | null>(null);
+  const [recommendations, setRecommendations] = useState<MaintenanceRecommendation[]>([]);
+  const [episodes, setEpisodes] = useState<AnomalyEpisode[]>([]);
+  const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(null);
+
+  const [historyEvents, setHistoryEvents] = useState<CanonicalEvent[]>([]);
   const [modelCard, setModelCard] = useState<ModelCardData | null>(null);
+
+  // Dark mode state with persistence
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('gridpulse_theme') as 'light' | 'dark') || 'light';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('gridpulse_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   // UI States
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -61,11 +80,12 @@ export default function App(): React.ReactElement {
   const loadState = useCallback(async (currentAssetId: string) => {
     setIsRefreshing(true);
     try {
-      const [healthRes, stateRes, historyRes, modelCardRes] = await Promise.allSettled([
+      const [healthRes, stateRes, historyRes, modelCardRes, replayStatusRes] = await Promise.allSettled([
         api.getHealthz(),
         api.getAssetState(currentAssetId),
         api.getAssetHistory(currentAssetId, { limit: 50 }),
         api.getAssetModelCard(currentAssetId),
+        api.getReplayStatus(),
       ]);
 
       // 1. Process Health
@@ -78,22 +98,11 @@ export default function App(): React.ReactElement {
       // 2. Process Asset State & FactBundle
       if (stateRes.status === 'fulfilled' && stateRes.value) {
         const data = stateRes.value;
-        if (
-          data.twin_state?.current_observations &&
-          Object.keys(data.twin_state.current_observations).length > 0
-        ) {
-          setTwinState(data.twin_state);
-        }
+        setTwinState(data.twin_state ?? null);
         if (data.fact_bundle) {
-          if (data.fact_bundle.health) {
-            setHealth(data.fact_bundle.health);
-          }
-          if (data.fact_bundle.active_recommendations?.length > 0) {
-            setRecommendations(data.fact_bundle.active_recommendations);
-          }
-          if (data.fact_bundle.open_episodes?.length > 0) {
-            setEpisodes(data.fact_bundle.open_episodes);
-          }
+          setHealth(data.fact_bundle.health ?? null);
+          setRecommendations(data.fact_bundle.active_recommendations ?? []);
+          setEpisodes(data.fact_bundle.open_episodes ?? []);
           if (data.fact_bundle.capabilities) {
             setCapabilities(data.fact_bundle.capabilities);
           }
@@ -109,6 +118,15 @@ export default function App(): React.ReactElement {
       if (modelCardRes.status === 'fulfilled' && modelCardRes.value) {
         setModelCard(modelCardRes.value);
       }
+
+      // 5. Replay Status Sync
+      if (replayStatusRes.status === 'fulfilled' && replayStatusRes.value) {
+        const status = replayStatusRes.value;
+        setReplayStatus(status);
+        if (status.processed_events > 0) {
+          setIsTwinStarted(true);
+        }
+      }
     } finally {
       setIsRefreshing(false);
     }
@@ -118,61 +136,157 @@ export default function App(): React.ReactElement {
     loadState(assetId);
   }, [assetId, loadState]);
 
-  // 2. Replay Controller
-  const handleReplayAction = async (
-    action: 'start' | 'pause' | 'resume' | 'step' | 'reset',
-    batchSize: number = 1,
-    overrideSpeed?: number
-  ) => {
-    const activeSpeed = overrideSpeed !== undefined ? overrideSpeed : speedMultiplier;
+  // 2. Start Digital Twin Action
+  const handleStartTwin = async () => {
     try {
       const res = await api.controlReplay({
-        action,
-        batch_size: batchSize,
+        action: 'start',
         asset_id: assetId,
-        speed_multiplier: activeSpeed,
+        speed_multiplier: speedMultiplier,
       });
       setReplayStatus(res);
-      showToast(`Replay ${action.toUpperCase()} action executed.`);
+      setIsTwinStarted(true);
+      setIsPlaying(false);
       await loadState(assetId);
+      showToast('Digital Twin initialized. Ready for telemetry replay.');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Replay action failed';
+      const msg = err instanceof Error ? err.message : 'Failed to start Digital Twin';
       showToast(msg);
     }
   };
 
-  const handleSpeedChange = (speed: number) => {
-    setSpeedMultiplier(speed);
-    handleReplayAction('resume', 1, speed);
-  };
-
-  // 3. Seed Telemetry Ingestion
-  const handleSeedDemoData = async () => {
-    setIsSeeding(true);
+  // 3. Manual Next-Frame Telemetry Stepper (1 frame or batch)
+  const handleNext = async (batchSize: number = 1) => {
+    if (isSteppingRef.current) return;
+    isSteppingRef.current = true;
     try {
-      const res = await api.ingestTelemetry({
+      const res = await api.controlReplay({
+        action: 'step',
+        batch_size: batchSize,
         asset_id: assetId,
-        events: SEED_TELEMETRY_EVENTS,
+        speed_multiplier: speedMultiplier,
       });
-      showToast(`Ingested ${res.ingested_count} canonical telemetry frames to reducer!`);
+      setReplayStatus(res);
+      if (res.is_completed) {
+        setIsPlaying(false);
+        showToast('Dataset replay completed.');
+      }
       await loadState(assetId);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Telemetry ingestion failed';
+      const msg = err instanceof Error ? err.message : 'Replay step failed';
       showToast(msg);
     } finally {
-      setIsSeeding(false);
+      isSteppingRef.current = false;
     }
   };
 
-  // 4. Seed Trip Fault Fixture
+  // 4. Play / Pause Automatic Replay
+  const handlePlayToggle = async () => {
+    if (!isTwinStarted) return;
+    if (isPlaying) {
+      setIsPlaying(false);
+      try {
+        const res = await api.controlReplay({
+          action: 'pause',
+          asset_id: assetId,
+        });
+        setReplayStatus(res);
+      } catch {
+        // ignore
+      }
+    } else {
+      setIsPlaying(true);
+      try {
+        const res = await api.controlReplay({
+          action: 'resume',
+          asset_id: assetId,
+          speed_multiplier: speedMultiplier,
+        });
+        setReplayStatus(res);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  // 5. Automatic Playback Loop (using same path as Next)
+  useEffect(() => {
+    if (!isPlaying) return;
+
+    const delayMs = speedMultiplier === 10 ? 150 : speedMultiplier === 5 ? 300 : 1500;
+    const interval = setInterval(async () => {
+      if (isSteppingRef.current) return;
+      isSteppingRef.current = true;
+      try {
+        const res = await api.controlReplay({
+          action: 'step',
+          batch_size: 1,
+          asset_id: assetId,
+          speed_multiplier: speedMultiplier,
+        });
+        setReplayStatus(res);
+        if (res.is_completed) {
+          setIsPlaying(false);
+          showToast('Replay reached end of dataset.');
+        }
+        await loadState(assetId);
+      } catch {
+        setIsPlaying(false);
+      } finally {
+        isSteppingRef.current = false;
+      }
+    }, delayMs);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, speedMultiplier, assetId, loadState]);
+
+  // 6. Speed Multiplier Change
+  const handleSpeedChange = async (speed: number) => {
+    setSpeedMultiplier(speed);
+    if (isPlaying) {
+      try {
+        const res = await api.controlReplay({
+          action: 'resume',
+          speed_multiplier: speed,
+          asset_id: assetId,
+        });
+        setReplayStatus(res);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  // 7. Reset Replay to Frame 0
+  const handleReset = async () => {
+    setIsPlaying(false);
+    try {
+      const res = await api.controlReplay({
+        action: 'reset',
+        asset_id: assetId,
+      });
+      setReplayStatus(res);
+      await loadState(assetId);
+      showToast('Digital Twin reset to frame 0.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Reset failed';
+      showToast(msg);
+    }
+  };
+
+  // 8. Seed Trip Fault Fixture (for discrete protection trip demo)
   const handleSeedTripData = async () => {
     setIsSeeding(true);
     try {
+      const eventTime = twinState?.event_time_watermark_utc
+        ? new Date(new Date(twinState.event_time_watermark_utc).getTime() + 1000).toISOString()
+        : new Date().toISOString();
+
       const tripEvent = {
         schema_version: '1.0.0',
         event_id: `evt-trip-${Date.now()}`,
         asset_id: assetId,
-        event_time_utc: new Date().toISOString(),
+        event_time_utc: eventTime,
         source: {
           system: 'protection_relay_trip',
           adapter_id: 'trip_adapter',
@@ -211,6 +325,56 @@ export default function App(): React.ReactElement {
             original_unit: 'A',
             quality: { severity: 'GOOD' as const, flags: [] },
           },
+          {
+            signal_id: 'current_l2',
+            value: 0.0,
+            value_type: 'float' as const,
+            unit_ucum: 'A',
+            original_name: 'I_Y',
+            original_value: '0.0',
+            original_unit: 'A',
+            quality: { severity: 'GOOD' as const, flags: [] },
+          },
+          {
+            signal_id: 'current_l3',
+            value: 0.0,
+            value_type: 'float' as const,
+            unit_ucum: 'A',
+            original_name: 'I_B',
+            original_value: '0.0',
+            original_unit: 'A',
+            quality: { severity: 'GOOD' as const, flags: [] },
+          },
+          {
+            signal_id: 'active_power_total',
+            value: 0.0,
+            value_type: 'float' as const,
+            unit_ucum: 'kW',
+            original_name: 'P',
+            original_value: '0.0',
+            original_unit: 'kW',
+            quality: { severity: 'GOOD' as const, flags: [] },
+          },
+          {
+            signal_id: 'reactive_power_total',
+            value: 0.0,
+            value_type: 'float' as const,
+            unit_ucum: 'kvar',
+            original_name: 'Q',
+            original_value: '0.0',
+            original_unit: 'kvar',
+            quality: { severity: 'GOOD' as const, flags: [] },
+          },
+          {
+            signal_id: 'apparent_power_total',
+            value: 0.0,
+            value_type: 'float' as const,
+            unit_ucum: 'kVA',
+            original_name: 'S',
+            original_value: '0.0',
+            original_unit: 'kVA',
+            quality: { severity: 'GOOD' as const, flags: [] },
+          },
         ],
         event_quality_flags: ['PROTECTION_TRIP_ACTIVE'],
         mapping_version: '1.0.0',
@@ -231,7 +395,7 @@ export default function App(): React.ReactElement {
     }
   };
 
-  // 5. Feedback handler
+  // 9. Feedback handler
   const handleFeedbackSuccess = (recId: string, actionChosen: string) => {
     setRecommendations((prev) =>
       prev.map((r) =>
@@ -248,10 +412,8 @@ export default function App(): React.ReactElement {
     showToast(`Recommendation ${actionChosen} committed to immutable audit ledger.`);
   };
 
-  const watermarkUtc = twinState?.event_time_watermark_utc || twinState?.state_time_utc;
-
   return (
-    <div className="min-h-screen text-slate-900 flex flex-col justify-between bg-[#f6f8fb]">
+    <div className="min-h-screen text-slate-900 dark:text-slate-100 flex flex-col justify-between bg-[#f6f8fb] dark:bg-slate-950 transition-colors">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-elevated text-xs font-semibold flex items-center gap-2 border border-slate-700">
@@ -267,22 +429,27 @@ export default function App(): React.ReactElement {
         onTabChange={setActiveTab}
         onRefresh={() => loadState(assetId)}
         isRefreshing={isRefreshing}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 w-full flex-grow pt-5 pb-10">
-        {/* Persistent Replay & Asset Control Bar */}
+        {/* Simplified Digital Twin Workflow & Replay Bar */}
         <ReplayBar
+          selectedDataset={selectedDataset}
+          onDatasetChange={(dataset) => setSelectedDataset(dataset)}
           assetId={assetId}
-          onAssetChange={(newId) => setAssetId(newId)}
+          isTwinStarted={isTwinStarted}
+          onStartTwin={handleStartTwin}
           replayStatus={replayStatus}
-          onReplayAction={handleReplayAction}
+          isPlaying={isPlaying}
+          onPlayToggle={handlePlayToggle}
+          onNext={handleNext}
           speedMultiplier={speedMultiplier}
           onSpeedChange={handleSpeedChange}
-          watermarkUtc={watermarkUtc}
+          onReset={handleReset}
           isBackendHealthy={isBackendHealthy}
-          onSeedDemoData={handleSeedDemoData}
-          isSeeding={isSeeding}
         />
 
         {/* View 1: Overview */}
@@ -369,10 +536,10 @@ export default function App(): React.ReactElement {
       />
 
       {/* Industrial Footer */}
-      <footer className="border-t border-slate-200 bg-white py-4 text-xs text-slate-500">
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 text-xs text-slate-500 dark:text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-900 font-sans">
+            <span className="font-bold text-slate-900 dark:text-slate-100 font-sans">
               GridPulse
             </span>
             <span>· Distribution Transformer Digital Twin · POWERNext-AI Hackathon 2026 (Track 2)</span>

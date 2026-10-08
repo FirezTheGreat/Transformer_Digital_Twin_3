@@ -18,7 +18,7 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
   const card = modelCard ?? {
     schema_version: '1.2.0',
     model_version: 'greybox_v1_0',
-    asset_id: 'tripura_dt_01',
+    asset_id: 'DT-TRIPURA-001',
     created_at_utc: '2026-10-07T07:55:17Z',
     selected_load_driver: 'rms_current_a',
     load_driver_reference_value: 153.8652,

@@ -6,12 +6,12 @@ import {
 
 export const INITIAL_FACT_BUNDLE: FactBundle = {
   fact_bundle_id: "fb-20261004-001",
-  asset_id: "tripura_dt_01",
+  asset_id: "DT-TRIPURA-001",
   timestamp_utc: "2026-10-04T12:00:00Z",
   bundle_version: "1.0.0",
   provenance_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   twin_state: {
-    asset_id: "tripura_dt_01",
+    asset_id: "DT-TRIPURA-001",
     state_time_utc: "2026-10-04T12:00:00Z",
     last_processed_event_id: "evt-20261004-048",
     event_time_watermark_utc: "2026-10-04T11:50:00Z",
@@ -183,7 +183,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
     open_episodes: [
       {
         episode_id: "ep-20261004-001",
-        asset_id: "tripura_dt_01",
+        asset_id: "DT-TRIPURA-001",
         state: "WARNING",
         category: "THERMAL_DEVIATION",
         severity_score: 0.55,
@@ -198,7 +198,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
       }
     ],
     health_bundle: {
-      asset_id: "tripura_dt_01",
+      asset_id: "DT-TRIPURA-001",
       timestamp_utc: "2026-10-04T12:00:00Z",
       othi_score: 67,
       status: "WATCH",
@@ -304,7 +304,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
     }
   },
   capabilities: {
-    asset_id: "tripura_dt_01",
+    asset_id: "DT-TRIPURA-001",
     evaluated_at_utc: "2026-10-04T12:00:00Z",
     evaluation_window_s: 86400,
     highest_tier: "C2",
@@ -382,7 +382,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
     model_version: "tripura_fit_20261003"
   },
   health: {
-    asset_id: "tripura_dt_01",
+    asset_id: "DT-TRIPURA-001",
     timestamp_utc: "2026-10-04T12:00:00Z",
     othi_score: 67,
     status: "WATCH",
@@ -440,7 +440,7 @@ export const INITIAL_FACT_BUNDLE: FactBundle = {
   open_episodes: [
     {
       episode_id: "ep-20261004-001",
-      asset_id: "tripura_dt_01",
+      asset_id: "DT-TRIPURA-001",
       state: "WARNING",
       category: "THERMAL_DEVIATION",
       severity_score: 0.55,
@@ -481,7 +481,7 @@ export const SEED_TELEMETRY_EVENTS: CanonicalEvent[] = [
   {
     schema_version: "1.0.0",
     event_id: "evt-seed-001",
-    asset_id: "tripura_dt_01",
+    asset_id: "DT-TRIPURA-001",
     event_time_utc: "2026-10-04T11:30:00Z",
     received_time_utc: "2026-10-04T11:30:02Z",
     source: {
@@ -543,7 +543,7 @@ export const SEED_TELEMETRY_EVENTS: CanonicalEvent[] = [
   {
     schema_version: "1.0.0",
     event_id: "evt-seed-002",
-    asset_id: "tripura_dt_01",
+    asset_id: "DT-TRIPURA-001",
     event_time_utc: "2026-10-04T11:45:00Z",
     received_time_utc: "2026-10-04T11:45:02Z",
     source: {

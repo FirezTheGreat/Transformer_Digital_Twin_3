@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 
 import { AnomalyEpisode, TwinState } from '../../types/contracts';
-import { UIHonestyBadge } from '../common/UIHonestyBadge';
 
 interface AnomalyTimelineViewProps {
   episodes: AnomalyEpisode[];
@@ -18,15 +17,11 @@ interface AnomalyTimelineViewProps {
 
 export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
   episodes,
-  twinState,
+  twinState: _twinState,
   onSeedTripData,
   isSeeding,
 }) => {
   const [showDetectorMath, setShowDetectorMath] = useState<boolean>(false);
-
-  const cusumPos = twinState?.detector_state?.cusum_pos ?? 3.82;
-  const cusumNeg = twinState?.detector_state?.cusum_neg ?? 0.0;
-  const persistenceTimer = twinState?.detector_state?.persistence_timers?.['cusum_thermal_shift'] ?? 3600.0;
 
   return (
     <div className="space-y-6">
@@ -63,54 +58,64 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
         </div>
       </div>
 
-      {/* CUSUM Statistical Drift Tracker */}
-      <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+      {/* CUSUM Statistical Drift Tracker - Disabled / Not Qualified */}
+      <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-800 shadow-subtle transition-colors">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Statistical Drift Detector
-            </span>
-            <h3 className="text-sm font-bold text-slate-900">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                Statistical Drift Detector
+              </span>
+              <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                DISABLED — NOT QUALIFIED
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">
               Two-Sided Robust CUSUM Accumulator (Thermal Residual)
             </h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Thermal residual anomaly detection is not qualified for the current Tripura model artifact.
+            </p>
           </div>
-          <UIHonestyBadge type="DEMO_DEFAULT" customText="Alarm Threshold: h = 3.50" />
+          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 self-start sm:self-auto border border-slate-200 dark:border-slate-700">
+            Frozen / Disabled
+          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded border border-slate-200 dark:border-slate-700">
             <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
               Positive Accumulator (C⁺)
             </span>
-            <div className="text-xl font-bold font-mono text-amber-800">
-              {cusumPos.toFixed(2)}
+            <div className="text-xl font-bold font-mono text-slate-400">
+              —
             </div>
-            <span className="text-[10px] text-slate-500 mt-0.5 block">
-              Threshold: h = 3.50 ({cusumPos > 3.5 ? 'Shift Flagged' : 'Normal'})
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
+              Decision threshold: — (Disabled)
             </span>
           </div>
 
-          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded border border-slate-200 dark:border-slate-700">
             <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
               Negative Accumulator (C⁻)
             </span>
-            <div className="text-xl font-bold font-mono text-emerald-800">
-              {cusumNeg.toFixed(2)}
+            <div className="text-xl font-bold font-mono text-slate-400">
+              —
             </div>
-            <span className="text-[10px] text-slate-500 mt-0.5 block">
-              Lower threshold: h = -3.50 (Nominal)
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
+              Lower threshold: — (Disabled)
             </span>
           </div>
 
-          <div className="bg-slate-50 p-3 rounded border border-slate-200">
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded border border-slate-200 dark:border-slate-700">
             <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
               Persistence Window
             </span>
-            <div className="text-xl font-bold font-mono text-slate-900">
-              {(persistenceTimer / 60).toFixed(0)} min
+            <div className="text-xl font-bold font-mono text-slate-400">
+              —
             </div>
-            <span className="text-[10px] text-slate-500 mt-0.5 block">
-              Continuous debounce timer
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
+              Gate status: Inactive
             </span>
           </div>
         </div>

@@ -52,13 +52,14 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
       ? (topOilObs - topOilExp).toFixed(1)
       : null;
 
-  const currentL1 = obs?.current_l1?.value;
-  const voltageL1 = obs?.voltage_l1_n?.value;
-  const currentL2 = obs?.current_l2?.value;
-  const voltageL2 = obs?.voltage_l2_n?.value;
-  const currentL3 = obs?.current_l3?.value;
-  const voltageL3 = obs?.voltage_l3_n?.value;
-  const neutralCurrent = obs?.neutral_current?.value;
+  const currentL1 = obs?.current_l1?.value ?? obs?.current_i1?.value;
+  const voltageL1 = obs?.voltage_l1_n?.value ?? obs?.voltage_v1?.value;
+  const currentL2 = obs?.current_l2?.value ?? obs?.current_i2?.value;
+  const voltageL2 = obs?.voltage_l2_n?.value ?? obs?.voltage_v2?.value;
+  const currentL3 = obs?.current_l3?.value ?? obs?.current_i3?.value;
+  const voltageL3 = obs?.voltage_l3_n?.value ?? obs?.voltage_v3?.value;
+  const neutralCurrent = obs?.neutral_current?.value ?? obs?.current_in?.value;
+  const phaseImbalancePct = twinState?.derived_electrical?.current_magnitude_imbalance_pct;
 
   const thermalStatus = health?.domains?.thermal?.status ?? 'WATCH';
   const phaseStatus = health?.domains?.phase_neutral?.status ?? 'NORMAL';
@@ -132,9 +133,9 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
         },
         {
           label: 'Phase Imbalance',
-          value: 'Unavailable',
-          sublabel: 'Requires verified multi-phase current sum',
-          isUnavailable: true,
+          value: typeof phaseImbalancePct === 'number' ? `${phaseImbalancePct.toFixed(1)} %` : 'Unavailable',
+          sublabel: 'NEMA current magnitude imbalance',
+          isUnavailable: typeof phaseImbalancePct !== 'number',
         },
       ],
     },
@@ -163,9 +164,9 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
         },
         {
           label: 'Phase Imbalance',
-          value: 'Unavailable',
-          sublabel: 'Requires verified multi-phase current sum',
-          isUnavailable: true,
+          value: typeof phaseImbalancePct === 'number' ? `${phaseImbalancePct.toFixed(1)} %` : 'Unavailable',
+          sublabel: 'NEMA current magnitude imbalance',
+          isUnavailable: typeof phaseImbalancePct !== 'number',
         },
       ],
     },
@@ -194,9 +195,9 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
         },
         {
           label: 'Phase Imbalance',
-          value: 'Unavailable',
-          sublabel: 'Requires verified multi-phase current sum',
-          isUnavailable: true,
+          value: typeof phaseImbalancePct === 'number' ? `${phaseImbalancePct.toFixed(1)} %` : 'Unavailable',
+          sublabel: 'NEMA current magnitude imbalance',
+          isUnavailable: typeof phaseImbalancePct !== 'number',
         },
       ],
     },

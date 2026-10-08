@@ -38,7 +38,12 @@ class TripuraCSVAdapter(BaseSourceAdapter):
     ) -> None:
         self._adapter_id = adapter_id
         self._source_system = "tripura_csv"
-        self.mapping_file = Path(mapping_file)
+        mf = Path(mapping_file)
+        if not mf.exists():
+            alt = Path(__file__).parent / "tripura_map.yaml"
+            if alt.exists():
+                mf = alt
+        self.mapping_file = mf
         self.mapping_config = self._load_mapping_config()
         self.column_map = self._build_column_index()
 

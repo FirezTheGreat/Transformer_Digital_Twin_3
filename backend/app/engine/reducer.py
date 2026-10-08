@@ -40,6 +40,7 @@ class TwinReducer:
         othi_engine: Any | None = None,
         exposure_engine: Any | None = None,
         maintenance_engine: Any | None = None,
+        thermal_gate: Any | None = None,
     ) -> None:
         """Initialize TwinReducer.
 
@@ -53,6 +54,7 @@ class TwinReducer:
             othi_engine: Optional OTHIEngine instance to evaluate multi-domain health and gated OTHI.
             exposure_engine: Optional ThermalExposureEngine instance to evaluate thermal exposure and ageing.
             maintenance_engine: Optional MaintenanceEngine instance to evaluate advisory maintenance policies.
+            thermal_gate: Optional ThermalFallbackGate instance to step physical thermal ODE.
         """
         self.profile = profile
         self.load_reference_kva = load_reference_kva
@@ -63,6 +65,7 @@ class TwinReducer:
         self.othi_engine = othi_engine
         self.exposure_engine = exposure_engine
         self.maintenance_engine = maintenance_engine
+        self.thermal_gate = thermal_gate
         self.latest_emitted_evidence: list[EvidenceItem] = []
 
     def reduce(
@@ -111,8 +114,9 @@ class TwinReducer:
             dict(current_state.current_observations) if current_state is not None else {}
         )
         for m in event.measurements:
-            obs_key = m.signal_id if m.phase is None else f"{m.signal_id}_{m.phase}"
-            observations[obs_key] = m
+            observations[m.signal_id] = m
+            if m.phase is not None:
+                observations[f"{m.signal_id}_{m.phase}"] = m
 
         # 4. Derive pure electrical features from current event
         derived_electrical: DerivedFeatures = extract_electrical_features(
@@ -131,9 +135,37 @@ class TwinReducer:
         }
 
         # 6. Preserve or initialize downstream sub-states
-        thermal_latent = (
-            current_state.thermal_latent if current_state is not None else ThermalLatentState()
-        )
+        if self.thermal_gate is not None:
+            t_oil_m = observations.get("top_oil_temperature")
+            t_amb_m = observations.get("ambient_temperature")
+            load_val = (
+                derived_electrical.current_mean_a
+                if derived_electrical and derived_electrical.current_mean_a is not None
+                else (observations.get("current_mean").value if observations.get("current_mean") else None)
+            )
+            thermal_output = self.thermal_gate.evaluate_step(
+                event_time_utc=ev_time,
+                top_oil_obs=t_oil_m.value if t_oil_m else None,
+                ambient_obs=t_amb_m.value if t_amb_m else None,
+                load_obs=load_val,
+            )
+            thermal_latent = ThermalLatentState(
+                top_oil_expected_degc=thermal_output.expected_top_oil_degc,
+                last_free_running_top_oil_degc=thermal_output.free_running_top_oil_degc,
+                time_constant_tau_hours=self.thermal_gate.params.tau_hours,
+                warmup_samples_remaining=thermal_output.warmup_samples_remaining,
+                model_status="SHADOW_DESCRIPTIVE" if not self.thermal_gate.is_model_promoted else "PROMOTED",
+                conformal_interval_lower_degc=thermal_output.conformal_interval_lower_degc,
+                conformal_interval_upper_degc=thermal_output.conformal_interval_upper_degc,
+            )
+            if derived_electrical is not None and thermal_output.thermal_residual_degc is not None:
+                derived_electrical = derived_electrical.model_copy(
+                    update={"thermal_residual_degc": thermal_output.thermal_residual_degc}
+                )
+        else:
+            thermal_latent = (
+                current_state.thermal_latent if current_state is not None else ThermalLatentState()
+            )
         detector_state = (
             current_state.detector_state if current_state is not None else DetectorState()
         )

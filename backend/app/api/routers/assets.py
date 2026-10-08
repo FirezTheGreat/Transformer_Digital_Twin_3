@@ -42,12 +42,12 @@ def _get_or_create_asset_state(
         return state, manifest
 
     # Build initial baseline state for asset
-    now = datetime.now(timezone.utc)
+    epoch_time = datetime(1970, 1, 1, tzinfo=timezone.utc)
     base_state = TwinState(
         asset_id=asset_id,
-        state_time_utc=now,
+        state_time_utc=epoch_time,
         last_processed_event_id="initial",
-        event_time_watermark_utc=now,
+        event_time_watermark_utc=epoch_time,
         state_sequence=0,
         state_hash="",
     )

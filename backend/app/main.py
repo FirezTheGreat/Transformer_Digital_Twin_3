@@ -106,7 +106,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             evaluation_window_s=settings.evaluation_window_s,
         )
         feedback_ledger = OperatorFeedbackLedger()
-        reducer = TwinReducer(load_reference_kva=settings.load_reference_kva)
+        from app.api.deps import build_default_model_artifact
+        from app.engine.thermal_fallback import ThermalFallbackGate
+        artifact = build_default_model_artifact(asset_id=settings.default_asset_id)
+        thermal_gate = ThermalFallbackGate.from_artifact(artifact)
+        reducer = TwinReducer(
+            load_reference_kva=settings.load_reference_kva,
+            thermal_gate=thermal_gate,
+        )
         replay_engine = ReplayEngine(storage=storage, asset_id=settings.default_asset_id)
 
         app_state = AppState(

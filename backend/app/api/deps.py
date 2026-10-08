@@ -162,9 +162,13 @@ def get_storage(state: AppState = Depends(get_app_state)) -> StorageEngine:
 def get_reducer(state: AppState = Depends(get_app_state)) -> TwinReducer:
     """Provide TwinReducer dependency."""
     if state.reducer is None:
+        from app.engine.thermal_fallback import ThermalFallbackGate
+        artifact = state.model_artifact or build_default_model_artifact(asset_id=state.settings.default_asset_id)
+        thermal_gate = ThermalFallbackGate.from_artifact(artifact)
         state.reducer = TwinReducer(
             profile=state.profile,
             load_reference_kva=state.settings.load_reference_kva,
+            thermal_gate=thermal_gate,
         )
     return state.reducer
 

@@ -208,7 +208,12 @@ export const api = {
     return handleResponse<ModelCardData>(res);
   },
 
-  // Replay Control
+  // Replay Control & Status
+  async getReplayStatus(): Promise<ReplayStatusResponse> {
+    const res = await fetch(`${API_BASE}/v1/replay`);
+    return handleResponse<ReplayStatusResponse>(res);
+  },
+
   async controlReplay(payload: ReplayControlRequest): Promise<ReplayStatusResponse> {
     const res = await fetch(`${API_BASE}/v1/replay`, {
       method: 'POST',

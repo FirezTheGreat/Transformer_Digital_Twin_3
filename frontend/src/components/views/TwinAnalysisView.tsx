@@ -26,8 +26,6 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
     ? (topOilObs - topOilExpected).toFixed(1)
     : '4.3';
   const tauHours = twinState?.thermal_latent?.time_constant_tau_hours ?? 0.5;
-  const cusumPos = twinState?.detector_state?.cusum_pos ?? 3.82;
-  const cusumAlarmActive = twinState?.detector_state?.cusum_alarm_active ?? true;
 
   return (
     <div className="space-y-6">
@@ -97,35 +95,35 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
           </span>
         </div>
 
-        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
+        <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-800 shadow-subtle transition-colors">
           <span className="text-[11px] uppercase font-semibold tracking-wider text-slate-400 block mb-1">
-            Thermal Trend
+            Thermal Anomaly Detector
           </span>
-          <div className={`text-base font-bold mt-1 ${cusumAlarmActive ? 'text-amber-800' : 'text-emerald-800'}`}>
-            {cusumAlarmActive ? 'Persistent Elevated Drift' : 'Stable Thermal Equilibrium'}
+          <div className="text-base font-bold mt-1 text-slate-600 dark:text-slate-400 font-mono">
+            Disabled — Not Qualified
           </div>
-          <span className="text-[11px] text-slate-500 mt-1 block">
-            Statistical debounce active
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 block">
+            Descriptive shadow mode only (CUSUM frozen)
           </span>
         </div>
       </div>
 
       {/* Progressive Disclosure: Mathematical Formulation & CUSUM Statistics */}
-      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs">
+      <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg p-4 text-xs transition-colors">
         <button
           onClick={() => setShowMathDetails(!showMathDetails)}
-          className="w-full flex items-center justify-between text-slate-700 font-semibold hover:text-slate-900"
+          className="w-full flex items-center justify-between text-slate-700 dark:text-slate-300 font-semibold hover:text-slate-900 dark:hover:text-slate-100"
         >
           <span>Mathematical Formulation & Detection Details</span>
           {showMathDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
 
         {showMathDetails && (
-          <div className="mt-3 pt-3 border-t border-slate-200 text-slate-600 space-y-3">
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <h4 className="font-semibold text-slate-900 mb-1">Thermal Differential Equation (ODE)</h4>
-                <p className="font-mono text-[11px] bg-white p-2 rounded border border-slate-200 text-slate-800">
+                <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Thermal Differential Equation (ODE)</h4>
+                <p className="font-mono text-[11px] bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
                   dθ_o / dt = (1 / τ) · (β₀ + β₁ · u² - θ_o)
                 </p>
                 <ul className="mt-1.5 space-y-0.5 text-[11px]">
@@ -136,12 +134,12 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
               </div>
 
               <div>
-                <h4 className="font-semibold text-slate-900 mb-1">CUSUM Drift Detection State</h4>
+                <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Thermal Anomaly Qualification State</h4>
                 <ul className="space-y-1 text-[11px]">
-                  <li>• Positive accumulator: <span className="font-mono font-bold text-amber-800">C⁺ = {cusumPos.toFixed(2)}</span> (Alarm threshold: h = 3.50)</li>
-                  <li>• Negative accumulator: <span className="font-mono">C⁻ = 0.00</span></li>
+                  <li>• CUSUM Anomaly Status: <span className="font-mono font-bold text-slate-700 dark:text-slate-300">DISABLED — NOT QUALIFIED</span></li>
+                  <li>• Accumulators: <span className="font-mono">C⁺ = —, C⁻ = —</span> (Frozen / inactive)</li>
                   <li>• Residual definition: <span className="font-mono">r_k = T_observed - θ̂_expected</span></li>
-                  <li>• Calibration notice: Parameters sit on lower domain boundary (0.50h). Model active as shadow descriptive twin only.</li>
+                  <li>• Qualification reason: Parameters sit on lower boundary (tau=0.50h). Model qualified as descriptive shadow twin only.</li>
                 </ul>
               </div>
             </div>

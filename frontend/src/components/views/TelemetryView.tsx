@@ -4,6 +4,7 @@ import { TwinState, CapabilityManifest, CanonicalEvent } from '../../types/contr
 import { api } from '../../services/api';
 import { TelemetryPhaseGrid } from '../TelemetryPhaseGrid';
 import { UIHonestyBadge } from '../common/UIHonestyBadge';
+import { TrendChart, LegendItem, TrendSeries, readSignal, formatUtcTick } from '../common/TrendChart';
 
 interface TelemetryViewProps {
   assetId: string;
@@ -43,120 +44,197 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
     }
   }, [assetId, propHistoryEvents]);
 
-  return (
-    <div className="space-y-6">
-      {/* View Header */}
-      <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-subtle">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">
-                Observability & Operating Limits
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                Tier {capabilities?.highest_tier ?? 'C2'}
-              </span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Live Electrical Telemetry & Capabilities
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Three-phase measurements, derived unbalance indices, dynamic capability gates, and temporal storage event log.
-            </p>
-          </div>
+  // Presentation-only: per-frame readings straight from recorded history events
+  const trendRows = events.map((ev) => ({
+    t: formatUtcTick(ev.event_time_utc),
+    topOil: readSignal(ev.measurements, ['top_oil_temperature']),
+    iR: readSignal(ev.measurements, ['current_l1', 'current_i1']),
+    iY: readSignal(ev.measurements, ['current_l2', 'current_i2']),
+    iB: readSignal(ev.measurements, ['current_l3', 'current_i3']),
+    vR: readSignal(ev.measurements, ['voltage_l1_n', 'voltage_v1']),
+    vY: readSignal(ev.measurements, ['voltage_l2_n', 'voltage_v2']),
+    vB: readSignal(ev.measurements, ['voltage_l3_n', 'voltage_v3']),
+    p: readSignal(ev.measurements, ['active_power_total', 'active_power']),
+  }));
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <UIHonestyBadge type="relative_load_index" />
+  const panels: { title: string; unit: string; series: TrendSeries[]; area?: boolean }[] = [
+    { title: 'Top-oil temperature', unit: '°C', series: [{ key: 'topOil', label: 'Top-oil' }], area: true },
+    { title: 'Active power', unit: 'kW', series: [{ key: 'p', label: 'Active power' }], area: true },
+    {
+      title: 'Phase currents',
+      unit: 'A',
+      series: [
+        { key: 'iR', label: 'I_R', colorIndex: 0 },
+        { key: 'iY', label: 'I_Y', colorIndex: 1 },
+        { key: 'iB', label: 'I_B', colorIndex: 2 },
+      ],
+    },
+    {
+      title: 'Phase voltages (L-N)',
+      unit: 'V',
+      series: [
+        { key: 'vR', label: 'V_R', colorIndex: 0 },
+        { key: 'vY', label: 'V_Y', colorIndex: 1 },
+        { key: 'vB', label: 'V_B', colorIndex: 2 },
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="page-header">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className="eyebrow">Observability & Operating Limits</span>
+            <span className="chip chip-neutral font-mono">Tier {capabilities?.highest_tier ?? 'C2'}</span>
           </div>
+          <h1 className="page-title">Electrical Telemetry</h1>
+          <p className="text-[13px] text-muted mt-2.5 max-w-2xl">
+            Three-phase measurements, derived unbalance indices, dynamic capability gates, and temporal storage event log.
+          </p>
         </div>
+
+        <UIHonestyBadge type="relative_load_index" />
       </div>
 
       {/* Main Phase Telemetry Grid & Capability Manifest */}
       <TelemetryPhaseGrid twinState={twinState} capabilities={capabilities} />
 
+      {/* Recorded Trends (small multiples, one axis each) */}
+      <div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+          <h2 className="section-title">Recorded trends</h2>
+          <span className="text-[10.5px] font-mono text-muted">
+            {events.length > 0
+              ? `${events.length} frames · ${formatUtcTick(events[0].event_time_utc)} → ${formatUtcTick(
+                  events[events.length - 1].event_time_utc
+                )} UTC`
+              : 'No recorded frames'}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {panels.map((panel) => {
+            const hasData = trendRows.some((r) =>
+              panel.series.some((s) => r[s.key as keyof typeof r] !== null)
+            );
+            return (
+              <div key={panel.title} className="card-muted p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <span className="eyebrow text-ink-2">
+                    {panel.title} · {panel.unit}
+                  </span>
+                  {panel.series.length > 1 && (
+                    <div className="flex items-center gap-3">
+                      {panel.series.map((s) => (
+                        <LegendItem key={s.key} label={s.label} colorIndex={s.colorIndex} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {hasData ? (
+                  <TrendChart
+                    data={trendRows}
+                    xKey="t"
+                    series={panel.series}
+                    unit={panel.unit}
+                    area={panel.area}
+                    height={190}
+                  />
+                ) : (
+                  <div className="h-[190px] flex items-center justify-center text-center border border-dashed border-line-strong rounded-card text-[11px] text-muted px-4">
+                    No recorded {panel.title.toLowerCase()} yet — start the Digital Twin and step telemetry.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Historical Telemetry Stream Table (/v1/assets/{id}/history) */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg p-5 border border-slate-200 dark:border-slate-800 shadow-subtle transition-colors">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                Historical Telemetry ({events.length} frames recorded)
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Chronological record of transformer telemetry and data quality.
-              </p>
-            </div>
+      <div>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-3">
+          <div>
+            <h2 className="section-title flex items-center gap-2.5">
+              <Database className="w-[18px] h-[18px] text-muted" strokeWidth={1.75} />
+              Historical Telemetry ({events.length} frames recorded)
+            </h2>
+            <p className="text-xs text-muted mt-1">
+              Chronological record of transformer telemetry and data quality.
+            </p>
           </div>
 
           <button
             onClick={fetchHistory}
             disabled={isLoadingHistory}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-300 dark:border-slate-700 transition-colors self-start sm:self-auto"
+            className="btn btn-ghost self-start sm:self-auto"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingHistory ? 'animate-spin text-sky-600 dark:text-sky-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingHistory ? 'animate-spin text-accent' : ''}`} />
             <span>Refresh Telemetry Log</span>
           </button>
         </div>
 
-        {events.length === 0 ? (
-          <div className="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
-            <Clock className="w-6 h-6 mx-auto text-slate-400 mb-2" />
-            <p className="font-semibold text-slate-800 dark:text-slate-200">No historical events recorded yet</p>
-            <p className="text-slate-400 mt-0.5">Start the Digital Twin or step telemetry to inspect recorded frames.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60">
-                  <th className="py-2.5 px-3">Event ID</th>
-                  <th className="py-2.5 px-3">Timestamp (UTC)</th>
-                  <th className="py-2.5 px-3">Source</th>
-                  <th className="py-2.5 px-3">Primary Signals</th>
-                  <th className="py-2.5 px-3">Quality Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
-                {events.slice(0, 15).map((ev) => {
-                  const otiVal = ev.measurements.find((m) => m.signal_id.includes('top_oil') || m.original_name === 'OTI')?.value;
-                  const vrVal = ev.measurements.find((m) => m.signal_id.includes('voltage_l1') || m.original_name === 'V_R')?.value;
-                  const irVal = ev.measurements.find((m) => m.signal_id.includes('current_l1') || m.original_name === 'I_R')?.value;
+        <div className="card overflow-hidden">
+          {events.length === 0 ? (
+            <div className="py-12 text-center text-xs text-muted">
+              <Clock className="w-6 h-6 mx-auto text-faint mb-3" strokeWidth={1.5} />
+              <p className="card-title">No historical events recorded yet</p>
+              <p className="mt-1">Start the Digital Twin or step telemetry to inspect recorded frames.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-line bg-surface-2">
+                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Event ID</th>
+                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Timestamp (UTC)</th>
+                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Source</th>
+                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Primary Signals</th>
+                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Quality Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line font-mono text-[11px]">
+                  {events.slice(0, 15).map((ev) => {
+                    const otiVal = ev.measurements.find((m) => m.signal_id.includes('top_oil') || m.original_name === 'OTI')?.value;
+                    const vrVal = ev.measurements.find((m) => m.signal_id.includes('voltage_l1') || m.original_name === 'V_R')?.value;
+                    const irVal = ev.measurements.find((m) => m.signal_id.includes('current_l1') || m.original_name === 'I_R')?.value;
 
-                  return (
-                    <tr key={ev.event_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="py-2 px-3 font-semibold text-slate-900 dark:text-slate-100">{ev.event_id}</td>
-                      <td className="py-2 px-3 text-slate-600 dark:text-slate-300">
-                        {new Date(ev.event_time_utc).toISOString().replace('T', ' ').slice(0, 19)}
-                      </td>
-                      <td className="py-2 px-3 text-slate-500 dark:text-slate-400">
-                        {ev.source?.system || 'tripura_scada'}
-                      </td>
-                      <td className="py-2 px-3 text-slate-800 dark:text-slate-200">
-                        <span className="inline-flex gap-3">
-                          {otiVal !== undefined && <span>OTI: {String(otiVal)}°C</span>}
-                          {vrVal !== undefined && <span>V_R: {String(vrVal)}V</span>}
-                          {irVal !== undefined && <span>I_R: {String(irVal)}A</span>}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        {ev.event_quality_flags.length === 0 ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-sans font-medium text-[10px]">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Normal
+                    return (
+                      <tr key={ev.event_id} className="hover:bg-surface-2 transition-colors">
+                        <td className="py-2.5 px-4 font-medium text-ink whitespace-nowrap">{ev.event_id}</td>
+                        <td className="py-2.5 px-4 text-ink-2 whitespace-nowrap">
+                          {new Date(ev.event_time_utc).toISOString().replace('T', ' ').slice(0, 19)}
+                        </td>
+                        <td className="py-2.5 px-4 text-muted whitespace-nowrap">
+                          {ev.source?.system || 'tripura_scada'}
+                        </td>
+                        <td className="py-2.5 px-4 text-ink-2 whitespace-nowrap">
+                          <span className="inline-flex gap-4">
+                            {otiVal !== undefined && <span>OTI: {String(otiVal)}°C</span>}
+                            {vrVal !== undefined && <span>V_R: {String(vrVal)}V</span>}
+                            {irVal !== undefined && <span>I_R: {String(irVal)}A</span>}
                           </span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-sans font-bold text-[10px]">
-                            {ev.event_quality_flags.join(', ')}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        </td>
+                        <td className="py-2.5 px-4">
+                          {ev.event_quality_flags.length === 0 ? (
+                            <span className="inline-flex items-center gap-1.5 text-muted font-sans font-medium text-[11px]">
+                              <CheckCircle2 className="w-3 h-3 text-ok" /> Normal
+                            </span>
+                          ) : (
+                            <span className="chip chip-warn font-sans">
+                              {ev.event_quality_flags.join(', ')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

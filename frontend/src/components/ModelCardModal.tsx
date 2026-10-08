@@ -61,114 +61,95 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
   const isPromoted = card.promotion.status === 'PROMOTED';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white rounded-lg p-6 max-w-xl w-full shadow-elevated border border-slate-200 relative my-8 text-xs">
+    <div className="modal-backdrop overflow-y-auto">
+      <div className="modal p-6 max-w-xl w-full relative my-8 text-xs">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          className="absolute right-4 top-4 icon-btn border-transparent"
         >
           <X className="w-4 h-4" />
         </button>
 
         {/* Modal Header */}
-        <div className="mb-4 pb-3 border-b border-slate-200 pr-8">
-          <div className="flex items-center gap-2 mb-1">
-            <Cpu className="w-4 h-4 text-sky-600" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
-              Model Specification
-            </span>
-            <span
-              className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
-                isPromoted
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-amber-100 text-amber-900 border border-amber-300'
-              }`}
-            >
+        <div className="mb-5 pb-4 border-b border-line pr-10">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <Cpu className="w-3.5 h-3.5 text-muted" strokeWidth={1.75} />
+            <span className="eyebrow">Model Specification</span>
+            <span className={`chip font-mono ${isPromoted ? 'chip-ok' : 'chip-warn'}`}>
               {card.promotion.status}
             </span>
           </div>
-          <h3 className="text-lg font-bold text-slate-900">
+          <h3 className="text-[22px] font-normal tracking-[-0.02em] text-ink">
             First-Order Grey-Box Thermal ODE
           </h3>
-          <p className="text-slate-500 mt-0.5 font-mono text-[11px]">
+          <p className="text-muted mt-1 font-mono text-[11px]">
             Model: {card.model_version} · Asset: {card.asset_id}
           </p>
         </div>
 
         {/* 1. ODE Equation & Parameters */}
-        <div className="bg-slate-50 rounded p-3 border border-slate-200 mb-4">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+        <div className="card-inverse p-4 mb-4">
+          <span className="text-[10px] font-semibold uppercase tracking-eyebrow text-on-inverse/70 block mb-2">
             ODE Formulation
           </span>
-          <div className="font-mono text-xs text-slate-900 bg-white p-2 rounded border border-slate-200">
+          <div className="font-mono text-[13px] text-on-inverse">
             dθ_o / dt = (1 / τ) · (β₀ + β₁ · u² - θ_o)
           </div>
-          <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
+          <div className="grid grid-cols-3 gap-3 mt-4 pt-3 border-t border-on-inverse/15 text-[11px]">
             <div>
-              <span className="text-slate-400 block">τ (time const)</span>
-              <strong className="font-mono text-slate-900">{card.parameters.tau_hours.toFixed(2)}h</strong>
+              <span className="text-on-inverse/60 block">τ (time const)</span>
+              <strong className="font-mono font-medium text-[15px] text-on-inverse">{card.parameters.tau_hours.toFixed(2)}h</strong>
             </div>
             <div>
-              <span className="text-slate-400 block">β₀ (ambient offset)</span>
-              <strong className="font-mono text-slate-900">{card.parameters.beta_0.toFixed(4)}°C</strong>
+              <span className="text-on-inverse/60 block">β₀ (ambient offset)</span>
+              <strong className="font-mono font-medium text-[15px] text-on-inverse">{card.parameters.beta_0.toFixed(4)}°C</strong>
             </div>
             <div>
-              <span className="text-slate-400 block">β₁ (load coeff)</span>
-              <strong className="font-mono text-slate-900">{card.parameters.beta_1.toFixed(4)}°C</strong>
+              <span className="text-on-inverse/60 block">β₁ (load coeff)</span>
+              <strong className="font-mono font-medium text-[15px] text-on-inverse">{card.parameters.beta_1.toFixed(4)}°C</strong>
             </div>
           </div>
         </div>
 
         {/* 2. Validation Metrics & Test Partition */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="p-3 bg-slate-50 rounded border border-slate-200">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-              Test Accuracy
-            </span>
-            <div className="space-y-1 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-slate-500">MAE:</span>
-                <span className="font-mono font-bold text-slate-900">{card.test_metrics.mae_degc.toFixed(2)}°C</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">RMSE:</span>
-                <span className="font-mono font-bold text-slate-900">{card.test_metrics.rmse_degc.toFixed(2)}°C</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">90% Coverage:</span>
-                <span className="font-mono font-bold text-emerald-700">{card.test_metrics.marginal_coverage_90_pct.toFixed(1)}%</span>
-              </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          <div className="card-muted px-4 py-3">
+            <span className="eyebrow text-[10px] block mb-1">Test Accuracy</span>
+            <div className="kv">
+              <span>MAE</span>
+              <span className="font-mono font-semibold text-ink">{card.test_metrics.mae_degc.toFixed(2)}°C</span>
+            </div>
+            <div className="kv">
+              <span>RMSE</span>
+              <span className="font-mono font-semibold text-ink">{card.test_metrics.rmse_degc.toFixed(2)}°C</span>
+            </div>
+            <div className="kv">
+              <span>90% Coverage</span>
+              <span className="font-mono font-semibold text-ink">{card.test_metrics.marginal_coverage_90_pct.toFixed(1)}%</span>
             </div>
           </div>
 
-          <div className="p-3 bg-slate-50 rounded border border-slate-200">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-              Qualification Status
-            </span>
-            <div className="space-y-1 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Interpretability:</span>
-                <span className="font-mono text-slate-800">{card.qualification.parameter_interpretability}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Forecast Gate:</span>
-                <span className="font-mono text-slate-800">{card.qualification.forecast_qualification}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Status:</span>
-                <span className="font-mono font-bold text-amber-800">{card.promotion.status}</span>
-              </div>
+          <div className="card-muted px-4 py-3">
+            <span className="eyebrow text-[10px] block mb-1">Qualification Status</span>
+            <div className="kv">
+              <span>Interpretability</span>
+              <span className="font-mono text-ink-2">{card.qualification.parameter_interpretability}</span>
+            </div>
+            <div className="kv">
+              <span>Forecast Gate</span>
+              <span className="font-mono text-ink-2">{card.qualification.forecast_qualification}</span>
+            </div>
+            <div className="kv">
+              <span>Status</span>
+              <span className="font-mono font-semibold text-warn">{card.promotion.status}</span>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="pt-3 border-t border-slate-200 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
-          >
+        <div className="pt-4 border-t border-line flex justify-end">
+          <button onClick={onClose} className="btn btn-primary px-4">
             Close Specification
           </button>
         </div>

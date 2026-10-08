@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import {
-  Activity,
   Flame,
   Zap,
   Gauge,
   ArrowRight,
+  ArrowUpRight,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
@@ -12,6 +12,7 @@ import {
   X,
   CheckCircle2,
   ShieldAlert,
+  Activity,
 } from 'lucide-react';
 
 import {
@@ -20,8 +21,10 @@ import {
   CapabilityManifest,
   MaintenanceRecommendation,
   AnomalyEpisode,
+  CanonicalEvent,
 } from '../../types/contracts';
 import { UIHonestyBadge } from '../common/UIHonestyBadge';
+import { TrendChart, readSignal, formatUtcTick } from '../common/TrendChart';
 
 interface OverviewViewProps {
   assetId: string;
@@ -30,9 +33,50 @@ interface OverviewViewProps {
   capabilities: CapabilityManifest | null;
   recommendations: MaintenanceRecommendation[];
   episodes: AnomalyEpisode[];
+  historyEvents?: CanonicalEvent[];
   onNavigateTab: (tab: string) => void;
   onOpenFeedback: (rec: MaintenanceRecommendation) => void;
 }
+
+/** Presentational metric tile (eyebrow label, large value, unit, contextual footer). */
+const MetricTile: React.FC<{
+  label: string;
+  icon: React.ReactNode;
+  value: string | null;
+  unit?: string;
+  footer: React.ReactNode;
+  onOpen?: () => void;
+  openTitle?: string;
+}> = ({ label, icon, value, unit, footer, onOpen, openTitle }) => (
+  <div className="bg-surface p-5 flex flex-col justify-between min-h-[176px]">
+    <div>
+      <div className="flex items-center justify-between gap-2 pb-3 border-b border-line">
+        <span className="eyebrow flex items-center gap-2">
+          <span className="text-faint">{icon}</span>
+          {label}
+        </span>
+        {onOpen && (
+          <button
+            onClick={onOpen}
+            title={openTitle}
+            className="text-muted hover:text-accent transition-colors -m-1 p-1"
+          >
+            <ArrowUpRight className="w-4 h-4" strokeWidth={1.75} />
+          </button>
+        )}
+      </div>
+      <div className="mt-4 flex items-baseline gap-1.5">
+        <span className={`metric-value text-[38px] ${value === null ? 'text-faint' : ''}`}>
+          {value !== null ? value : '—'}
+        </span>
+        {value !== null && unit && <span className="metric-unit">{unit}</span>}
+      </div>
+    </div>
+    <div className="mt-4 text-[11px] text-muted">{footer}</div>
+  </div>
+);
+
+type TrendMetric = 'topOil' | 'activePower' | 'apparentPower';
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
   assetId,
@@ -41,6 +85,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   capabilities,
   recommendations,
   episodes,
+  historyEvents = [],
   onNavigateTab,
   onOpenFeedback,
 }) => {
@@ -130,367 +175,437 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* 1. Asset Header & High-Level Condition Banner */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 shadow-subtle transition-colors">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          {/* Asset Identity & Substation Summary */}
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-1.5">
-              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 font-mono">{assetId}</span>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Agartala Substation (33/11kV)</span>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <button
-                onClick={() => setIsCapabilityModalOpen(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer group"
-                title="Click to understand Current Operating Capability"
-              >
-                <span className="text-[10px] uppercase font-bold text-slate-400 font-sans">Capability:</span>
-                <span className="font-bold text-sky-700 dark:text-sky-400">{getTierTitle(highestTier)}</span>
-                <Info className="w-3 h-3 text-slate-400 group-hover:text-sky-600 dark:group-hover:text-sky-400" />
-              </button>
-              {activeEpisodeCount > 0 && (
-                <button
-                  onClick={() => onNavigateTab('anomalies')}
-                  className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-900 transition-colors"
-                >
-                  {activeEpisodeCount} Active {activeEpisodeCount === 1 ? 'Anomaly' : 'Anomalies'}
-                </button>
-              )}
-              {isGated && <UIHonestyBadge type="GATED_EVIDENCE" />}
-            </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-              Distribution Transformer Condition Overview
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Live transformer telemetry, thermal condition tracking, anomaly detection, and maintenance guidance.
-            </p>
-          </div>
 
-          {/* Health Index Metric Display */}
-          <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg p-3.5 self-start lg:self-auto">
-            <div
-              onClick={() => setIsHealthModalOpen(true)}
-              className="cursor-pointer group"
-              title="Click to understand Health Index (OTHI)"
+  // Presentation-only: trend series read directly from recorded history events
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>('topOil');
+  const trendOptions: Record<TrendMetric, { label: string; unit: string; ids: string[] }> = {
+    topOil: { label: 'Top-oil', unit: '°C', ids: ['top_oil_temperature'] },
+    activePower: { label: 'Active power', unit: 'kW', ids: ['active_power_total', 'active_power'] },
+    apparentPower: { label: 'Apparent power', unit: 'kVA', ids: ['apparent_power_total', 'apparent_power'] },
+  };
+  const activeTrend = trendOptions[trendMetric];
+  const trendData = historyEvents.map((ev) => ({
+    t: formatUtcTick(ev.event_time_utc),
+    value: readSignal(ev.measurements, activeTrend.ids),
+  }));
+  const trendHasData = trendData.some((d) => d.value !== null);
+  const trendRange =
+    historyEvents.length > 0
+      ? `${formatUtcTick(historyEvents[0].event_time_utc)} → ${formatUtcTick(
+          historyEvents[historyEvents.length - 1].event_time_utc
+        )} UTC`
+      : null;
+
+  const isScoreShown = othiScore !== null && !isGated && evidenceGrade !== 'U';
+  const asOfIso = twinState?.event_time_watermark_utc || twinState?.state_time_utc || null;
+  // Hide the unseeded epoch-0 placeholder watermark
+  const asOf = asOfIso && new Date(asOfIso).getTime() > 0
+    ? new Date(asOfIso).toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
+    : null;
+
+  const priorityChip = (p: string) =>
+    p === 'P0' ? 'chip-crit' : p === 'P1' ? 'chip-warn' : 'chip-neutral';
+
+  return (
+    <div className="space-y-8">
+      {/* 1. Page Header: Asset identity, capability & condition flags */}
+      <div className="page-header">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
+            <span className="eyebrow text-ink">{assetId}</span>
+            <span className="text-faint">·</span>
+            <span className="eyebrow">Agartala Substation (33/11kV)</span>
+          </div>
+          <h1 className="page-title">Condition Overview</h1>
+          <p className="text-[13px] text-muted mt-2.5 max-w-2xl">
+            Live transformer telemetry, thermal condition tracking, anomaly detection, and maintenance guidance.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          <button
+            onClick={() => setIsCapabilityModalOpen(true)}
+            className="btn btn-ghost font-medium group"
+            title="Click to understand Current Operating Capability"
+          >
+            <span className="eyebrow text-[10px]">Capability</span>
+            <span className="text-ink">{getTierTitle(highestTier)}</span>
+            <Info className="w-3.5 h-3.5 text-faint group-hover:text-accent" />
+          </button>
+          {activeEpisodeCount > 0 && (
+            <button
+              onClick={() => onNavigateTab('anomalies')}
+              className="btn bg-warn/10 text-warn hover:bg-warn/15"
             >
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 group-hover:text-slate-600 block">
-                  Health Index (OTHI)
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {activeEpisodeCount} Active {activeEpisodeCount === 1 ? 'Anomaly' : 'Anomalies'}
+            </button>
+          )}
+          {isGated && <UIHonestyBadge type="GATED_EVIDENCE" />}
+        </div>
+      </div>
+
+      {/* 2. Primary Health + Telemetry Block | Advisories Rail */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px bg-line border border-line rounded-card overflow-hidden">
+          {/* Health Index (visual anchor) */}
+          <div className="card-inverse rounded-none sm:col-span-2 xl:col-span-1 xl:row-span-2 p-6 flex flex-col justify-between min-h-[260px]">
+            <div>
+              <button
+                onClick={() => setIsHealthModalOpen(true)}
+                className="w-full flex items-center justify-between pb-3 border-b border-on-inverse/15 group"
+                title="Click to understand Health Index (OTHI)"
+              >
+                <span className="text-[11px] font-semibold uppercase tracking-eyebrow text-on-inverse/70 group-hover:text-on-inverse">
+                  Health Index · OTHI
                 </span>
-                <Info className="w-3 h-3 text-slate-400 group-hover:text-sky-600" />
-              </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                {othiScore !== null && !isGated && evidenceGrade !== 'U' ? (
-                  <>
-                    <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-sans leading-none">
+                <Info className="w-3.5 h-3.5 text-on-inverse/50 group-hover:text-on-inverse" />
+              </button>
+
+              <div className="mt-6">
+                {isScoreShown ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="metric-value text-[84px] text-on-inverse">
                       {Math.round(Number(othiScore))}
                     </span>
-                    <span className="text-xs text-slate-400 font-medium">/ 100</span>
-                  </>
+                    <span className="text-base text-on-inverse/50">/100</span>
+                  </div>
                 ) : (
                   <>
-                    <span className="text-3xl font-extrabold text-slate-400 font-sans leading-none">
-                      —
-                    </span>
-                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium block">
+                    <span className="metric-value text-[84px] text-on-inverse/40">—</span>
+                    <span className="block text-xs text-on-inverse/70 mt-3">
                       Insufficient current evidence
                     </span>
                   </>
                 )}
               </div>
-              <span className="text-[9px] text-slate-400 block mt-0.5">
-                {othiScore !== null && !isGated && evidenceGrade !== 'U'
-                  ? 'Composite health index'
-                  : 'Gated (requires ≥2 corroborated domains)'}
-              </span>
+
+              <div className="mt-5">
+                {healthStatus && isScoreShown ? (
+                  <span className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-on-inverse">
+                    <span
+                      className={`dot w-2 h-2 ${
+                        healthStatus === 'NORMAL'
+                          ? 'bg-ok'
+                          : healthStatus === 'WATCH'
+                          ? 'bg-warn'
+                          : 'bg-crit'
+                      }`}
+                    />
+                    {healthStatus}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-on-inverse/70">
+                    <span className="dot w-2 h-2 border border-on-inverse/50" />
+                    Status: Insufficient evidence
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="pl-4 border-l border-slate-200 dark:border-slate-700">
-              {healthStatus && othiScore !== null && !isGated && evidenceGrade !== 'U' ? (
-                <span
-                  className={`inline-block px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
-                    healthStatus === 'NORMAL'
-                      ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
-                      : healthStatus === 'WATCH'
-                      ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
-                      : 'bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300'
-                  }`}
-                >
-                  {healthStatus}
-                </span>
-              ) : (
-                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  Status: Insufficient evidence
-                </span>
-              )}
+            <div className="mt-6 pt-3 border-t border-on-inverse/15 space-y-1.5 text-[11px] text-on-inverse/60">
               <button
                 onClick={() => setIsEvidenceModalOpen(true)}
-                className="text-[10px] text-slate-600 dark:text-slate-400 hover:text-sky-700 dark:hover:text-sky-400 hover:underline block mt-1 font-medium cursor-pointer flex items-center gap-1"
+                className="flex items-center gap-1.5 text-on-inverse/85 hover:text-on-inverse font-medium"
                 title="Click to understand Evidence Grade"
               >
-                Evidence: {evidenceGrade}
-                <Info className="w-3 h-3 text-slate-400" />
+                Evidence grade <span className="font-mono font-semibold">{evidenceGrade}</span>
+                <Info className="w-3 h-3" />
+              </button>
+              <div>
+                {isScoreShown ? 'Composite health index' : 'Gated (requires ≥2 corroborated domains)'}
+              </div>
+              {asOf && <div className="font-mono text-[10.5px] text-on-inverse/50">As of {asOf}</div>}
+            </div>
+          </div>
+
+          {/* Top-Oil Temperature */}
+          <MetricTile
+            label="Top-Oil Temperature"
+            icon={<Flame className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            value={topOilObs}
+            unit="°C"
+            onOpen={() => onNavigateTab('twin-analysis')}
+            openTitle="Open thermal analysis"
+            footer={
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2 font-mono">
+                  <span>Expected {topOilExpected !== null ? `${topOilExpected} °C` : '—'}</span>
+                  <span className={residual && Number(residual) > 3 ? 'text-warn font-semibold' : 'text-muted'}>
+                    ΔT {residual !== null ? (Number(residual) >= 0 ? `+${residual} °C` : `${residual} °C`) : '—'}
+                  </span>
+                </div>
+                {!hasValidExpected && (
+                  <span className="block text-[10.5px] text-warn">
+                    {isThermalWarmup ? 'Shadow model warming up' : 'Thermal shadow unavailable'}
+                  </span>
+                )}
+              </div>
+            }
+          />
+
+          {/* Operating Load */}
+          <MetricTile
+            label="Operating Load"
+            icon={<Zap className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            value={apparentPowerKva}
+            unit="kVA"
+            onOpen={() => onNavigateTab('telemetry')}
+            openTitle="Open electrical telemetry"
+            footer={
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono">{relativeLoad !== null ? `${relativeLoad} rel. u` : '—'}</span>
+                <UIHonestyBadge type="relative_load_index" customText="Ref: 142.9 kVA (non-nameplate)" />
+              </div>
+            }
+          />
+
+          {/* Active Power */}
+          <MetricTile
+            label="Active Power (P)"
+            icon={<Activity className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            value={activePowerKw}
+            unit="kW"
+            onOpen={() => onNavigateTab('telemetry')}
+            openTitle="Open electrical telemetry"
+            footer={
+              <span className="font-mono">
+                Reactive (Q) {reactivePowerKvar !== null ? `${reactivePowerKvar} kvar` : '—'}
+              </span>
+            }
+          />
+
+          {/* Power Factor */}
+          <MetricTile
+            label="Power Factor (cos φ)"
+            icon={<Gauge className="w-3.5 h-3.5" strokeWidth={1.75} />}
+            value={powerFactor}
+            onOpen={() => onNavigateTab('telemetry')}
+            openTitle="Open electrical telemetry"
+            footer={
+              <span className={powerFactor !== null ? 'text-ink-2 inline-flex items-center gap-1.5' : ''}>
+                {powerFactor !== null && <span className="dot bg-ok" />}
+                {powerFactor !== null ? 'Lagging · Within Grid Standards' : '—'}
+              </span>
+            }
+          />
+        </div>
+
+        {/* Advisories & Episodes Rail */}
+        <div className="lg:col-span-4 flex flex-col">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
+            <h2 className="section-title sm:whitespace-nowrap">Maintenance advisories</h2>
+            <button onClick={() => onNavigateTab('maintenance')} className="link">
+              View all
+            </button>
+          </div>
+          <div className="card-muted flex-1 p-5 flex flex-col">
+            {recommendations.length === 0 ? (
+              <div className="flex-1 flex flex-col items-start justify-center py-6">
+                <span className="chip chip-ok mb-3">
+                  <CheckCircle2 className="w-3 h-3" /> Nominal
+                </span>
+                <p className="card-title">No active maintenance advisories</p>
+                <p className="text-xs text-muted mt-1">
+                  No safety limit excursions or maintenance actions are currently flagged.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-4 flex-1">
+                {recommendations.slice(0, 3).map((rec, idx) => (
+                  <li key={rec.recommendation_id} className={idx > 0 ? 'pt-4 border-t border-line' : ''}>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className={`chip ${priorityChip(rec.priority)}`}>
+                        {rec.priority_label || `Priority ${rec.priority}`}
+                      </span>
+                      <span className="text-[10.5px] font-mono text-muted truncate">
+                        {rec.action_window.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <h3 className="card-title">{rec.title}</h3>
+                    {rec === activeRec && (
+                      <p className="text-xs text-muted mt-1 leading-relaxed line-clamp-3">
+                        {rec.advisory_wording}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => onOpenFeedback(rec)}
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-ink-2 hover:text-accent"
+                    >
+                      {rec.acknowledged ? 'View Acknowledged Record' : 'Acknowledge Advisory'}
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-5 pt-4 border-t border-line space-y-3">
+              <button
+                onClick={() => onNavigateTab('anomalies')}
+                className="w-full flex items-center justify-between text-xs group"
+              >
+                <span className="flex items-center gap-2 text-ink-2 group-hover:text-ink">
+                  <span className={`dot w-2 h-2 ${activeEpisodeCount > 0 ? 'bg-warn' : 'bg-ok'}`} />
+                  Active anomaly episodes
+                </span>
+                <span className="font-mono font-semibold text-ink num">{activeEpisodeCount}</span>
+              </button>
+              <button
+                onClick={() => onNavigateTab('maintenance')}
+                className="btn btn-accent w-full rounded-full py-2.5 text-[13px] font-medium"
+              >
+                Open advisories
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. Priority Advisory & Active Episodes Banner (if any) */}
-      {activeRec && (
-        <div className={`rounded-lg p-4 border flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-subtle ${
-          activeRec.priority === 'P0'
-            ? 'bg-rose-50/70 border-rose-200'
-            : activeRec.priority === 'P1'
-            ? 'bg-amber-50/70 border-amber-200'
-            : 'bg-slate-50 border-slate-200'
-        }`}>
-          <div className="flex items-start gap-3">
-            <div className={`p-2 rounded mt-0.5 ${
-              activeRec.priority === 'P0'
-                ? 'bg-rose-100 text-rose-700'
-                : activeRec.priority === 'P1'
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-slate-200 text-slate-700'
-            }`}>
-              <AlertTriangle className="w-4 h-4" />
+      {/* 3. Trend Chart | Diagnostic Domains */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-8 flex flex-col">
+          <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
+            <h2 className="section-title">Telemetry trend</h2>
+            <div className="segmented">
+              {(Object.keys(trendOptions) as TrendMetric[]).map((k) => (
+                <button key={k} data-active={trendMetric === k} onClick={() => setTrendMetric(k)}>
+                  {trendOptions[k].label}
+                </button>
+              ))}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  {activeRec.priority_label || `Priority ${activeRec.priority}`} Advisory
-                </span>
-                <span className="text-[11px] font-mono text-slate-400">
-                  Action Window: {activeRec.action_window.replace(/_/g, ' ')}
-                </span>
+          </div>
+          <div className="card-muted flex-1 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <span className="eyebrow text-ink-2">
+                {activeTrend.label} · {activeTrend.unit}
+              </span>
+              <span className="text-[10.5px] font-mono text-muted">
+                {trendRange ? `${historyEvents.length} recorded frames · ${trendRange}` : 'No recorded frames'}
+              </span>
+            </div>
+            {trendHasData ? (
+              <TrendChart
+                data={trendData}
+                xKey="t"
+                series={[{ key: 'value', label: activeTrend.label }]}
+                unit={activeTrend.unit}
+                area
+                height={330}
+              />
+            ) : (
+              <div className="h-[330px] flex flex-col items-center justify-center text-center border border-dashed border-line-strong rounded-card">
+                <p className="text-xs font-medium text-ink-2">No {activeTrend.label.toLowerCase()} history yet</p>
+                <p className="text-[11px] text-muted mt-1 max-w-xs">
+                  Start the Digital Twin and step telemetry to record frames from the history API.
+                </p>
               </div>
-              <h4 className="text-sm font-bold text-slate-900 mt-0.5">
-                {activeRec.title}
-              </h4>
-              <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                {activeRec.advisory_wording}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 flex-shrink-0 self-end md:self-center">
-            <button
-              onClick={() => onOpenFeedback(activeRec)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white transition-colors"
-            >
-              <span>{activeRec.acknowledged ? 'View Acknowledged Record' : 'Acknowledge Advisory'}</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Primary Operating Metrics (Unified Instrumentation Rail) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-subtle divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 transition-colors">
-        {/* Metric 1: Top-Oil Temperature */}
-        <div className="p-4 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1.5">
-              <span className="text-[11px] uppercase font-semibold tracking-wider">Top-Oil Temperature</span>
-              <Flame className="w-3.5 h-3.5 text-rose-500" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-slate-900 dark:text-slate-100">
-              {topOilObs !== null ? `${topOilObs} °C` : '—'}
-            </div>
-          </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1 font-mono text-[11px]">
-            <div className="flex items-center justify-between">
-              <span>Expected: {topOilExpected !== null ? `${topOilExpected} °C` : '—'}</span>
-              <span className={residual && Number(residual) > 3 ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-emerald-700 dark:text-emerald-400'}>
-                ΔT: {residual !== null ? (Number(residual) >= 0 ? `+${residual} °C` : `${residual} °C`) : '—'}
-              </span>
-            </div>
-            {!hasValidExpected && (
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-sans">
-                {isThermalWarmup ? 'Shadow model warming up' : 'Thermal shadow unavailable'}
-              </span>
             )}
           </div>
         </div>
 
-        {/* Metric 2: Apparent Power & Relative Loading */}
-        <div className="p-4 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1.5">
-              <span className="text-[11px] uppercase font-semibold tracking-wider">Operating Load</span>
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-slate-900 dark:text-slate-100">
-              {apparentPowerKva !== null ? `${apparentPowerKva} kVA` : '—'}
-            </div>
+        {/* Five Diagnostic Health Domains */}
+        <div className="lg:col-span-4 flex flex-col">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
+            <h2 className="section-title sm:whitespace-nowrap">Diagnostic domains</h2>
+            <button onClick={() => onNavigateTab('telemetry')} className="link">
+              View Full Measurements →
+            </button>
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between font-mono text-[11px]">
-            <span>{relativeLoad !== null ? `${relativeLoad} rel. u` : '—'}</span>
-            <UIHonestyBadge type="relative_load_index" customText="Ref: 142.9 kVA (non-nameplate)" />
-          </div>
-        </div>
+          <div className="card flex-1 divide-y divide-line">
+            {[
+              { key: 'thermal', name: 'Thermal', subtitle: 'Top-oil & shadow residual' },
+              { key: 'loading', name: 'Loading', subtitle: 'Load excursion & energy' },
+              { key: 'phase_neutral', name: 'Phase & Neutral', subtitle: 'Symmetry & unbalance' },
+              { key: 'voltage_pf_freq', name: 'Voltage & Quality', subtitle: 'Phase voltage & PF' },
+              { key: 'oil_protection', name: 'Protection & Oil', subtitle: 'Discrete contact flags' },
+            ].map((d) => {
+              const domainData = domains[d.key];
+              const rawStatus = domainData?.status ?? 'NORMAL';
+              const severity = domainData?.severity ?? 0.0;
+              const evidenceCount = domainData?.evidence_count ?? 0;
+              const isCrit = rawStatus === 'CRITICAL' || severity >= 0.7;
+              const isWarn = rawStatus === 'WARNING' || (severity >= 0.4 && !isCrit);
+              const isWatch = rawStatus === 'WATCH' || (severity > 0.0 && !isWarn && !isCrit);
+              const isUnexcursed = severity === 0 && (evidenceCount === 0 || rawStatus === 'NORMAL');
 
-        {/* Metric 3: Active & Reactive Power */}
-        <div className="p-4 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1.5">
-              <span className="text-[11px] uppercase font-semibold tracking-wider">Active Power (P)</span>
-              <Activity className="w-3.5 h-3.5 text-sky-600" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-slate-900 dark:text-slate-100">
-              {activePowerKw !== null ? `${activePowerKw} kW` : '—'}
-            </div>
-          </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between font-mono text-[11px]">
-            <span>Reactive (Q): {reactivePowerKvar !== null ? `${reactivePowerKvar} kvar` : '—'}</span>
-          </div>
-        </div>
+              const statusLabel = isCrit
+                ? 'CRITICAL'
+                : isWarn
+                ? 'WARNING'
+                : isWatch
+                ? 'WATCH'
+                : isUnexcursed
+                ? 'UNEXCURSED'
+                : 'NORMAL';
 
-        {/* Metric 4: Power Factor */}
-        <div className="p-4 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-1.5">
-              <span className="text-[11px] uppercase font-semibold tracking-wider">Power Factor (cos φ)</span>
-              <Gauge className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-slate-900 dark:text-slate-100">
-              {powerFactor !== null ? powerFactor : '—'}
-            </div>
-          </div>
-          <div className="text-xs text-emerald-700 dark:text-emerald-400 font-medium mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
-            {powerFactor !== null ? 'Lagging · Within Grid Standards' : '—'}
-          </div>
-        </div>
-      </div>
+              const chipClass = isCrit
+                ? 'chip-crit'
+                : isWarn
+                ? 'chip-warn'
+                : isWatch
+                ? 'chip-accent'
+                : isUnexcursed
+                ? 'chip-outline'
+                : 'chip-ok';
+              const barClass = isCrit ? 'bg-crit' : isWarn ? 'bg-warn' : isWatch ? 'bg-accent' : 'bg-ok';
 
-      {/* 4. Five Diagnostic Health Domains Rail (Clean Row Presentation) */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg p-5 border border-slate-200 dark:border-slate-800 shadow-subtle transition-colors">
-        <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100 dark:border-slate-800">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider text-[11px]">
-              Diagnostic Health Domains
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Independent evaluation across thermal, electrical, and protection boundaries.
-            </p>
-          </div>
-          <button
-            onClick={() => onNavigateTab('telemetry')}
-            className="text-xs text-sky-600 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 hover:underline font-medium"
-          >
-            View Full Measurements →
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-          {[
-            { key: 'thermal', name: 'Thermal', subtitle: 'Top-oil & shadow residual' },
-            { key: 'loading', name: 'Loading', subtitle: 'Load excursion & energy' },
-            { key: 'phase_neutral', name: 'Phase & Neutral', subtitle: 'Symmetry & unbalance' },
-            { key: 'voltage_pf_freq', name: 'Voltage & Quality', subtitle: 'Phase voltage & PF' },
-            { key: 'oil_protection', name: 'Protection & Oil', subtitle: 'Discrete contact flags' },
-          ].map((d) => {
-            const domainData = domains[d.key];
-            const rawStatus = domainData?.status ?? 'NORMAL';
-            const severity = domainData?.severity ?? 0.0;
-            const evidenceCount = domainData?.evidence_count ?? 0;
-            const isCrit = rawStatus === 'CRITICAL' || severity >= 0.7;
-            const isWarn = rawStatus === 'WARNING' || (severity >= 0.4 && !isCrit);
-            const isWatch = rawStatus === 'WATCH' || (severity > 0.0 && !isWarn && !isCrit);
-            const isUnexcursed = severity === 0 && (evidenceCount === 0 || rawStatus === 'NORMAL');
-
-            const statusLabel = isCrit
-              ? 'CRITICAL'
-              : isWarn
-              ? 'WARNING'
-              : isWatch
-              ? 'WATCH'
-              : isUnexcursed
-              ? 'UNEXCURSED'
-              : 'NORMAL';
-
-            return (
-              <div
-                key={d.key}
-                className={`p-3 rounded-lg border flex flex-col justify-between transition-colors ${
-                  isCrit
-                    ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900'
-                    : isWarn
-                    ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900'
-                    : isWatch
-                    ? 'bg-sky-50/40 dark:bg-sky-950/20 border-sky-200 dark:border-sky-900'
-                    : 'bg-slate-50/80 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{d.name}</span>
-                    <span
-                      className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${
-                        isCrit
-                          ? 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
-                          : isWarn
-                          ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
-                          : isWatch
-                          ? 'bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300'
-                          : isUnexcursed
-                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                          : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
-                      }`}
-                    >
-                      {statusLabel}
-                    </span>
+              return (
+                <div key={d.key} className="px-4 py-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[13.5px] font-medium text-ink">{d.name}</div>
+                      <div className="text-[11px] text-muted leading-tight mt-0.5">{d.subtitle}</div>
+                    </div>
+                    <span className={`chip ${chipClass}`}>{statusLabel}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
-                    {d.subtitle}
-                  </p>
+                  <div className="mt-2.5 flex items-center gap-3 text-[10.5px] text-muted font-mono">
+                    <div className="flex-1 h-[3px] rounded-full bg-surface-3 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${barClass}`}
+                        style={{ width: `${Math.min(severity * 100, 100)}%` }}
+                      />
+                    </div>
+                    <span className="num">Penalty {(severity * 100).toFixed(0)}%</span>
+                    <span className="text-faint">·</span>
+                    <span className="num">{domainData?.evidence_count ?? 0} item(s)</span>
+                  </div>
                 </div>
-
-                <div className="mt-3 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
-                  <span>Penalty: {(severity * 100).toFixed(0)}%</span>
-                  <span>{domainData?.evidence_count ?? 0} item(s)</span>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* 5. Progressive Disclosure: Technical Governance & Model Details */}
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 text-xs">
+      {/* 4. Progressive Disclosure: Technical Governance & Model Details */}
+      <div className="card-muted px-5 py-4 text-xs">
         <button
           onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-          className="w-full flex items-center justify-between text-slate-700 font-semibold hover:text-slate-900"
+          className="w-full flex items-center justify-between gap-3 text-ink-2 font-medium hover:text-ink text-left"
         >
-          <span>Technical Model Governance & State Reducer Parameters</span>
-          {showTechnicalDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <span className="flex items-center gap-3">
+            <span className="eyebrow hidden sm:inline">Governance</span>
+            <span>Technical Model Governance & State Reducer Parameters</span>
+          </span>
+          {showTechnicalDetails ? <ChevronUp className="w-4 h-4 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 flex-shrink-0" />}
         </button>
 
         {showTechnicalDetails && (
-          <div className="mt-3 pt-3 border-t border-slate-200 text-slate-600 space-y-2">
+          <div className="mt-4 pt-4 border-t border-line text-muted space-y-2.5 leading-relaxed">
             <p>
-              <strong>First-Order Grey-Box ODE:</strong> Parameters calibrated on Tripura historical training partition (τ = {tauHours}h, β₀ = 1.09°C, β₁ = 2.90°C).
-              Status: <span className="font-mono text-slate-800">NOT_PROMOTED</span> (Uninstrumented ambient temperature feed).
+              <strong className="text-ink font-semibold">First-Order Grey-Box ODE:</strong> Parameters calibrated on Tripura historical training partition (τ = {tauHours}h, β₀ = 1.09°C, β₁ = 2.90°C).
+              Status: <span className="font-mono text-ink">NOT_PROMOTED</span> (Uninstrumented ambient temperature feed).
             </p>
             <p>
-              <strong>Overall Health Index (OTHI):</strong> Computed multi-domain engineering index using a Max-Plus penalty formulation across tiers C0–C4.
+              <strong className="text-ink font-semibold">Overall Health Index (OTHI):</strong> Computed multi-domain engineering index using a Max-Plus penalty formulation across tiers C0–C4.
               Missing signals degrade capability tiers rather than fabricating ungrounded estimates.
             </p>
-            <div className="pt-2 flex items-center gap-3">
-              <button
-                onClick={() => onNavigateTab('twin-analysis')}
-                className="text-sky-600 hover:text-sky-800 hover:underline font-medium"
-              >
+            <div className="pt-1 flex flex-wrap items-center gap-3">
+              <button onClick={() => onNavigateTab('twin-analysis')} className="link">
                 Inspect Thermal What-If Simulation →
               </button>
-              <span className="text-slate-300">·</span>
-              <button
-                onClick={() => onNavigateTab('model-card')}
-                className="text-sky-600 hover:text-sky-800 hover:underline font-medium"
-              >
+              <span className="text-faint">·</span>
+              <button onClick={() => onNavigateTab('model-card')} className="link">
                 View Model Card & Calibration Audit →
               </button>
             </div>
@@ -500,79 +615,68 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
       {/* Popover Disclosure 1: Capability Tier */}
       {isCapabilityModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-md w-full p-5 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-sky-100 text-sky-800">
-                  {highestTier}
-                </span>
-                <h3 className="text-sm font-bold text-slate-900">Current Operating Capability</h3>
+        <div className="modal-backdrop">
+          <div className="modal max-w-md w-full p-6 space-y-5">
+            <div className="flex items-start justify-between pb-3 border-b border-line">
+              <div>
+                <span className="chip chip-neutral font-mono mb-2">{highestTier}</span>
+                <h3 className="text-lg font-medium tracking-tight">Current Operating Capability</h3>
               </div>
               <button
                 onClick={() => setIsCapabilityModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded cursor-pointer"
+                className="icon-btn border-transparent"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="text-xs text-slate-600 space-y-3">
+            <div className="text-xs text-muted space-y-4 leading-relaxed">
               <div>
-                <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                  What this means:
-                </span>
-                <p>
+                <span className="eyebrow block mb-1.5">What this means</span>
+                <p className="text-ink-2">
                   The digital twin has enough validated telemetry and model support for its currently enabled monitoring functions.
                 </p>
               </div>
 
               <div>
-                <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-1">
-                  Available Functions:
-                </span>
-                <ul className="space-y-1 text-slate-700">
-                  <li className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                <span className="eyebrow block mb-2">Available Functions</span>
+                <ul className="space-y-1.5 text-ink-2">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-ok flex-shrink-0" />
                     <span>Electrical telemetry & symmetrical components (C0/C1)</span>
                   </li>
-                  <li className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-ok flex-shrink-0" />
                     <span>Descriptive top-oil thermal condition tracking (C2)</span>
                   </li>
-                  <li className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-ok flex-shrink-0" />
                     <span>Multi-domain anomaly detection & deterministic advisories</span>
                   </li>
                 </ul>
               </div>
 
               <div>
-                <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-1">
-                  Restricted Functions:
-                </span>
-                <ul className="space-y-1 text-slate-500">
-                  <li className="flex items-center gap-1.5">
-                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                <span className="eyebrow block mb-2">Restricted Functions</span>
+                <ul className="space-y-1.5">
+                  <li className="flex items-center gap-2">
+                    <ShieldAlert className="w-3.5 h-3.5 text-warn flex-shrink-0" />
                     <span>Autonomous predictive simulation (C3 requires promoted ODE model)</span>
                   </li>
-                  <li className="flex items-center gap-1.5">
-                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                  <li className="flex items-center gap-2">
+                    <ShieldAlert className="w-3.5 h-3.5 text-warn flex-shrink-0" />
                     <span>Thermal ageing & RUL claims (C4 requires verified insulation class)</span>
                   </li>
                 </ul>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="pt-3 border-t border-line text-[11px] text-faint">
                 <span>Technical details: Capability Tier {highestTier} evaluated per IEC 60076-7 and IEEE C57.91 standards.</span>
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setIsCapabilityModalOpen(false)}
-                className="px-3 py-1.5 rounded bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
-              >
+            <div className="flex justify-end">
+              <button onClick={() => setIsCapabilityModalOpen(false)} className="btn btn-primary">
                 Close
               </button>
             </div>
@@ -582,47 +686,39 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
       {/* Popover Disclosure 2: Evidence Grade */}
       {isEvidenceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-md w-full p-5 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-amber-100 text-amber-800">
-                  Grade {evidenceGrade}
-                </span>
-                <h3 className="text-sm font-bold text-slate-900">Evidence Grade Explanation</h3>
+        <div className="modal-backdrop">
+          <div className="modal max-w-md w-full p-6 space-y-5">
+            <div className="flex items-start justify-between pb-3 border-b border-line">
+              <div>
+                <span className="chip chip-neutral font-mono mb-2">Grade {evidenceGrade}</span>
+                <h3 className="text-lg font-medium tracking-tight">Evidence Grade Explanation</h3>
               </div>
               <button
                 onClick={() => setIsEvidenceModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded cursor-pointer"
+                className="icon-btn border-transparent"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="text-xs text-slate-600 space-y-3">
+            <div className="text-xs text-ink-2 space-y-4 leading-relaxed">
               {evidenceGrade === 'U' ? (
                 <>
                   <div>
-                    <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                      Meaning:
-                    </span>
+                    <span className="eyebrow block mb-1.5">Meaning</span>
                     <p>
                       There is not enough current independent evidence to assign a stronger evidence grade.
                     </p>
                   </div>
                   <div>
-                    <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                      Why:
-                    </span>
+                    <span className="eyebrow block mb-1.5">Why</span>
                     <p>
                       Current evidence does not meet the minimum corroboration requirements (requires at least 2 distinct physical domains or a decisive protection trip).
                     </p>
                   </div>
                   <div>
-                    <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                      Effect:
-                    </span>
-                    <p className="text-amber-700 font-medium">
+                    <span className="eyebrow block mb-1.5">Effect</span>
+                    <p className="text-warn font-medium">
                       Health index is gated and not treated as a confirmed score, protecting against false alarms.
                     </p>
                   </div>
@@ -630,42 +726,33 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               ) : (
                 <>
                   <div>
-                    <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                      Meaning:
-                    </span>
+                    <span className="eyebrow block mb-1.5">Meaning</span>
                     <p>
                       Active observations meet {evidenceGrade === 'A' ? 'high' : 'moderate'} multi-domain corroboration criteria.
                     </p>
                   </div>
                   <div>
-                    <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                      Why:
-                    </span>
+                    <span className="eyebrow block mb-1.5">Why</span>
                     <p>
                       Independent physical vectors (e.g. electrical loading and top-oil thermal excursion) corroborate the state.
                     </p>
                   </div>
                   <div>
-                    <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                      Effect:
-                    </span>
-                    <p className="text-emerald-700 font-medium">
+                    <span className="eyebrow block mb-1.5">Effect</span>
+                    <p className="text-ok font-medium">
                       Health index is evaluated and emitted as a verified numerical score.
                     </p>
                   </div>
                 </>
               )}
 
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="pt-3 border-t border-line text-[11px] text-faint">
                 <span>Grading Hierarchy: Grade A (≥3 domains) · Grade B (2 domains) · Grade C (single domain) · Grade U (uncorroborated / gated).</span>
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setIsEvidenceModalOpen(false)}
-                className="px-3 py-1.5 rounded bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
-              >
+            <div className="flex justify-end">
+              <button onClick={() => setIsEvidenceModalOpen(false)} className="btn btn-primary">
                 Close
               </button>
             </div>
@@ -675,50 +762,43 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
       {/* Popover Disclosure 3: Health Index (OTHI) */}
       {isHealthModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-md w-full p-5 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">Overall Transformer Health Index (OTHI)</h3>
+        <div className="modal-backdrop">
+          <div className="modal max-w-md w-full p-6 space-y-5">
+            <div className="flex items-start justify-between pb-3 border-b border-line">
+              <h3 className="text-lg font-medium tracking-tight">Overall Transformer Health Index (OTHI)</h3>
               <button
                 onClick={() => setIsHealthModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded cursor-pointer"
+                className="icon-btn border-transparent"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="text-xs text-slate-600 space-y-3">
+            <div className="text-xs text-ink-2 space-y-4 leading-relaxed">
               <div>
-                <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                  Algorithm & Formulation:
-                </span>
+                <span className="eyebrow block mb-1.5">Algorithm & Formulation</span>
                 <p>
                   OTHI is a physics-grounded composite condition score (0–100) using a deterministic Max-Plus secondary formulation:
                 </p>
-                <code className="block bg-slate-100 p-2 rounded text-[11px] font-mono text-slate-800 mt-1">
+                <code className="block bg-surface-2 border border-line p-2.5 rounded text-[11px] font-mono text-ink mt-2">
                   OTHI = 100 × (1 - [Pen_primary + 0.20 × Pen_secondary])
                 </code>
               </div>
 
               <div>
-                <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider mb-0.5">
-                  Safety Gating Invariant:
-                </span>
+                <span className="eyebrow block mb-1.5">Safety Gating Invariant</span>
                 <p>
                   To eliminate false precision, OTHI is strictly suppressed (displays &ldquo;—&rdquo;) when telemetry does not satisfy multi-domain corroboration or when uninstrumented ambient feeds cause anti-uplift violations.
                 </p>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="pt-3 border-t border-line text-[11px] text-faint">
                 <span>Non-Learning Contract: Evaluation is deterministic and executes without modifying model parameters.</span>
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setIsHealthModalOpen(false)}
-                className="px-3 py-1.5 rounded bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
-              >
+            <div className="flex justify-end">
+              <button onClick={() => setIsHealthModalOpen(false)} className="btn btn-primary">
                 Close
               </button>
             </div>

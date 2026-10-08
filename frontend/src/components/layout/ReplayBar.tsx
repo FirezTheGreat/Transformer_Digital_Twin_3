@@ -53,31 +53,33 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
     ? new Date(currentTime).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
     : 'Waiting for first telemetry frame';
 
+  const progressPct =
+    replayStatus?.total_events && replayStatus.total_events > 0
+      ? Math.min(100, (processed / replayStatus.total_events) * 100)
+      : 0;
+
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-subtle mb-6">
-      {/* Top Row: Dataset Hierarchy & Primary Twin State */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 mb-2.5 border-b border-slate-100">
-        {/* Left: Dataset Selector */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+    <div className="card mb-8">
+      {/* Top Row: Asset / Dataset Identity & Twin Lifecycle */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 sm:px-5 py-3.5 border-b border-line">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             <span
-              className={`w-2 h-2 rounded-full ${
-                isBackendHealthy ? 'bg-emerald-500' : 'bg-rose-500'
-              }`}
+              className={`dot w-2 h-2 ${isBackendHealthy ? 'bg-ok' : 'bg-crit'}`}
               title={isBackendHealthy ? 'Connected to digital twin server' : 'Backend offline'}
             />
             <label
               htmlFor="replay-dataset-select"
-              className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"
+              className="eyebrow flex items-center gap-1.5"
             >
-              <Database className="w-3.5 h-3.5 text-slate-400" />
-              Dataset:
+              <Database className="w-3.5 h-3.5" strokeWidth={1.75} />
+              Dataset
             </label>
             <select
               id="replay-dataset-select"
               value={selectedDataset}
               onChange={(e) => onDatasetChange(e.target.value)}
-              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1 text-xs font-medium text-slate-900 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
+              className="input w-auto max-w-[260px] sm:max-w-none py-1 pr-7 cursor-pointer font-medium"
             >
               <option value="tripura_dev">
                 Tripura Transformer — Development Dataset
@@ -89,120 +91,91 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
           </div>
 
           {/* Contextual Asset Identity */}
-          <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 pl-3 border-l border-slate-200">
-            <span className="text-[10px] uppercase font-bold text-slate-400">Transformer:</span>
-            <span className="font-mono text-[11px] font-semibold text-slate-700">
+          <div className="hidden md:flex items-center gap-2 pl-5 border-l border-line">
+            <span className="eyebrow">Transformer</span>
+            <span className="font-mono text-[11px] font-medium text-ink">
               {assetId} · Agartala Substation
             </span>
           </div>
         </div>
 
-        {/* Right: Digital Twin Lifecycle Status & Start Action */}
+        {/* Digital Twin Lifecycle Status & Start Action */}
         <div className="flex items-center gap-3">
           {!isTwinStarted ? (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500 hidden lg:inline max-w-md text-right">
+            <>
+              <span className="text-xs text-muted hidden 2xl:inline max-w-sm text-right">
                 Replay telemetry through the digital twin one 15-minute measurement at a time.
               </span>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                  Ready to start
-                </span>
-                <button
-                  onClick={onStartTwin}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
-                >
-                  <Play className="w-3.5 h-3.5 text-sky-400 fill-current" />
-                  <span>Start Digital Twin</span>
-                </button>
-              </div>
-            </div>
+              <span className="chip chip-neutral">Ready to start</span>
+              <button onClick={onStartTwin} className="btn btn-primary px-4">
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Start Digital Twin</span>
+              </button>
+            </>
           ) : (
-            <div className="flex items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-semibold ${
-                  isPlaying
-                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-slate-100 text-slate-700 border border-slate-200'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isPlaying ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
-                  }`}
-                />
-                <span>{isPlaying ? 'Twin Running' : 'Twin Paused'}</span>
-              </span>
-            </div>
+            <span className={`chip ${isPlaying ? 'chip-ok' : 'chip-neutral'}`}>
+              <span className={`dot ${isPlaying ? 'bg-ok animate-pulse' : 'bg-faint'}`} />
+              <span>{isPlaying ? 'Twin Running' : 'Twin Paused'}</span>
+            </span>
           )}
         </div>
       </div>
 
-      {/* Bottom Row: Replay Controls & Frame Progress (Active After Start) */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        {/* Left: Event Timestamp */}
-        <div className="flex items-center gap-2">
-          <Clock className="w-3.5 h-3.5 text-slate-400" />
-          <span
-            className={`font-mono text-xs ${
-              hasFrames
-                ? 'font-medium text-slate-800'
-                : 'text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px]'
-            }`}
-          >
-            {formattedTime}
-          </span>
+      {/* Bottom Row: Timestamp, Replay Controls & Frame Progress */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 sm:px-5 py-3.5">
+        {/* Event Timestamp */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Clock className="w-4 h-4 text-muted flex-shrink-0" strokeWidth={1.75} />
+          {hasFrames ? (
+            <span className="font-mono text-[13px] font-medium text-ink num">{formattedTime}</span>
+          ) : (
+            <span className="chip chip-neutral normal-case tracking-normal text-[11px] font-medium">
+              {formattedTime}
+            </span>
+          )}
         </div>
 
-        {/* Center: Interactive Playback Controls */}
-        <div className="flex items-center gap-2">
-          {/* Play / Pause */}
+        {/* Interactive Playback Controls */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={onPlayToggle}
             disabled={!isTwinStarted}
             title={isPlaying ? 'Pause automatic replay' : 'Play automatic replay'}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              isPlaying
-                ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
-                : 'bg-slate-900 text-white hover:bg-slate-800'
-            }`}
+            className={`btn min-w-[84px] ${isPlaying ? 'btn-accent' : 'btn-primary'}`}
           >
             {isPlaying ? (
               <>
-                <Pause className="w-3 h-3 text-amber-700" />
+                <Pause className="w-3.5 h-3.5" />
                 <span>Pause</span>
               </>
             ) : (
               <>
-                <Play className="w-3 h-3 text-sky-400 fill-current" />
+                <Play className="w-3.5 h-3.5 fill-current" />
                 <span>Play</span>
               </>
             )}
           </button>
 
-          {/* Stepping Controls: Next & +5 */}
-          <div className="flex items-center border border-slate-200 rounded overflow-hidden">
+          <div className="segmented">
             <button
               onClick={() => onNext(1)}
               disabled={!isTwinStarted}
               title="Process exactly the next 1 telemetry frame"
-              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-semibold flex items-center gap-1.5 border-r border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:bg-slate-200"
+              className="flex items-center gap-1.5"
             >
-              <StepForward className="w-3 h-3 text-sky-600" />
+              <StepForward className="w-3.5 h-3.5" />
               <span>Next</span>
             </button>
             <button
               onClick={() => onNext(5)}
               disabled={!isTwinStarted}
               title="Process the next 5 telemetry frames"
-              className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:bg-slate-200"
             >
               +5
             </button>
           </div>
 
-          {/* Speed Multipliers: 1x, 5x, 10x */}
-          <div className="hidden sm:flex items-center border border-slate-200 rounded overflow-hidden">
+          <div className="hidden sm:inline-flex segmented">
             {[
               { val: 1, label: '1×' },
               { val: 5, label: '5×' },
@@ -213,36 +186,32 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
                 onClick={() => onSpeedChange(val)}
                 disabled={!isTwinStarted}
                 title={`Advance replay at ${label} speed`}
-                className={`px-2.5 py-1.5 text-[11px] font-mono transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                  speedMultiplier === val
-                    ? 'bg-slate-900 text-white font-bold'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                }`}
+                data-active={speedMultiplier === val}
+                className="font-mono"
               >
                 {label}
               </button>
             ))}
           </div>
 
-          {/* Reset */}
           <button
             onClick={onReset}
             disabled={!isTwinStarted}
             title="Reset replay to frame 0 and clear derived state"
-            className="p-1.5 text-slate-500 hover:text-slate-900 rounded hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="icon-btn"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Right: Frame Progress Count */}
-        <div className="flex items-center gap-2">
-          <div className="text-[11px] font-mono text-slate-700 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded">
-            <span className="text-slate-400 uppercase text-[10px] font-sans font-semibold mr-1.5">
-              Progress:
-            </span>
-            <span className="font-bold text-slate-900">{processed.toLocaleString()}</span>
-            <span className="text-slate-400"> / {total} frames</span>
+        {/* Frame Progress */}
+        <div className="flex items-center gap-3 min-w-[180px]">
+          <div className="flex-1 h-[3px] rounded-full bg-surface-3 overflow-hidden hidden sm:block">
+            <div className="h-full bg-accent transition-all" style={{ width: `${progressPct}%` }} />
+          </div>
+          <div className="text-[11px] font-mono text-muted whitespace-nowrap num">
+            <span className="font-semibold text-ink">{processed.toLocaleString()}</span>
+            <span> / {total} frames</span>
           </div>
         </div>
       </div>

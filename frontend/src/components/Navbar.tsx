@@ -1,5 +1,16 @@
 import React from 'react';
-import { RefreshCw, Activity, Moon, Sun } from 'lucide-react';
+import {
+  RefreshCw,
+  Moon,
+  Sun,
+  LayoutGrid,
+  Thermometer,
+  ScanSearch,
+  Wrench,
+  Zap,
+  FileText,
+  Box,
+} from 'lucide-react';
 
 interface NavbarProps {
   isBackendHealthy: boolean;
@@ -11,6 +22,12 @@ interface NavbarProps {
   onToggleTheme?: () => void;
 }
 
+const BrandMark: React.FC = () => (
+  <svg viewBox="0 0 24 24" className="w-6 h-6 text-ink" fill="none" aria-hidden="true">
+    <path d="M3 12h4l2.5-6 5 12 2.5-6h4" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square" strokeLinejoin="miter" />
+  </svg>
+);
+
 export const Navbar: React.FC<NavbarProps> = ({
   isBackendHealthy,
   activeTab,
@@ -21,53 +38,159 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleTheme,
 }) => {
   const navItems = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'twin-analysis', label: 'Thermal & What-If' },
-    { id: 'anomalies', label: 'Anomalies & Evidence' },
-    { id: 'maintenance', label: 'Maintenance Advisories' },
-    { id: 'telemetry', label: 'Electrical Telemetry' },
-    { id: 'model-card', label: 'Model Card & Specs' },
-    { id: 'twin-3d', label: '3D Component View' },
+    { id: 'overview', label: 'Overview', icon: LayoutGrid },
+    { id: 'twin-analysis', label: 'Thermal & What-If', icon: Thermometer },
+    { id: 'anomalies', label: 'Anomalies & Evidence', icon: ScanSearch },
+    { id: 'maintenance', label: 'Maintenance Advisories', icon: Wrench },
+    { id: 'telemetry', label: 'Electrical Telemetry', icon: Zap },
+    { id: 'model-card', label: 'Model Card & Specs', icon: FileText },
+    { id: 'twin-3d', label: '3D Component View', icon: Box },
   ];
 
+
+  const statusPill = (
+    <div className="flex items-center gap-2 text-[12px] font-medium text-ink-2 tracking-[-0.005em]">
+      <span className="relative flex w-2 h-2">
+        <span className={`absolute inset-0 rounded-full ${isBackendHealthy ? 'bg-ok/25' : 'bg-warn/25'} scale-[1.9]`} />
+        <span className={`relative dot w-2 h-2 ${isBackendHealthy ? 'bg-ok' : 'bg-warn'}`} />
+      </span>
+      <span>{isBackendHealthy ? 'Twin Online' : 'Degraded'}</span>
+    </div>
+  );
+
+  const refreshButton = (
+    <button
+      onClick={onRefresh}
+      disabled={isRefreshing}
+      title="Refresh Digital Twin State"
+      className="icon-btn bg-transparent hover:bg-surface"
+    >
+      <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-accent' : ''}`} strokeWidth={1.75} />
+    </button>
+  );
+
   return (
-    <header className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        {/* Brand & Subtitle */}
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-60 flex-col bg-sidebar border-r border-line transition-colors">
+        {/* Brand */}
         <div
           onClick={() => onTabChange('overview')}
-          className="flex items-center gap-3 cursor-pointer select-none flex-shrink-0"
+          className="px-6 pt-8 pb-9 cursor-pointer select-none"
         >
-          <div className="w-8 h-8 rounded bg-slate-900 dark:bg-slate-800 border dark:border-slate-700 flex items-center justify-center text-white">
-            <Activity className="w-4 h-4 text-sky-400" />
+          <div className="flex items-center gap-2.5">
+            <BrandMark />
+            <span className="font-display text-[25px] font-semibold tracking-[-0.01em] text-ink leading-none">
+              GridPulse
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight leading-none">
-                GridPulse
-              </span>
-              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border border-slate-200 dark:border-slate-700 leading-none">
-                Digital Twin
-              </span>
+          <p className="mt-3 text-[11.5px] text-muted leading-[1.45]">
+            Distribution Transformer Digital Twin
+            <br />
+            <span className="text-faint">Tripura 33/11kV Substation</span>
+          </p>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 space-y-px overflow-y-auto">
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`relative w-full h-10 px-3 flex items-center gap-3 rounded text-[13.5px] tracking-[-0.01em] text-left transition-colors ${
+                  isActive
+                    ? 'bg-accent-soft text-ink font-medium ring-1 ring-accent/15'
+                    : 'text-ink-2 hover:text-ink hover:bg-ink/[0.035]'
+                }`}
+              >
+                {isActive && (
+                  <span className="absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full bg-accent" />
+                )}
+                <Icon
+                  className={`w-[17px] h-[17px] flex-shrink-0 ${isActive ? 'text-accent' : 'text-faint'}`}
+                  strokeWidth={1.6}
+                />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Footer: status, refresh, theme */}
+        <div className="mx-3 mb-4 p-3 rounded-card border border-line bg-canvas/60 space-y-3">
+          <div className="flex items-center justify-between pl-1">
+            {statusPill}
+            {refreshButton}
+          </div>
+          {onToggleTheme && (
+            <div className="grid grid-cols-2 p-[3px] rounded-full bg-ink/[0.05] border border-line">
+              <button
+                onClick={() => theme === 'dark' && onToggleTheme()}
+                title="Switch to Light Mode"
+                className={`h-7 rounded-full flex items-center justify-center transition-colors ${
+                  theme === 'light' ? 'bg-surface text-ink shadow-subtle ring-1 ring-line' : 'text-muted hover:text-ink'
+                }`}
+              >
+                <Sun className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              </button>
+              <button
+                onClick={() => theme === 'light' && onToggleTheme()}
+                title="Switch to Dark Mode"
+                className={`h-7 rounded-full flex items-center justify-center transition-colors ${
+                  theme === 'dark' ? 'bg-surface text-ink shadow-subtle ring-1 ring-line' : 'text-muted hover:text-ink'
+                }`}
+              >
+                <Moon className="w-[15px] h-[15px]" strokeWidth={1.75} />
+              </button>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal mt-0.5 leading-none">
-              Tripura 33/11kV Substation Monitoring
-            </p>
+          )}
+        </div>
+      </aside>
+
+
+      {/* Tablet / mobile top bar */}
+      <header className="lg:hidden sticky top-0 z-40 bg-sidebar/95 backdrop-blur border-b border-line transition-colors">
+        <div className="px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <div
+            onClick={() => onTabChange('overview')}
+            className="flex items-center gap-2 cursor-pointer select-none min-w-0"
+          >
+            <BrandMark />
+            <span className="font-display text-[19px] font-semibold tracking-[-0.01em] text-ink">GridPulse</span>
+            <span className="hidden sm:inline text-[11px] text-muted truncate">
+              · Tripura 33/11kV Substation
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="hidden sm:flex">{statusPill}</div>
+            {onToggleTheme && (
+              <button
+                onClick={onToggleTheme}
+                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                className="icon-btn"
+              >
+                {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              </button>
+            )}
+            {refreshButton}
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <nav className="hidden lg:flex items-center gap-1 h-full">
+        <nav className="px-2 sm:px-4 flex items-center gap-1 overflow-x-auto border-t border-line">
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`h-full px-3.5 text-xs font-semibold flex items-center border-b-2 transition-colors ${
+                className={`px-2.5 py-2.5 text-[12px] whitespace-nowrap border-b-2 -mb-px transition-colors ${
                   isActive
-                    ? 'border-sky-600 dark:border-sky-400 text-sky-700 dark:text-sky-400 font-bold bg-sky-50/40 dark:bg-sky-950/30'
-                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-300 dark:hover:border-slate-700'
+                    ? 'border-accent text-ink font-semibold'
+                    : 'border-transparent text-muted hover:text-ink'
                 }`}
               >
                 {item.label}
@@ -75,60 +198,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             );
           })}
         </nav>
-
-        {/* Right Actions: Theme Toggle, System Status & Refresh */}
-        <div className="flex items-center gap-2.5 flex-shrink-0">
-          {onToggleTheme && (
-            <button
-              onClick={onToggleTheme}
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              className="p-1.5 rounded text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
-            >
-              {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5" />}
-            </button>
-          )}
-
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 font-medium">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isBackendHealthy ? 'bg-emerald-500' : 'bg-amber-500'
-              }`}
-            />
-            <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
-              {isBackendHealthy ? 'Twin Online' : 'Degraded'}
-            </span>
-          </div>
-
-          <button
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            title="Refresh Digital Twin State"
-            className="p-1.5 rounded text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-sky-600' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile / Tablet Horizontal Navigation Scroll */}
-      <div className="lg:hidden px-4 py-2 border-t border-slate-200 dark:border-slate-800 overflow-x-auto flex items-center gap-2 bg-slate-50 dark:bg-slate-900">
-        {navItems.map((item) => {
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onTabChange(item.id)}
-              className={`px-3 py-1.5 rounded text-xs font-medium whitespace-nowrap transition-colors ${
-                isActive
-                  ? 'bg-slate-900 dark:bg-slate-800 text-white font-semibold'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-              }`}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-    </header>
+      </header>
+    </>
   );
 };

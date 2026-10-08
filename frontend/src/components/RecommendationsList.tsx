@@ -12,30 +12,28 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
   onOpenFeedback,
 }) => {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider text-[11px]">
-            Actionable Maintenance Advisories ({recommendations.length})
-          </h3>
-          <p className="text-xs text-slate-500">
-            Ranked by operational priority and risk severity.
-          </p>
-        </div>
+    <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <h2 className="section-title">
+          Actionable Maintenance Advisories ({recommendations.length})
+        </h2>
+        <p className="text-xs text-muted">
+          Ranked by operational priority and risk severity.
+        </p>
       </div>
 
       {recommendations.length === 0 ? (
-        <div className="bg-white rounded-lg p-8 text-center border border-slate-200 shadow-subtle text-slate-500">
-          <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <h4 className="text-sm font-bold text-slate-900">All systems operating within standard parameters</h4>
-          <p className="text-xs text-slate-400 mt-0.5 max-w-sm mx-auto">
+        <div className="card-muted p-10 text-center">
+          <span className="chip chip-ok mb-3">
+            <CheckCircle2 className="w-3 h-3" /> Nominal
+          </span>
+          <h4 className="card-title">All systems operating within standard parameters</h4>
+          <p className="text-xs text-muted mt-1 max-w-sm mx-auto">
             No active maintenance actions or safety limit excursions flagged.
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="card divide-y divide-line overflow-hidden">
           {recommendations.map((rec) => {
             const isP0 = rec.priority === 'P0';
             const isP1 = rec.priority === 'P1';
@@ -43,82 +41,71 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
             return (
               <div
                 key={rec.recommendation_id}
-                className="bg-white rounded-lg p-5 border border-slate-200 shadow-subtle hover:border-slate-300 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="p-5 hover:bg-surface-2 transition-colors grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-x-5 gap-y-4 items-start"
               >
-                {/* Left: Details */}
-                <div className="flex items-start gap-4 max-w-2xl">
-                  <div
-                    className={`p-2.5 rounded-lg flex-shrink-0 mt-0.5 ${
-                      isP0
-                        ? 'bg-rose-100 text-rose-800'
-                        : isP1
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    {isP0 ? (
-                      <ShieldAlert className="w-5 h-5 text-rose-600" />
-                    ) : isP1 ? (
-                      <Wrench className="w-5 h-5 text-amber-700" />
-                    ) : (
-                      <Clock className="w-5 h-5 text-slate-600" />
+                {/* Priority Glyph */}
+                <div
+                  className={`hidden md:flex w-10 h-10 rounded-card items-center justify-center border ${
+                    isP0
+                      ? 'border-crit/25 bg-crit/5 text-crit'
+                      : isP1
+                      ? 'border-warn/25 bg-warn/5 text-warn'
+                      : 'border-line bg-surface-2 text-muted'
+                  }`}
+                >
+                  {isP0 ? (
+                    <ShieldAlert className="w-[18px] h-[18px]" strokeWidth={1.75} />
+                  ) : isP1 ? (
+                    <Wrench className="w-[18px] h-[18px]" strokeWidth={1.75} />
+                  ) : (
+                    <Clock className="w-[18px] h-[18px]" strokeWidth={1.75} />
+                  )}
+                </div>
+
+                {/* Details */}
+                <div className="min-w-0 max-w-3xl">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className={`chip ${isP0 ? 'chip-crit' : isP1 ? 'chip-warn' : 'chip-neutral'}`}>
+                      {rec.priority_label || `Priority ${rec.priority}`}
+                    </span>
+
+                    {rec.acknowledged && (
+                      <span className="chip chip-ok normal-case tracking-normal font-medium text-[11px]">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Acknowledged in Ledger</span>
+                      </span>
                     )}
+
+                    <span className="text-[10.5px] font-mono text-muted">
+                      Rule: {rec.rule_id}
+                    </span>
                   </div>
 
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <span
-                        className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${
-                          isP0
-                            ? 'bg-rose-100 text-rose-800'
-                            : isP1
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {rec.priority_label || `Priority ${rec.priority}`}
-                      </span>
+                  <h4 className="text-[16px] font-medium tracking-[-0.01em] text-ink">
+                    {rec.title}
+                  </h4>
 
-                      {rec.acknowledged && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          <span>Acknowledged in Ledger</span>
-                        </span>
-                      )}
+                  <p className="mt-1.5 text-xs text-ink-2 leading-relaxed">
+                    {rec.advisory_wording}
+                  </p>
 
-                      <span className="text-[11px] font-mono text-slate-400">
-                        Rule: {rec.rule_id}
-                      </span>
-                    </div>
-
-                    <h4 className="text-base font-bold text-slate-900">
-                      {rec.title}
-                    </h4>
-
-                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                      {rec.advisory_wording}
-                    </p>
-
-                    <div className="mt-2 text-[11px] text-slate-400">
-                      Standard Reference: <span className="text-slate-600 font-medium">{rec.source_reference}</span>
-                    </div>
+                  <div className="mt-2.5 text-[11px] text-muted">
+                    Standard Reference: <span className="text-ink-2 font-medium">{rec.source_reference}</span>
                   </div>
                 </div>
 
-                {/* Right: Action Window & Button */}
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 flex-shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                  <div className="text-left sm:text-right">
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">
-                      Action Window
-                    </span>
-                    <span className="text-xs font-semibold font-mono text-slate-800 mt-0.5 block">
+                {/* Action Window & Button */}
+                <div className="flex md:flex-col items-center md:items-end justify-between gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-line">
+                  <div className="md:text-right">
+                    <span className="eyebrow text-[10px] block">Action Window</span>
+                    <span className="text-[13px] font-medium font-mono text-ink mt-1.5 block">
                       {rec.action_window.replace(/_/g, ' ')}
                     </span>
                   </div>
 
                   <button
                     onClick={() => onOpenFeedback(rec)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
+                    className={`btn ${rec.acknowledged ? 'btn-ghost' : 'btn-primary'}`}
                   >
                     <span>{rec.acknowledged ? 'Operator Record' : 'Acknowledge Advisory'}</span>
                     <ArrowRight className="w-3.5 h-3.5" />

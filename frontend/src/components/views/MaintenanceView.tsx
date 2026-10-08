@@ -16,78 +16,75 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({
   const p1Count = recommendations.filter((r) => r.priority === 'P1').length;
   const p2Count = recommendations.filter((r) => r.priority === 'P2' || r.priority === 'P3').length;
 
-  return (
-    <div className="space-y-6">
-      {/* View Header */}
-      <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-subtle">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">
-                Maintenance Dispatch
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                IEEE C57.91 & CBIP Rules
-              </span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Prioritized Maintenance Advisories
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Deterministic rule-based recommendations mapped directly from corroborated diagnostic evidence.
-            </p>
-          </div>
+  const counters = [
+    {
+      label: 'P0 Safety Critical',
+      count: p0Count,
+      note: 'Immediate action window',
+      dot: p0Count > 0 ? 'bg-crit animate-pulse' : 'bg-line-strong',
+      inverse: true,
+    },
+    {
+      label: 'P1 Urgent Inspection',
+      count: p1Count,
+      note: 'Action within 24 hours',
+      dot: p1Count > 0 ? 'bg-warn' : 'bg-line-strong',
+      inverse: false,
+    },
+    {
+      label: 'P2–P3 Planned / Review',
+      count: p2Count,
+      note: 'Scheduled maintenance window',
+      dot: 'bg-line-strong',
+      inverse: false,
+    },
+  ];
 
-          <UIHonestyBadge type="DEMO_DEFAULT" customText="Standard Action Windows" />
+  return (
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="page-header">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className="eyebrow">Maintenance Dispatch</span>
+            <span className="text-faint">·</span>
+            <span className="eyebrow">IEEE C57.91 &amp; CBIP Rules</span>
+          </div>
+          <h1 className="page-title">Maintenance Advisories</h1>
+          <p className="text-[13px] text-muted mt-2.5 max-w-2xl">
+            Deterministic rule-based recommendations mapped directly from corroborated diagnostic evidence.
+          </p>
         </div>
+
+        <UIHonestyBadge type="DEMO_DEFAULT" customText="Standard Action Windows" />
       </div>
 
       {/* Priority Summary Counters */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle flex items-center justify-between">
-          <div>
-            <span className="text-[10px] uppercase font-bold tracking-wider text-rose-700 block mb-0.5">
-              P0 Safety Critical
-            </span>
-            <div className="text-2xl font-bold font-mono text-slate-900">
-              {p0Count}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-line border border-line rounded-card overflow-hidden">
+        {counters.map((c) => (
+          <div key={c.label} className={c.inverse ? 'bg-inverse text-on-inverse p-5' : 'bg-surface p-5'}>
+            <div
+              className={`flex items-center justify-between pb-3 border-b ${
+                c.inverse ? 'border-on-inverse/15' : 'border-line'
+              }`}
+            >
+              <span
+                className={`text-[11px] font-semibold uppercase tracking-eyebrow leading-none ${
+                  c.inverse ? 'text-on-inverse/70' : 'text-muted'
+                }`}
+              >
+                {c.label}
+              </span>
+              <span className={`dot w-2 h-2 ${c.dot}`} />
             </div>
-            <span className="text-[11px] text-slate-500 block mt-0.5">
-              Immediate action window
+            <div className={`metric-value text-[44px] mt-4 ${c.inverse ? 'text-on-inverse' : ''}`}>
+              {c.count}
+            </div>
+            <span className={`text-[11px] block mt-2 ${c.inverse ? 'text-on-inverse/60' : 'text-muted'}`}>
+              {c.note}
             </span>
           </div>
-          <span className={`w-3 h-3 rounded-full ${p0Count > 0 ? 'bg-rose-600 animate-pulse' : 'bg-slate-300'}`} />
-        </div>
-
-        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle flex items-center justify-between">
-          <div>
-            <span className="text-[10px] uppercase font-bold tracking-wider text-amber-700 block mb-0.5">
-              P1 Urgent Inspection
-            </span>
-            <div className="text-2xl font-bold font-mono text-slate-900">
-              {p1Count}
-            </div>
-            <span className="text-[11px] text-slate-500 block mt-0.5">
-              Action within 24 hours
-            </span>
-          </div>
-          <span className={`w-3 h-3 rounded-full ${p1Count > 0 ? 'bg-amber-500' : 'bg-slate-300'}`} />
-        </div>
-
-        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle flex items-center justify-between">
-          <div>
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-600 block mb-0.5">
-              P2–P3 Planned / Review
-            </span>
-            <div className="text-2xl font-bold font-mono text-slate-900">
-              {p2Count}
-            </div>
-            <span className="text-[11px] text-slate-500 block mt-0.5">
-              Scheduled maintenance window
-            </span>
-          </div>
-          <span className="w-3 h-3 rounded-full bg-slate-300" />
-        </div>
+        ))}
       </div>
 
       {/* Full Recommendations List */}

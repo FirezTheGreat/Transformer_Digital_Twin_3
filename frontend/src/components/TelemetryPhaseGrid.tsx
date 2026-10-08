@@ -7,6 +7,30 @@ interface TelemetryPhaseGridProps {
   capabilities: CapabilityManifest | null;
 }
 
+/** Display-only number formatting: fixed decimals per unit; non-numbers pass through unchanged. */
+const fmt = (v: unknown, decimals: number): string =>
+  typeof v === 'number' ? v.toFixed(decimals) : String(v);
+
+/** Presentational row: label · value · unit. */
+const ReadingRow: React.FC<{ tag: string; label: string; value: string; unit?: string; tone?: string }> = ({
+  tag,
+  label,
+  value,
+  unit,
+  tone = 'text-ink',
+}) => (
+  <div className="flex items-baseline justify-between gap-3 py-2.5 border-b border-line last:border-b-0">
+    <span className="flex items-center gap-2 text-[11.5px] text-muted min-w-0">
+      <span className="font-mono text-[10px] font-semibold text-ink-2 bg-surface-3 rounded px-1.5 py-0.5">{tag}</span>
+      <span className="truncate">{label}</span>
+    </span>
+    <span className="flex items-baseline gap-1.5 flex-shrink-0">
+      <span className={`metric-compact text-[23px] ${tone}`}>{value}</span>
+      <span className="metric-unit text-[11.5px] w-9 text-left">{unit ?? ''}</span>
+    </span>
+  </div>
+);
+
 export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
   twinState,
   capabilities,
@@ -28,154 +52,82 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
   const freq = obs['frequency']?.value ?? 50.02;
   const pf = derived?.power_factor_derived ?? 0.951;
 
+  const panelHeader = (title: string, icon: React.ReactNode) => (
+    <div className="flex items-center justify-between pb-3 border-b border-line">
+      <span className="eyebrow">{title}</span>
+      <span className="text-faint">{icon}</span>
+    </div>
+  );
+
+  const panelFooter = (label: string, value: string) => (
+    <div className="mt-auto pt-3 border-t border-line flex items-baseline justify-between text-[11px] font-mono">
+      <span className="text-muted">{label}</span>
+      <span className="font-semibold text-ink">{value}</span>
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* 4 Telemetry Panels */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-px bg-line border border-line rounded-card overflow-hidden">
         {/* Panel 1: Phase Voltages */}
-        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
-          <div className="flex items-center justify-between mb-3 text-slate-500">
-            <span className="text-[10px] uppercase font-bold tracking-wider">
-              Phase Voltages (L-N)
-            </span>
-            <Gauge className="w-3.5 h-3.5 text-sky-600" />
+        <div className="bg-surface p-5 flex flex-col">
+          {panelHeader('Phase Voltages (L-N)', <Gauge className="w-3.5 h-3.5" strokeWidth={1.75} />)}
+          <div className="py-2">
+            <ReadingRow tag="L1" label="Phase R" value={fmt(vr, 1)} unit="V" />
+            <ReadingRow tag="L2" label="Phase Y" value={fmt(vy, 1)} unit="V" />
+            <ReadingRow tag="L3" label="Phase B" value={fmt(vb, 1)} unit="V" />
           </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Phase R (L1):</span>
-              <span className="font-mono font-bold text-slate-900">{String(vr)} V</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Phase Y (L2):</span>
-              <span className="font-mono font-bold text-slate-900">{String(vy)} V</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Phase B (L3):</span>
-              <span className="font-mono font-bold text-slate-900">{String(vb)} V</span>
-            </div>
-          </div>
-
-          <div className="mt-3 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between font-mono">
-            <span>Voltage Imbalance:</span>
-            <span className="font-semibold text-slate-800">
-              {derived?.voltage_magnitude_imbalance_pct?.toFixed(2) ?? '0.43'}%
-            </span>
-          </div>
+          {panelFooter('Voltage Imbalance', `${derived?.voltage_magnitude_imbalance_pct?.toFixed(2) ?? '0.43'}%`)}
         </div>
 
         {/* Panel 2: Phase Currents */}
-        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
-          <div className="flex items-center justify-between mb-3 text-slate-500">
-            <span className="text-[10px] uppercase font-bold tracking-wider">
-              Phase Currents
-            </span>
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
+        <div className="bg-surface p-5 flex flex-col">
+          {panelHeader('Phase Currents', <Zap className="w-3.5 h-3.5" strokeWidth={1.75} />)}
+          <div className="py-2">
+            <ReadingRow tag="I_R" label="Current R" value={fmt(ir, 1)} unit="A" />
+            <ReadingRow tag="I_Y" label="Current Y" value={fmt(iy, 1)} unit="A" />
+            <ReadingRow tag="I_B" label="Current B" value={fmt(ib, 1)} unit="A" />
           </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Current R (I_R):</span>
-              <span className="font-mono font-bold text-slate-900">{String(ir)} A</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Current Y (I_Y):</span>
-              <span className="font-mono font-bold text-slate-900">{String(iy)} A</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Current B (I_B):</span>
-              <span className="font-mono font-bold text-slate-900">{String(ib)} A</span>
-            </div>
-          </div>
-
-          <div className="mt-3 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between font-mono">
-            <span>Current Imbalance:</span>
-            <span className="font-semibold text-slate-800">
-              {derived?.current_magnitude_imbalance_pct?.toFixed(2) ?? '2.33'}%
-            </span>
-          </div>
+          {panelFooter('Current Imbalance', `${derived?.current_magnitude_imbalance_pct?.toFixed(2) ?? '2.33'}%`)}
         </div>
 
         {/* Panel 3: Neutral & Power Factor */}
-        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
-          <div className="flex items-center justify-between mb-3 text-slate-500">
-            <span className="text-[10px] uppercase font-bold tracking-wider">
-              Neutral & Grid Quality
-            </span>
-            <Activity className="w-3.5 h-3.5 text-emerald-600" />
+        <div className="bg-surface p-5 flex flex-col">
+          {panelHeader('Neutral & Grid Quality', <Activity className="w-3.5 h-3.5" strokeWidth={1.75} />)}
+          <div className="py-2">
+            <ReadingRow tag="I_N" label="Neutral Current" value={fmt(in_val, 1)} unit="A" />
+            <ReadingRow tag="PF" label="Power Factor" value={Number(pf).toFixed(3)} />
+            <ReadingRow tag="f" label="Frequency" value={fmt(freq, 2)} unit="Hz" />
           </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Neutral Current:</span>
-              <span className="font-mono font-bold text-slate-900">{String(in_val)} A</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Power Factor:</span>
-              <span className="font-mono font-bold text-emerald-700">{Number(pf).toFixed(3)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Frequency:</span>
-              <span className="font-mono font-bold text-slate-900">{String(freq)} Hz</span>
-            </div>
-          </div>
-
-          <div className="mt-3 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between font-mono">
-            <span>Neutral Ratio:</span>
-            <span className="font-semibold text-slate-800">
-              {((derived?.neutral_current_ratio ?? 0.041) * 100).toFixed(1)}%
-            </span>
-          </div>
+          {panelFooter('Neutral Ratio', `${((derived?.neutral_current_ratio ?? 0.041) * 100).toFixed(1)}%`)}
         </div>
 
         {/* Panel 4: Power Summary */}
-        <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-subtle">
-          <div className="flex items-center justify-between mb-3 text-slate-500">
-            <span className="text-[10px] uppercase font-bold tracking-wider">
-              Power Summary
-            </span>
-            <Activity className="w-3.5 h-3.5 text-sky-600" />
+        <div className="bg-surface p-5 flex flex-col">
+          {panelHeader('Power Summary', <Activity className="w-3.5 h-3.5" strokeWidth={1.75} />)}
+          <div className="py-2">
+            <ReadingRow tag="P" label="Active Power" value={fmt(p_tot, 1)} unit="kW" />
+            <ReadingRow tag="Q" label="Reactive Power" value={fmt(q_tot, 1)} unit="kvar" />
+            <ReadingRow tag="u" label="Relative Load" value={Number(derived?.relative_load_index ?? 0.78).toFixed(2)} unit="rel. u" />
           </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Active Power (P):</span>
-              <span className="font-mono font-bold text-slate-900">{String(p_tot)} kW</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Reactive Power (Q):</span>
-              <span className="font-mono font-bold text-slate-900">{String(q_tot)} kvar</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 font-mono">Relative Load (u):</span>
-              <span className="font-mono font-bold text-slate-900">{Number(derived?.relative_load_index ?? 0.78).toFixed(2)} rel. u</span>
-            </div>
-          </div>
-
-          <div className="mt-3 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex justify-between font-mono">
-            <span>Sampling:</span>
-            <span className="font-semibold text-slate-800">900s (15 min)</span>
-          </div>
+          {panelFooter('Sampling', '900s (15 min)')}
         </div>
       </div>
 
       {/* Dynamic Capability Manifest (Tiers C0-C4) */}
-      <div className="bg-white rounded-lg p-5 border border-slate-200 shadow-subtle">
-        <div className="pb-3 border-b border-slate-100 mb-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider text-[11px]">
-              Dynamic Capability Tier Manifest (C0–C4)
-            </h3>
-            <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-              Active Tier: {capabilities?.highest_tier ?? 'C2'}
-            </span>
+      <div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+          <div>
+            <h2 className="section-title">Dynamic Capability Tier Manifest (C0–C4)</h2>
+            <p className="text-xs text-muted mt-1">
+              Operational capability gates dynamically enable analytics based on verified input freshness.
+            </p>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Operational capability gates dynamically enable analytics based on verified input freshness.
-          </p>
+          <span className="chip chip-neutral font-mono">Active Tier: {capabilities?.highest_tier ?? 'C2'}</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-px bg-line border border-line rounded-card overflow-hidden">
           {[
             { tier: 'C0', name: 'Baseline Telemetry', desc: 'Raw SCADA event capture & storage' },
             { tier: 'C1', name: 'Electrical Symmetry', desc: 'Sequence components & unbalance metrics' },
@@ -187,24 +139,18 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
             return (
               <div
                 key={t.tier}
-                className={`p-3 rounded-lg border ${
-                  isEnabled
-                    ? 'bg-slate-50 border-slate-200 text-slate-900'
-                    : 'bg-slate-50/50 border-dashed border-slate-200 text-slate-400'
-                }`}
+                className={`p-4 ${isEnabled ? 'bg-surface' : 'bg-surface-2'}`}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-mono font-bold text-xs">{t.tier}</span>
-                  <span
-                    className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${
-                      isEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
+                <div className="flex items-center justify-between mb-4">
+                  <span className={`font-mono text-[22px] font-light ${isEnabled ? 'text-ink' : 'text-faint'}`}>
+                    {t.tier}
+                  </span>
+                  <span className={`chip ${isEnabled ? 'chip-ok' : 'chip-outline'}`}>
                     {isEnabled ? 'Available' : 'Gated'}
                   </span>
                 </div>
-                <div className="font-semibold text-xs mt-1">{t.name}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">{t.desc}</div>
+                <div className={`text-[13px] font-medium ${isEnabled ? 'text-ink' : 'text-muted'}`}>{t.name}</div>
+                <div className="text-[11px] text-muted mt-1 leading-snug">{t.desc}</div>
               </div>
             );
           })}

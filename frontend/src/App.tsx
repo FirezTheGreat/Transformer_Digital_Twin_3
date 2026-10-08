@@ -413,11 +413,11 @@ export default function App(): React.ReactElement {
   };
 
   return (
-    <div className="min-h-screen text-slate-900 dark:text-slate-100 flex flex-col justify-between bg-[#f6f8fb] dark:bg-slate-950 transition-colors">
+    <div className="min-h-screen text-ink bg-canvas transition-colors">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-elevated text-xs font-semibold flex items-center gap-2 border border-slate-700">
-          <span className="w-2 h-2 rounded-full bg-sky-400"></span>
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-inverse text-on-inverse px-4 py-3 rounded-card shadow-elevated text-xs font-medium flex items-center gap-2.5">
+          <span className="dot w-2 h-2 bg-accent"></span>
           <span>{toastMessage}</span>
         </div>
       )}
@@ -433,8 +433,9 @@ export default function App(): React.ReactElement {
         onToggleTheme={toggleTheme}
       />
 
+      <div className="lg:pl-60 min-h-screen flex flex-col">
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 w-full flex-grow pt-5 pb-10">
+      <main className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-10 w-full flex-grow pt-6 lg:pt-8 pb-12">
         {/* Simplified Digital Twin Workflow & Replay Bar */}
         <ReplayBar
           selectedDataset={selectedDataset}
@@ -461,6 +462,7 @@ export default function App(): React.ReactElement {
             capabilities={capabilities}
             recommendations={recommendations}
             episodes={episodes}
+            historyEvents={historyEvents}
             onNavigateTab={setActiveTab}
             onOpenFeedback={(rec) => setSelectedRecForFeedback(rec)}
           />
@@ -519,6 +521,26 @@ export default function App(): React.ReactElement {
         )}
       </main>
 
+      {/* Industrial Footer */}
+      <footer className="border-t border-line py-5 text-xs text-muted">
+        <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-10 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-ink">
+              GridPulse
+            </span>
+            <span>· Distribution Transformer Digital Twin · POWERNext-AI Hackathon 2026 (Track 2)</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono text-faint">
+            <span>DT-TRIPURA-001</span>
+            <span>·</span>
+            <span>Multi-Domain OTHI</span>
+            <span>·</span>
+            <span>Conformal Bounds (90%)</span>
+          </div>
+        </div>
+      </footer>
+      </div>
+
       {/* Operator Feedback Modal */}
       <FeedbackModal
         isOpen={Boolean(selectedRecForFeedback)}
@@ -534,25 +556,6 @@ export default function App(): React.ReactElement {
         onClose={() => setIsModelCardOpen(false)}
         modelCard={modelCard}
       />
-
-      {/* Industrial Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 text-xs text-slate-500 dark:text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-900 dark:text-slate-100 font-sans">
-              GridPulse
-            </span>
-            <span>· Distribution Transformer Digital Twin · POWERNext-AI Hackathon 2026 (Track 2)</span>
-          </div>
-          <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
-            <span>DT-TRIPURA-001</span>
-            <span>·</span>
-            <span>Multi-Domain OTHI</span>
-            <span>·</span>
-            <span>Conformal Bounds (90%)</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

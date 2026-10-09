@@ -1,0 +1,169 @@
+"""Regression tests for the live API runtime wiring (reducer engines, CPRI replay, replay restart)."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.api.deps import build_runtime_reducer
+from app.api.routers.replay import ensure_dataset_loaded
+from app.adapters.cpri_v3 import ORACLE_COLUMNS
+from app.core.config import Settings
+from app.core.storage import StorageEngine
+from app.engine.replay import ReplayEngine
+from app.main import create_app
+from app.models.thermal_artifact import QualificationStatus
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CAL_START_UTC = datetime(2024, 12, 31, 18, 30, tzinfo=timezone.utc)  # 2025-01-01 00:00 +05:30
+CAL_END_UTC = datetime(2025, 7, 2, 18, 30, tzinfo=timezone.utc)  # 2025-07-03 00:00 +05:30
+
+
+@pytest.fixture
+def at_repo_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(PROJECT_ROOT)
+
+
+def _load_events(asset_id: str) -> list:
+    storage = StorageEngine(db_path=":memory:")
+    replay = ReplayEngine(storage=storage, asset_id=asset_id)
+    ensure_dataset_loaded(storage, replay, asset_id)
+    return replay._events
+
+
+def test_runtime_reducer_wires_all_engines_with_gated_cpri_qualification(at_repo_root: None) -> None:
+    reducer = build_runtime_reducer(Settings(default_asset_id="TX_250_MIX"))
+    for engine in ("episode_engine", "anomaly_engine", "othi_engine", "exposure_engine", "maintenance_engine", "thermal_gate", "review_engine"):
+        assert getattr(reducer, engine) is not None, engine
+    assert reducer.thermal_gate.is_model_promoted is False
+    assert reducer.anomaly_engine.qualification.residual_anomaly_qualification == QualificationStatus.NOT_QUALIFIED
+    assert reducer.profile.fields["load_reference_kva"].value == 250.0
+
+
+def test_cpri_replay_uses_cal_partition_only_without_oracle_labels(at_repo_root: None) -> None:
+    events = _load_events("TX_250_MIX")
+    assert len(events) == 8757
+    assert all(CAL_START_UTC <= ev.event_time_utc < CAL_END_UTC for ev in events)
+    oracle = set(ORACLE_COLUMNS)
+    for ev in events[:500]:
+        assert ev.asset_id == "TX_250_MIX"
+        for m in ev.measurements:
+            assert not m.signal_id.startswith("y_") and m.signal_id not in oracle
+
+
+def test_declared_rating_is_not_flagged_as_frozen_sensor(at_repo_root: None) -> None:
+    events = _load_events("TX_250_MIX")[:50]
+    reducer = build_runtime_reducer(Settings(default_asset_id="TX_250_MIX"))
+    state = None
+    for ev in events:
+        state = reducer.reduce(state, ev)
+        assert not any("_plaus_stuck_rated_kva_" in e.evidence_id for e in reducer.latest_emitted_evidence)
+
+
+def test_tripura_runtime_reducer_runs_with_open_phase_episodes(at_repo_root: None) -> None:
+    """Review superseding must handle PHASE_OR_NEUTRAL episodes (previously AttributeError)."""
+    events = _load_events("DT-TRIPURA-001")[:300]
+    reducer = build_runtime_reducer(Settings(default_asset_id="DT-TRIPURA-001"))
+    state = None
+    for ev in events:
+        state = reducer.reduce(state, ev)
+    assert state is not None and state.health_bundle is not None
+
+
+def test_live_app_reports_computed_health_and_restarts_cleanly(at_repo_root: None) -> None:
+    app = create_app(settings=Settings(default_asset_id="TX_250_MIX"))
+    with TestClient(app) as client:
+        assert client.post("/v1/replay", json={"action": "start", "asset_id": "TX_250_MIX"}).status_code == 200
+        first_reducer = app.state.app_state.reducer
+        assert client.post("/v1/replay", json={"action": "step", "batch_size": 50, "asset_id": "TX_250_MIX"}).status_code == 200
+
+        health = client.get("/v1/assets/TX_250_MIX/health").json()
+        details = [d.get("details") or "" for d in health["domains"].values()]
+        assert not any("uninitialized" in d for d in details)
+
+        card = client.get("/v1/assets/TX_250_MIX/model-card").json()
+        assert card["promotion"]["status"] == "NOT_PROMOTED"
+        scenario = client.post("/v1/assets/TX_250_MIX/scenario", json={"load_multiplier": 1.2}).json()
+        assert scenario["is_enabled"] is False
+
+        assert client.post("/v1/replay", json={"action": "start", "asset_id": "TX_250_MIX"}).status_code == 200
+        assert app.state.app_state.reducer is not first_reducer
+
+
+def test_cpri_model_evaluation_matrix_matches_runtime_gates(at_repo_root: None) -> None:
+    app = create_app(settings=Settings(default_asset_id="TX_250_MIX"))
+    with TestClient(app) as client:
+        body = client.get("/v1/models/cpri-evaluation").json()
+    rows = {r["asset_id"]: r for r in body["assets"]}
+    assert len(rows) == 8
+    tx = rows["TX_250_MIX"]
+    assert tx["promotion_status"] == "NOT_PROMOTED" and tx["test_partition"] == "CONSUMED"
+    assert tx["artifact_sha256"] == "05d7c29f22fcb34e6bc2e596479d0e4c48ff468a0a7993d6bc2b87015f9e160f"
+    assert tx["gates"]["signed_bias"] is False and tx["metrics"]["signed_bias_degc"] == 0.2599
+    for row in rows.values():
+        assert row["capabilities"]["anomaly_detection"]["available"] is True
+        # Forecasting / what-if only ever available for a promoted model
+        if row["promotion_status"] != "PROMOTED":
+            assert row["capabilities"]["forecasting"]["available"] is False
+            assert row["capabilities"]["what_if"]["available"] is False
+
+
+@pytest.mark.parametrize("mode", ["--fit-and-freeze", "--evaluate-test"])
+def test_calibration_runner_refuses_to_overwrite_or_reconsume(mode: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    import hashlib
+    import importlib.util
+    import sys
+
+    spec = importlib.util.spec_from_file_location("run_calibration_cpri", PROJECT_ROOT / "backend" / "scripts" / "run_calibration_cpri.py")
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    processed = PROJECT_ROOT / "data" / "processed"
+    before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in processed.glob("*tx_250_mix*")}
+
+    monkeypatch.setattr(sys, "argv", ["run_calibration_cpri.py", "--asset", "TX_250_MIX", mode])
+    with pytest.raises(SystemExit) as exc:
+        runner.main()
+    assert exc.value.code == 1
+    assert {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in processed.glob("*tx_250_mix*")} == before
+
+
+def test_promoted_asset_forecasts_with_its_own_30min_envelope(at_repo_root: None) -> None:
+    """A PROMOTED CPRI model unlocks C3/what-if, projecting 4 x 30 min with its own CAL envelope only."""
+    import json
+
+    artifact = json.loads((PROJECT_ROOT / "data/processed/calibrated_thermal_model_cpri_tx_1000_comm.json").read_text(encoding="utf-8"))
+    own_widths = artifact["conformal_uncertainty"]["horizon_half_widths_degc"]
+    app = create_app(settings=Settings(default_asset_id="TX_1000_COMM"))
+    with TestClient(app) as client:
+        client.post("/v1/replay", json={"action": "start", "asset_id": "TX_1000_COMM"})
+        client.post("/v1/replay", json={"action": "seek", "seek_position": 200, "asset_id": "TX_1000_COMM"})
+        caps = client.get("/v1/assets/TX_1000_COMM/state").json()["fact_bundle"]["capabilities"]["capabilities"]
+        result = client.post("/v1/assets/TX_1000_COMM/scenario", json={"load_multiplier": 1.2}).json()
+    assert caps["C3"]["enabled"] is True
+    assert result["is_enabled"] is True
+    steps = result["trajectory"]
+    assert [s["horizon_minutes"] for s in steps] == [30, 60, 90, 120]
+    for step, width in zip(steps, own_widths):
+        half = (step["conformal_upper_degc"] - step["conformal_lower_degc"]) / 2
+        assert half == pytest.approx(width, abs=1e-3)
+
+
+def test_scenario_without_origin_telemetry_is_refused_not_fabricated(at_repo_root: None) -> None:
+    app = create_app(settings=Settings(default_asset_id="TX_1000_COMM"))
+    with TestClient(app) as client:
+        result = client.post("/v1/assets/TX_1000_COMM/scenario", json={"load_multiplier": 1.2}).json()
+    assert result["is_enabled"] is False
+    assert "origin telemetry" in result["disabled_reason"]
+
+
+def test_thermal_gate_receives_load_in_its_fitted_driver_units(at_repo_root: None) -> None:
+    from app.engine.reducer import thermal_load_driver_value
+
+    event = _load_events("TX_250_MIX")[0]
+    vals = {m.signal_id: float(m.value) for m in event.measurements if isinstance(m.value, (int, float))}
+    assert thermal_load_driver_value(event, None, "apparent_power_kva") == vals["apparent_power_total"]
+    rms = (sum(vals[f"current_i{n}"] ** 2 for n in (1, 2, 3)) / 3) ** 0.5
+    assert thermal_load_driver_value(event, None, "rms_current_a") == pytest.approx(rms)

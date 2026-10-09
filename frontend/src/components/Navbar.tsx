@@ -21,6 +21,7 @@ interface NavbarProps {
   isRefreshing: boolean;
   theme?: 'light' | 'dark';
   onToggleTheme?: () => void;
+  siteLabel?: string;
 }
 
 const BrandMark: React.FC = () => (
@@ -37,6 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isRefreshing,
   theme = 'light',
   onToggleTheme,
+  siteLabel = '',
 }) => {
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutGrid },
@@ -89,7 +91,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <p className="mt-3 text-[10.5px] font-medium text-muted leading-[1.55] tracking-[-0.02em]">
             Distribution Transformer Digital Twin
             <br />
-            <span className="text-muted">Tripura 33/11kV Substation</span>
+            <span className="text-muted">{siteLabel}</span>
           </p>
         </div>
 
@@ -164,7 +166,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <BrandMark />
             <span className="font-display text-[19px] font-semibold tracking-[-0.01em] text-ink">GridPulse</span>
             <span className="hidden sm:inline text-[11px] text-muted truncate">
-              · Tripura 33/11kV Substation
+              · {siteLabel}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">

@@ -208,7 +208,7 @@ class ReviewFlagEngine:
                         if ep.category == AnomalyCategory.SENSOR_PLAUSIBILITY and "sensor" in rec.target:
                             matching_ep = ep
                             break
-                        elif ep.category == AnomalyCategory.ELECTRICAL_UNBALANCE and "imbalance" in rec.target:
+                        elif ep.category == AnomalyCategory.PHASE_OR_NEUTRAL and "imbalance" in rec.target:
                             matching_ep = ep
                             break
                         elif ep.category == AnomalyCategory.THERMAL_DEVIATION and "thermal" in rec.target:

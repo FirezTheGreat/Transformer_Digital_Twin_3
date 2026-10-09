@@ -22,10 +22,13 @@ import {
   CanonicalEvent,
 } from './types/contracts';
 import { api, ModelCardData } from './services/api';
+import { getAssetContext } from './utils/assetContext';
+import { ModelEvaluationMatrix } from './components/views/ModelEvaluationMatrix';
 
 export default function App(): React.ReactElement {
-  const [assetId] = useState<string>('DT-TRIPURA-001');
-  const [selectedDataset, setSelectedDataset] = useState<string>('tripura_dev');
+  // The backend serves one configured asset (DEFAULT_ASSET_ID); the UI follows it rather than hardcoding one.
+  const [assetId, setAssetId] = useState<string>('');
+  const selectedDataset = getAssetContext(assetId).datasetId;
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('overview');
 
@@ -168,6 +171,14 @@ export default function App(): React.ReactElement {
   }, [replayStatus]);
 
   useEffect(() => {
+    api
+      .getHealthz()
+      .then((h) => setAssetId(h.default_asset_id))
+      .catch(() => setIsBackendHealthy(false));
+  }, []);
+
+  useEffect(() => {
+    if (!assetId) return;
     loadState(assetId);
   }, [assetId, loadState]);
 
@@ -497,6 +508,7 @@ export default function App(): React.ReactElement {
         isRefreshing={isRefreshing}
         theme={theme}
         onToggleTheme={toggleTheme}
+        siteLabel={getAssetContext(assetId).siteLabel}
       />
 
       <div className="lg:pl-60 min-h-screen flex flex-col">
@@ -505,7 +517,7 @@ export default function App(): React.ReactElement {
         {/* Simplified Digital Twin Workflow & Replay Bar */}
         <ReplayBar
           selectedDataset={selectedDataset}
-          onDatasetChange={(dataset) => setSelectedDataset(dataset)}
+          onDatasetChange={() => undefined}
           assetId={assetId}
           isTwinStarted={isTwinStarted}
           onStartTwin={handleStartTwin}
@@ -530,6 +542,7 @@ export default function App(): React.ReactElement {
             recommendations={recommendations}
             episodes={episodes}
             historyEvents={historyEvents}
+            modelCard={modelCard}
             onNavigateTab={setActiveTab}
             onOpenFeedback={(rec) => setSelectedRecForFeedback(rec)}
           />
@@ -581,7 +594,10 @@ export default function App(): React.ReactElement {
 
         {/* View 7: Data & Model Card */}
         {activeTab === 'model-card' && (
-          <DataModelCardView modelCard={modelCard} />
+          <>
+            <DataModelCardView modelCard={modelCard} />
+            <ModelEvaluationMatrix currentAssetId={assetId} />
+          </>
         )}
 
         {/* View 7: 3D Twin Workspace */}
@@ -604,7 +620,7 @@ export default function App(): React.ReactElement {
             <span>· Distribution Transformer Digital Twin · POWERNext-AI Hackathon 2026 (Track 2)</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono text-muted">
-            <span>DT-TRIPURA-001</span>
+            <span>{assetId}</span>
             <span>·</span>
             <span>Multi-Domain OTHI</span>
             <span>·</span>

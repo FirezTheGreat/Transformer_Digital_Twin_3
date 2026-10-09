@@ -9,6 +9,7 @@ and periodic deterministic checkpointing per Phase 3.2 requirements.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Sequence
 
@@ -25,6 +26,35 @@ from app.models.twin_state import (
     ThermalLatentState,
     TwinState,
 )
+
+
+def thermal_load_driver_value(
+    event: CanonicalEvent,
+    derived: DerivedFeatures | None,
+    driver_type: str,
+) -> float | None:
+    """Load value in the units of the driver the thermal artifact was fitted on.
+
+    Mirrors calibration.extract_load_driver: 'apparent_power_kva' uses measured apparent power
+    (else sqrt(P^2 + Q^2)); 'rms_current_a' uses the quadratic mean of the three phase currents.
+    Only the current event is used, so a stale carried-forward reading never drives the model.
+    """
+    vals = {
+        m.signal_id: float(m.value)
+        for m in event.measurements
+        if isinstance(m.value, (int, float)) and not isinstance(m.value, bool)
+    }
+    if driver_type == "apparent_power_kva":
+        s_kva = vals.get("apparent_power_total", vals.get("apparent_power"))
+        if s_kva is None and derived is not None:
+            s_kva = derived.apparent_power_derived_kva
+        return s_kva
+    phases = [vals.get(k) for k in ("current_i1", "current_i2", "current_i3")]
+    if all(v is not None for v in phases):
+        return math.sqrt(sum(v * v for v in phases) / 3.0)
+    if derived is not None and derived.current_mean_a is not None:
+        return derived.current_mean_a
+    return vals.get("current_mean")
 
 
 class TwinReducer:
@@ -142,10 +172,8 @@ class TwinReducer:
         if self.thermal_gate is not None:
             t_oil_m = observations.get("top_oil_temperature")
             t_amb_m = observations.get("ambient_temperature")
-            load_val = (
-                derived_electrical.current_mean_a
-                if derived_electrical and derived_electrical.current_mean_a is not None
-                else (observations.get("current_mean").value if observations.get("current_mean") else None)
+            load_val = thermal_load_driver_value(
+                event, derived_electrical, self.thermal_gate.load_driver_type
             )
             thermal_output = self.thermal_gate.evaluate_step(
                 event_time_utc=ev_time,

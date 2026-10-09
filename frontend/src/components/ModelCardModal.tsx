@@ -2,6 +2,9 @@ import React from 'react';
 import { X, Cpu } from 'lucide-react';
 import { ModelCardData } from '../services/api';
 
+const fmt = (v: number | null | undefined, digits: number): string => (v == null ? '—' : v.toFixed(digits));
+
+
 interface ModelCardModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -15,48 +18,17 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const card = modelCard ?? {
-    schema_version: '1.2.0',
-    model_version: 'greybox_v1_0',
-    asset_id: 'DT-TRIPURA-001',
-    created_at_utc: '2026-10-07T07:55:17Z',
-    selected_load_driver: 'rms_current_a',
-    load_driver_reference_value: 153.8652,
-    parameters: {
-      beta_0: 1.0880,
-      beta_1: 2.8979,
-      tau_hours: 0.50,
-    },
-    identifiability: {
-      is_identifiable: false,
-      fit_samples_count: 10941,
-      fit_span_days: 150.39,
-      load_cv: 0.5331,
-      diagnostic_messages: ['Boundary hit on tau (0.50h). Model active as shadow descriptive twin only.'],
-    },
-    conformal_uncertainty: {
-      horizon_steps: 8,
-      block_quantile_90: 5.9891,
-      horizon_half_widths_degc: [2.99, 3.11, 3.37, 4.08, 5.04, 6.29, 8.20, 9.56],
-    },
-    test_metrics: {
-      mae_degc: 1.65,
-      rmse_degc: 2.29,
-      marginal_coverage_90_pct: 97.33,
-    },
-    promotion: {
-      status: 'NOT_PROMOTED',
-      mae_improvement_pct: 18.59,
-      all_criteria_met: false,
-      reasons: ['Boundary hit on tau (0.50h). Model active as shadow descriptive twin only.'],
-    },
-    qualification: {
-      parameter_interpretability: 'UNVERIFIED',
-      forecast_qualification: 'PENDING_VALIDATION',
-      scenario_qualification: 'PENDING_VALIDATION',
-      residual_anomaly_qualification: 'NOT_QUALIFIED',
-    },
-  };
+  if (!modelCard) {
+    return (
+      <div className="modal-backdrop">
+        <div className="modal p-6 max-w-md w-full text-xs">
+          <p className="text-muted">Model card unavailable: the backend has not returned a model artifact for this asset.</p>
+          <button onClick={onClose} className="btn mt-4">Close</button>
+        </div>
+      </div>
+    );
+  }
+  const card = modelCard;
 
   const isPromoted = card.promotion.status === 'PROMOTED';
 
@@ -99,15 +71,15 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
           <div className="grid grid-cols-3 gap-3 mt-4 pt-3 border-t border-on-inverse/15 text-[11px]">
             <div>
               <span className="text-on-inverse/60 block">τ (time const)</span>
-              <strong className="font-mono font-medium text-[15px] text-on-inverse">{card.parameters.tau_hours.toFixed(2)}h</strong>
+              <strong className="font-mono font-medium text-[15px] text-on-inverse">{fmt(card.parameters?.tau_hours, 2)}h</strong>
             </div>
             <div>
               <span className="text-on-inverse/60 block">β₀ (ambient offset)</span>
-              <strong className="font-mono font-medium text-[15px] text-on-inverse">{card.parameters.beta_0.toFixed(4)}°C</strong>
+              <strong className="font-mono font-medium text-[15px] text-on-inverse">{fmt(card.parameters?.beta_0, 4)}°C</strong>
             </div>
             <div>
               <span className="text-on-inverse/60 block">β₁ (load coeff)</span>
-              <strong className="font-mono font-medium text-[15px] text-on-inverse">{card.parameters.beta_1.toFixed(4)}°C</strong>
+              <strong className="font-mono font-medium text-[15px] text-on-inverse">{fmt(card.parameters?.beta_1, 4)}°C</strong>
             </div>
           </div>
         </div>
@@ -118,15 +90,15 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
             <span className="eyebrow text-[11px] block mb-1">Test Accuracy</span>
             <div className="kv">
               <span>MAE</span>
-              <span className="font-mono font-semibold text-ink">{card.test_metrics.mae_degc.toFixed(2)}°C</span>
+              <span className="font-mono font-semibold text-ink">{fmt(card.test_metrics?.mae_degc, 2)}°C</span>
             </div>
             <div className="kv">
               <span>RMSE</span>
-              <span className="font-mono font-semibold text-ink">{card.test_metrics.rmse_degc.toFixed(2)}°C</span>
+              <span className="font-mono font-semibold text-ink">{fmt(card.test_metrics?.rmse_degc, 2)}°C</span>
             </div>
             <div className="kv">
               <span>90% Marginal Coverage (Test)</span>
-              <span className="font-mono font-semibold text-ink">{card.test_metrics.marginal_coverage_90_pct.toFixed(1)}%</span>
+              <span className="font-mono font-semibold text-ink">{fmt(card.test_metrics?.marginal_coverage_90_pct, 1)}%</span>
             </div>
           </div>
 
@@ -134,11 +106,11 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
             <span className="eyebrow text-[11px] block mb-1">Qualification Status</span>
             <div className="kv">
               <span>Interpretability</span>
-              <span className="font-mono text-ink-2">{card.qualification.parameter_interpretability}</span>
+              <span className="font-mono text-ink-2">{card.qualification?.parameter_interpretability}</span>
             </div>
             <div className="kv">
               <span>Forecast Gate</span>
-              <span className="font-mono text-ink-2">{card.qualification.forecast_qualification}</span>
+              <span className="font-mono text-ink-2">{card.qualification?.forecast_qualification}</span>
             </div>
             <div className="kv">
               <span>Status</span>

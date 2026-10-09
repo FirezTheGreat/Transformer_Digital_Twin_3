@@ -1,0 +1,122 @@
+{
+  "schema_version": "1.2.0",
+  "model_version": "cpri_greybox_v1_0",
+  "dataset_id": "cpri_v3_0_2",
+  "asset_id": "TX_160_RURAL",
+  "created_at_utc": "2026-10-09T19:11:09.441543+00:00",
+  "selected_load_driver": "apparent_power_kva",
+  "load_driver_reference_value": 123.8312218,
+  "parameters": {
+    "beta_0": 11.6222,
+    "beta_1": 8.2487,
+    "tau_hours": 1.9433
+  },
+  "identifiability": {
+    "is_identifiable": true,
+    "fit_samples_count": 15975,
+    "fit_span_days": 365.98,
+    "load_cv": 0.2888,
+    "load_range": 124.07,
+    "tau_cv_across_folds": 0.0123,
+    "boundary_hit": false,
+    "diagnostic_messages": [
+      "All parameter identifiability and data sufficiency criteria satisfied."
+    ]
+  },
+  "conformal_uncertainty": {
+    "horizon_steps": 4,
+    "horizon_scales_degc": [
+      0.5,
+      0.5582,
+      0.7981,
+      1.0594
+    ],
+    "block_quantile_90": 3.7258,
+    "horizon_half_widths_degc": [
+      1.8629,
+      2.0799,
+      2.9736,
+      3.9472
+    ],
+    "calibration_residual_median": 0.0481,
+    "calibration_residual_mad": 1.6476,
+    "num_calibration_origins": 8745
+  },
+  "baselines": {},
+  "test_metrics": null,
+  "promotion": {
+    "status": "CANDIDATE_FROZEN_PENDING_TEST",
+    "primary_evaluation_horizon": "2_hour_multi_step_trajectory",
+    "mae_improvement_pct": 0.0,
+    "passes_mae_criterion": false,
+    "passes_bias_criterion": false,
+    "passes_coverage_criterion": false,
+    "passes_scenario_criterion": false,
+    "passes_identifiability_criterion": true,
+    "secondary_1step_closed_loop_mae_improvement_pct": null,
+    "all_criteria_met": false,
+    "reasons": [
+      "Candidate frozen from FIT+CAL partitions; holdout TEST evaluation pending."
+    ]
+  },
+  "qualification": {
+    "parameter_interpretability": "QUALIFIED",
+    "forecast_qualification": "PENDING_VALIDATION",
+    "scenario_qualification": "PENDING_VALIDATION",
+    "residual_display_qualification": "DESCRIPTIVE_ONLY",
+    "residual_anomaly_qualification": "QUALIFIED",
+    "cusum_qualification": "QUALIFIED",
+    "maintenance_inference_qualification": "DISABLED",
+    "dimension_reasons": {
+      "parameter_interpretability": "Parameter identifiability criteria satisfied across FIT partition.",
+      "forecast_qualification": "Autonomous 2-hour forward forecasting pending independent holdout test evaluation.",
+      "scenario_qualification": "Scenario what-if projection pending independent causal and holdout validation.",
+      "residual_display_qualification": "First-order grey-box ODE runs continuously on valid telemetry to compute descriptive shadow residuals.",
+      "residual_anomaly_qualification": "Residual excursions qualified against identifiable physical baseline.",
+      "cusum_qualification": "Two-sided CUSUM tracker qualified on identifiable model residuals.",
+      "maintenance_inference_qualification": "Model-driven maintenance recommendations disabled until causal degradation models are qualified."
+    }
+  },
+  "dataset_hashes": {
+    "cpri_v3_fit_sha256": "8e258d78587069636457a505bd03a166098fa503846d98d47c4a433b815190f4",
+    "cpri_v3_calibration_sha256": "48d44e9e0e1746d29216741d7d73bb27e293494ab601c435858f067ead699371"
+  },
+  "metadata": {
+    "fit_diagnostics": {
+      "fit_loss": 1.0566,
+      "fit_mae_degc": 1.1833,
+      "fit_rmse_degc": 1.4554,
+      "fit_bias_degc": 0.004,
+      "tau_grid_best": 1.8171,
+      "huber_delta_degc": 3.5894,
+      "fit_sigma_mad_degc": 2.6687
+    },
+    "load_driver_comparison": {
+      "apparent_power_kva": {
+        "mean_rolling_mae": 1.1608,
+        "tau_cv": 0.0123,
+        "fold_maes": [
+          1.4233,
+          1.144,
+          1.0416,
+          1.0835,
+          1.1114
+        ]
+      },
+      "rms_current_a": {
+        "mean_rolling_mae": 1.1608,
+        "tau_cv": 0.0123,
+        "fold_maes": [
+          1.4278,
+          1.1467,
+          1.0445,
+          1.0749,
+          1.1101
+        ]
+      }
+    },
+    "nominal_cadence_seconds": 1800.0,
+    "horizon_steps": 4,
+    "uncertainty_semantics": "Time-series block-conformal calibration on CAL partition; marginal and simultaneous path coverage distinguish pointwise vs trajectory envelope coverage."
+  }
+}

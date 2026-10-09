@@ -102,7 +102,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId, r
           <div>
             <span className="font-semibold text-ink block">Safety & Governance Gate</span>
             <p className="mt-0.5 leading-snug">
-              Tripura thermal model status is <strong className="text-ink-2">NOT_PROMOTED</strong> due to uninstrumented ambient sensors. Projections operate under descriptive qualification boundaries.
+              What-if projections run only for a <strong className="text-ink-2">PROMOTED</strong> thermal model. This asset's promotion decision and reasons are on the Data &amp; Model Card.
             </p>
           </div>
         </div>
@@ -213,7 +213,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId, r
                 <span className="font-semibold text-warn">Scenario Qualified Notice</span>
                 <p className="mt-1">{error || result?.disabled_reason}</p>
                 <p className="mt-1.5 text-[11px] text-muted">
-                  Because the Tripura thermal grey-box model is unpromoted, forward projections are withheld under frozen capability gates to prevent ungrounded operational advice.
+                  Forward projections are withheld under capability gates until the thermal grey-box model is promoted, to prevent ungrounded operational advice.
                 </p>
               </div>
             </div>

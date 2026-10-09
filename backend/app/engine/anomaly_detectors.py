@@ -82,6 +82,9 @@ class AnomalyDetectorThresholds(BaseModel):
 
 DEFAULT_DETECTOR_THRESHOLDS = AnomalyDetectorThresholds()
 
+# Declared asset metadata carried in the telemetry stream (constant by definition, not a sensor).
+STATIC_METADATA_SIGNALS: frozenset[str] = frozenset({"rated_kva"})
+
 
 # ---------------------------------------------------------------------------
 # Individual Domain Detector Functions
@@ -184,6 +187,8 @@ def detect_sensor_plausibility(
 
     for m in event.measurements:
         if not isinstance(m.value, (int, float)) or isinstance(m.value, bool):
+            continue
+        if m.signal_id in STATIC_METADATA_SIGNALS:
             continue
         val = float(m.value)
         key = m.signal_id if m.phase is None else f"{m.signal_id}_{m.phase}"

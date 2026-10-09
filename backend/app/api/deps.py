@@ -7,7 +7,7 @@ for storage, engines, configuration, scenario simulation, feedback ledger, and a
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from fastapi import Depends, Request
 
 from app.core.checkpoint import CheckpointStore
@@ -105,6 +105,52 @@ def build_default_model_artifact(
     )
 
 
+def build_runtime_reducer(
+    settings: Settings,
+    feedback_ledger: OperatorFeedbackLedger | None = None,
+) -> TwinReducer:
+    """Build a fully wired reducer for the configured asset (episodes, evidence, OTHI, exposure, maintenance).
+
+    Thermal qualification comes from the asset's resolved artifact, so unpromoted models stay gated.
+    """
+    from app.core.registry import resolve_asset_profile, resolve_model_artifact
+    from app.engine.anomaly_detectors import MultiDomainAnomalyEngine
+    from app.engine.electrical_episodes import ElectricalEpisodeEngine
+    from app.engine.exposure import ThermalExposureEngine
+    from app.engine.maintenance import MaintenanceEngine
+    from app.engine.othi import OTHIEngine
+    from app.engine.review import ReviewFlagEngine
+    from app.engine.thermal_fallback import ThermalFallbackGate
+
+    asset_id = settings.default_asset_id
+    profile = resolve_asset_profile(asset_id=asset_id)
+    artifact = resolve_model_artifact(asset_id=asset_id)
+    thermal_gate = ThermalFallbackGate.from_artifact(artifact, nominal_cadence_s=profile.expected_cadence_s)
+    qual = artifact.qualification if thermal_gate.is_model_promoted else None
+    return TwinReducer(
+        profile=profile,
+        load_reference_kva=settings.load_reference_kva,
+        episode_engine=ElectricalEpisodeEngine(asset_id=asset_id),
+        anomaly_engine=MultiDomainAnomalyEngine(
+            asset_id=asset_id, qualification=artifact.qualification, profile=profile
+        ),
+        othi_engine=OTHIEngine(expected_cadence_seconds=profile.expected_cadence_s),
+        exposure_engine=ThermalExposureEngine(asset_id=asset_id),
+        maintenance_engine=MaintenanceEngine(
+            feedback_ledger=feedback_ledger,
+            is_model_promoted=thermal_gate.is_model_promoted,
+            # Model-driven rules (e.g. MNT-THERM-002) only when the locked matrix qualifies them
+            is_thermal_qualified=qual is not None
+            and qual.maintenance_inference_qualification == QualificationStatus.QUALIFIED,
+            cusum_qualification="ENABLED"
+            if qual is not None and qual.cusum_qualification == QualificationStatus.QUALIFIED
+            else "DISABLED",
+        ),
+        thermal_gate=thermal_gate,
+        review_engine=ReviewFlagEngine(asset_id=asset_id),
+    )
+
+
 class AppState:
     """Central stateful container holding engines, storage, and active digital twin states."""
 
@@ -122,6 +168,7 @@ class AppState:
         scenario_simulator: ScenarioSimulator | None = None,
         current_state: TwinState | None = None,
         latest_fact_bundle: FactBundle | None = None,
+        reducer_factory: Callable[[], TwinReducer] | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.storage = storage
@@ -135,6 +182,8 @@ class AppState:
         self.scenario_simulator = scenario_simulator
         self.current_state = current_state
         self.latest_fact_bundle = latest_fact_bundle
+        # Optional: rebuilds a fresh reducer (and its stateful engines) when replay restarts or seeks
+        self.reducer_factory = reducer_factory
 
     def update_state(self, state: TwinState, fact_bundle: FactBundle | None = None) -> None:
         """Update current state and latest FactBundle."""

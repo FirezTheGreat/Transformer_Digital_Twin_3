@@ -106,10 +106,11 @@ def _kv(key: str, val: Any, color: str = Color.BOLD) -> None:
 
 def _create_source_ref(seq_id: int) -> SourceRef:
     return SourceRef(
-        system="tripura_csv",
-        adapter_id="tripura_v1",
+        # Scripted synthetic events: provenance must say so, not claim a field dataset
+        system="synthetic_demo_injector",
+        adapter_id="demo_script_v1",
         source_record_id=f"rec_{seq_id:04d}",
-        source_uri="file:///data/processed/tripura_telemetry.csv",
+        source_uri="synthetic://demo_script",
         raw_sha256="abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
     )
 
@@ -445,7 +446,9 @@ def run_hackathon_demo() -> Dict[str, Any]:
     final_report_data = generate_report_data(final_bundle)
     pdf_bytes, renderer_name = render_report_pdf(final_report_data)
 
-    output_pdf_path = Path(__file__).resolve().parent / "demo_audit_report.pdf"
+    output_pdf_path = Path(
+        os.getenv("DEMO_REPORT_PATH") or Path(__file__).resolve().parent / "demo_audit_report.pdf"
+    )
     with open(output_pdf_path, "wb") as f:
         f.write(pdf_bytes)
 

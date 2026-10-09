@@ -14,6 +14,7 @@ from app.api.deps import (
 )
 from app.api.errors import ReplayException
 from app.api.schemas import ReplayControlRequest, ReplayStatusResponse
+from app.core.registry import CPRI_SYNTHETIC_ASSET_RATINGS
 from app.core.storage import StorageEngine
 from app.engine.capability import CapabilityEvaluator
 from app.engine.fact_bundle import assemble_fact_bundle
@@ -55,7 +56,27 @@ def ensure_dataset_loaded(
         return 0
 
     events_in_storage = storage.get_canonical_events(asset_id=asset_id, limit=1)
-    if not events_in_storage:
+    if not events_in_storage and asset_id in CPRI_SYNTHETIC_ASSET_RATINGS:
+        # CPRI synthetic assets replay their CAL partition only; the TEST partition is reserved
+        # for one-shot model evaluation. Oracle y_* labels never enter the runtime stream.
+        cal_parquet = _find_data_file("data/processed/cpri_v3_calibration.parquet")
+        if cal_parquet:
+            import pandas as pd
+            from app.adapters.cpri_v3 import CPRIv3SourceAdapter
+            df = pd.read_parquet(cal_parquet, filters=[("meta_transformer_id", "==", asset_id)])
+            df = df.drop(columns=[c for c in df.columns if c.startswith("y_")])
+            adapter = CPRIv3SourceAdapter()
+            events = [
+                adapter.transform_record(
+                    r,
+                    asset_id=asset_id,
+                    source_uri="data/processed/cpri_v3_calibration.parquet",
+                    source_record_id=f"cal_{asset_id}_{i}",
+                )
+                for i, r in enumerate(df.to_dict("records"))
+            ]
+            storage.insert_canonical_events(events)
+    elif not events_in_storage:
         canon_events_file = _find_data_file("data/processed/canonical_events.parquet")
         canon_meas_file = _find_data_file("data/processed/canonical_measurements.parquet")
         if canon_events_file and canon_meas_file:
@@ -75,6 +96,16 @@ def ensure_dataset_loaded(
 
     count = replay_engine.load_from_storage()
     return count
+
+
+def _restart_reducer(app_state: AppState, reducer: TwinReducer) -> TwinReducer:
+    """Give replay a clean reducer: rebuild all stateful engines when possible, else reset the thermal gate."""
+    if app_state.reducer_factory is not None:
+        app_state.reducer = app_state.reducer_factory()
+        return app_state.reducer
+    if reducer.thermal_gate is not None:
+        reducer.thermal_gate.reset()
+    return reducer
 
 
 def _build_status_response(
@@ -185,8 +216,7 @@ async def control_replay(
         replay_engine._is_paused = False
         app_state.current_state = None
         app_state.latest_fact_bundle = None
-        if reducer.thermal_gate is not None:
-            reducer.thermal_gate.reset()
+        reducer = _restart_reducer(app_state, reducer)
 
     elif action == "pause":
         replay_engine.pause()
@@ -199,8 +229,7 @@ async def control_replay(
         replay_engine.reset()
         app_state.current_state = None
         app_state.latest_fact_bundle = None
-        if reducer.thermal_gate is not None:
-            reducer.thermal_gate.reset()
+        reducer = _restart_reducer(app_state, reducer)
 
     elif action == "seek":
         if payload.seek_position is not None:
@@ -218,8 +247,7 @@ async def control_replay(
             )
 
         replay_engine.seek(target_pos)
-        if reducer.thermal_gate is not None:
-            reducer.thermal_gate.reset()
+        reducer = _restart_reducer(app_state, reducer)
 
         if target_pos == 0:
             app_state.current_state = None

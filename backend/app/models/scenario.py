@@ -59,7 +59,7 @@ class ScenarioRequest(BaseModel):
         default=8,
         ge=1,
         le=8,
-        description="Number of 15-minute projection steps (locked to 8 for 2-hour projection).",
+        description="Requested projection steps; capped at the model's calibrated 2-hour steps (8 x 15 min or 4 x 30 min).",
     )
 
 

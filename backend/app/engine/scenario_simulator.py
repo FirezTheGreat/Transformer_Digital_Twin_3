@@ -3,7 +3,7 @@
 Implements the deterministic 2-hour forward what-if scenario simulator:
 1. Validates current twin/thermal state and scenario assumptions.
 2. Gates execution against the thermal capability trust state (disabled in WARMUP or FALLBACK).
-3. Projects top-oil temperature forward exactly 8 x 15-minute steps (h = 1..8, Delta_t = 0.25h)
+3. Projects top-oil temperature forward over 2 hours in the model's calibrated steps (8 x 15 min or 4 x 30 min)
    using the frozen first-order grey-box thermal ODE without future observed OTI feedback.
 4. Simulates both the user what-if trajectory and the baseline trajectory (holding current conditions).
 5. Computes asymptotic steady-state theta*, empirical 90% block-conformal bounds (W_1..W_8),
@@ -68,11 +68,10 @@ class ScenarioSimulator:
         self.load_driver_type = str(load_driver_type)
         self.is_model_promoted = bool(is_model_promoted)
         self.qualification = qualification
-        self.conformal_half_widths = list(
-            conformal_half_widths_degc
-            if conformal_half_widths_degc and len(conformal_half_widths_degc) == 8
-            else DEFAULT_CONFORMAL_HALF_WIDTHS_DEGC
-        )
+        # Use the asset's own calibrated envelope (never another asset's); its length defines the
+        # 2-hour horizon steps, e.g. 8 x 15 min (Tripura) or 4 x 30 min (CPRI).
+        self.conformal_half_widths = list(conformal_half_widths_degc or DEFAULT_CONFORMAL_HALF_WIDTHS_DEGC)
+        self.step_minutes = 120 // len(self.conformal_half_widths)
         self.model_version = str(model_version)
         self.conformal_quantile_90 = float(conformal_quantile_90)
 
@@ -177,7 +176,7 @@ class ScenarioSimulator:
             is_load_value_already_index_u: True if origin_load_value is already dimensionless u.
 
         Returns:
-            ScenarioProjectionResult: Complete 8-step projection trajectory and diagnostics.
+            ScenarioProjectionResult: Complete 2-hour projection trajectory and diagnostics.
         """
         if origin_time_utc.tzinfo is None:
             origin_time_utc = origin_time_utc.replace(tzinfo=timezone.utc)
@@ -287,7 +286,7 @@ class ScenarioSimulator:
                 provenance=self._get_provenance(),
             )
 
-        # 2. Execute 8-Step Forward Rollout
+        # 2. Execute 2-Hour Forward Rollout (calibrated step count)
         trajectory: List[ScenarioProjectionStep] = []
         current_scen_top_oil = t_oil_origin
         current_base_top_oil = t_oil_origin
@@ -302,10 +301,11 @@ class ScenarioSimulator:
         count_above_warn = 0
         count_above_crit = 0
 
-        dt_step_hours = 0.25
+        dt_step_hours = self.step_minutes / 60.0
+        n_steps = min(req.horizon_steps, len(self.conformal_half_widths))
 
-        for h in range(1, req.horizon_steps + 1):
-            horizon_min = h * 15
+        for h in range(1, n_steps + 1):
+            horizon_min = h * self.step_minutes
             step_time = origin_time_utc + timedelta(minutes=horizon_min)
 
             # Integrate what-if scenario ODE
@@ -380,8 +380,8 @@ class ScenarioSimulator:
             asymptotic_steady_state_degc=round(theta_star_scen, 4),
             earliest_warning_crossing_minutes=earliest_warn_min,
             earliest_critical_crossing_minutes=earliest_crit_min,
-            time_above_warning_minutes=count_above_warn * 15,
-            time_above_critical_minutes=count_above_crit * 15,
+            time_above_warning_minutes=count_above_warn * self.step_minutes,
+            time_above_critical_minutes=count_above_crit * self.step_minutes,
             provenance=self._get_provenance(),
         )
 

@@ -24,6 +24,8 @@ import {
   CanonicalEvent,
 } from '../../types/contracts';
 import { UIHonestyBadge } from '../common/UIHonestyBadge';
+import { ModelCardData } from '../../services/api';
+import { getAssetContext } from '../../utils/assetContext';
 import { TrendChart, readSignal, formatUtcTick } from '../common/TrendChart';
 
 interface OverviewViewProps {
@@ -34,6 +36,7 @@ interface OverviewViewProps {
   recommendations: MaintenanceRecommendation[];
   episodes: AnomalyEpisode[];
   historyEvents?: CanonicalEvent[];
+  modelCard?: ModelCardData | null;
   onNavigateTab: (tab: string) => void;
   onOpenFeedback: (rec: MaintenanceRecommendation) => void;
 }
@@ -86,6 +89,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   recommendations,
   episodes,
   historyEvents = [],
+  modelCard = null,
   onNavigateTab,
   onOpenFeedback,
 }) => {
@@ -215,7 +219,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
             <span className="eyebrow text-ink">{assetId}</span>
             <span className="text-faint">·</span>
-            <span className="eyebrow">Agartala Substation (33/11kV)</span>
+            <span className="eyebrow">{getAssetContext(assetId).siteLabel}</span>
           </div>
           <h1 className="page-title">Condition Overview</h1>
           <p className="text-[13px] text-muted mt-2.5 max-w-2xl">
@@ -594,8 +598,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         {showTechnicalDetails && (
           <div className="mt-4 pt-4 border-t border-line text-muted space-y-2.5 leading-relaxed">
             <p>
-              <strong className="text-ink font-semibold">First-Order Grey-Box ODE:</strong> Parameters calibrated on Tripura historical training partition (τ = {tauHours}h, β₀ = 1.09°C, β₁ = 2.90°C).
-              Status: <span className="font-mono text-ink">NOT_PROMOTED</span> (Uninstrumented ambient temperature feed).
+              <strong className="text-ink font-semibold">First-Order Grey-Box ODE:</strong> {modelCard?.parameters
+                ? <>Parameters from the asset's frozen artifact <span className="font-mono">{modelCard.model_version}</span> (τ = {modelCard.parameters.tau_hours}h, β₀ = {modelCard.parameters.beta_0}°C, β₁ = {modelCard.parameters.beta_1}°C).</>
+                : <>No calibrated parameters for this asset (τ = {tauHours}h placeholder; thermal model uncalibrated).</>}
+              {' '}Status: <span className="font-mono text-ink">{modelCard?.promotion?.status ?? 'UNKNOWN'}</span>
+              {modelCard?.promotion?.status !== 'PROMOTED' && ' — forecasting and what-if projections stay gated.'}
             </p>
             <p>
               <strong className="text-ink font-semibold">Overall Health Index (OTHI):</strong> Computed multi-domain engineering index using a Max-Plus penalty formulation across tiers C0–C4.

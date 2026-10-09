@@ -68,6 +68,16 @@ class ObservedThermalExposure(BaseModel):
         default_factory=dict, description="Time-in-band breakdown across configured thresholds"
     )
     is_valid: bool = Field(default=False, description="True if at least one valid top-oil observation was recorded")
+    integration_convention: str = Field(
+        default="PIECEWISE_LINEAR",
+        description="Explicit numerical integration convention: 'PIECEWISE_LINEAR' or 'SAMPLE_HOLD'",
+    )
+    wall_clock_coverage_hours: Optional[float] = Field(
+        default=None, description="Elapsed wall-clock duration from first to last observation in hours"
+    )
+    monitored_coverage_ratio: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Ratio of valid monitored hours to total wall-clock hours"
+    )
 
 
 class StandardsAgeingResult(BaseModel):
@@ -115,4 +125,11 @@ class ThermalExposureBundle(BaseModel):
     )
     failure_probability_supported: bool = Field(
         default=False, description="Explicit flag: failure probability is NOT supported by the digital twin"
+    )
+    rul_status: str = Field(
+        default="NOT_QUALIFIED", description="Truthful RUL capability status (NOT_QUALIFIED / UNAVAILABLE)"
+    )
+    rul_rationale: str = Field(
+        default="No validated initial degradation state and life-outcome evidence for operational RUL",
+        description="Deterministic reason why operational RUL is unavailable",
     )

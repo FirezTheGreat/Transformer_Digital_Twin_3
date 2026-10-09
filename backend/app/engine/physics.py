@@ -53,17 +53,28 @@ def calculate_power_factor(
     p_kw: float | None,
     s_kva: float | None,
     floor_kva: float = 1e-3,
+    signed: bool = False,
 ) -> float | None:
     """Derive power factor from active power (kW) and apparent power (kVA).
 
+    Args:
+        p_kw: Total active power in kW.
+        s_kva: Total apparent power in kVA.
+        floor_kva: Floor below which apparent power is treated as de-energized/insignificant.
+        signed: If True, preserves active power sign for import/export flow (+ import, - export).
+                If False (default), returns magnitude |P| / S in [0.0, 1.0].
+
     Returns:
-        float | None: PF = |P| / S in range [0.0, 1.0], or None if inputs missing or S <= floor.
+        float | None: PF in range [-1.0, 1.0] (if signed) or [0.0, 1.0] (if unsigned),
+                      or None if inputs missing or S <= floor.
     """
     if p_kw is None or s_kva is None:
         return None
     if s_kva <= floor_kva:
         return None
-    pf = abs(p_kw) / s_kva
+    pf = (p_kw / s_kva) if signed else (abs(p_kw) / s_kva)
+    if signed:
+        return round(min(1.0, max(-1.0, pf)), 4)
     return round(min(1.0, max(0.0, pf)), 4)
 
 
@@ -307,8 +318,9 @@ def extract_electrical_features(
     # Apparent Power derived: S = sqrt(P^2 + Q^2)
     s_derived = calculate_apparent_power(p_kw, q_kvar)
 
-    # Power Factor derived: PF = |P| / S
-    s_for_pf = s_derived if s_derived is not None else s_obs
+    # Power Factor derived: prefer observed apparent power S_obs directly from meter when valid;
+    # otherwise fallback to derived apparent power from compatible active/reactive power.
+    s_for_pf = s_obs if (s_obs is not None and s_obs > 1e-3) else s_derived
     pf_derived = calculate_power_factor(p_kw, s_for_pf)
 
     # Current Mean and Imbalance

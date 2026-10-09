@@ -157,7 +157,9 @@ export const DataModelCardView: React.FC<DataModelCardViewProps> = ({ modelCard 
               <dd className="font-mono font-semibold text-ink">{card.test_metrics.rmse_degc.toFixed(2)} °C</dd>
             </div>
             <div className="kv">
-              <dt>90% Conformal Coverage</dt>
+              <dt title="Empirical marginal interval coverage on test partition; not simultaneous continuous-path coverage">
+                90% Marginal Step Coverage (Test)
+              </dt>
               <dd className="font-mono font-semibold text-ink">{card.test_metrics.marginal_coverage_90_pct.toFixed(1)}%</dd>
             </div>
             <div className="kv">

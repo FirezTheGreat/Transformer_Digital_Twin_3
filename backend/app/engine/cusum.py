@@ -79,7 +79,7 @@ class TwoSidedCUSUMTracker:
         calibration_median: float = 0.2062,
         calibration_mad: float = 0.9613,
         sensor_resolution_floor: float = 0.50,
-        is_qualified: bool = False,
+        is_qualified: bool = True,
     ) -> None:
         self.k = float(reference_k)
         self.h = float(decision_limit_h)
@@ -184,6 +184,25 @@ class TwoSidedCUSUMTracker:
             self.last_step_result = res
             return res
 
+        if not self.is_qualified:
+            # When CUSUM is unqualified or disabled, both positive and negative accumulators
+            # remain strictly 0.0 across all updates, and no alarm may ever trip.
+            self.cusum_pos = 0.0
+            self.cusum_neg = 0.0
+            self.samples_tracked += 1
+            res = CUSUMStepResult(
+                standardized_residual_z=round(z, 4),
+                cusum_pos=0.0,
+                cusum_neg=0.0,
+                is_positive_alarm=False,
+                is_negative_alarm=False,
+                alarm_active=False,
+                direction=CUSUMDirection.NORMAL,
+                trust_status=CUSUMTrustStatus.SHADOW_EXPLORATORY,
+            )
+            self.last_step_result = res
+            return res
+
         # 2. Two-sided CUSUM updates with zero-clamping
         self.cusum_pos = max(0.0, self.cusum_pos + z - self.k)
         self.cusum_neg = min(0.0, self.cusum_neg + z + self.k)
@@ -201,7 +220,7 @@ class TwoSidedCUSUMTracker:
         elif is_pos_alarm and is_neg_alarm:
             direction = CUSUMDirection.POSITIVE_SHIFT if abs(self.cusum_pos) >= abs(self.cusum_neg) else CUSUMDirection.NEGATIVE_SHIFT
 
-        trust = CUSUMTrustStatus.QUALIFIED_ACTIVE if self.is_qualified else CUSUMTrustStatus.SHADOW_EXPLORATORY
+        trust = CUSUMTrustStatus.QUALIFIED_ACTIVE
 
         res = CUSUMStepResult(
             standardized_residual_z=round(z, 4),
@@ -227,10 +246,9 @@ class TwoSidedCUSUMTracker:
     ) -> Optional[EvidenceItem]:
         """Generate structured evidence item adhering strictly to capability authority.
 
-        If cusum_qualification is DISABLED, emits non-assertive exploratory hypotheses:
-        PERSISTENT_MODEL_DEVIATION_HYPOTHESIS, never a confirmed failure diagnosis.
+        If CUSUM is disabled or unqualified, never emits anomaly evidence.
         """
-        if not step_result.alarm_active:
+        if not self.is_qualified or not step_result.alarm_active:
             return None
 
         dir_str = "POSITIVE_SHIFT" if step_result.direction == CUSUMDirection.POSITIVE_SHIFT else "NEGATIVE_SHIFT"

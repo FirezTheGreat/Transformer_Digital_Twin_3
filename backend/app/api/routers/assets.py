@@ -99,6 +99,7 @@ async def get_asset_history(
     end_time: datetime | None = Query(default=None, description="End timestamp filter in UTC"),
     limit: int = Query(default=500, ge=1, le=5000, description="Max number of events to return"),
     offset: int = Query(default=0, ge=0, description="Offset for pagination"),
+    order_asc: bool = Query(default=True, description="Sort order: True for ascending (default), False for descending"),
     storage: StorageEngine = Depends(get_storage),
 ) -> HistoryResponse:
     """Query chronological historical telemetry events from temporal storage."""
@@ -108,7 +109,7 @@ async def get_asset_history(
         end_time=end_time,
         limit=limit,
         offset=offset,
-        order_asc=True,
+        order_asc=order_asc,
     )
 
     return HistoryResponse(

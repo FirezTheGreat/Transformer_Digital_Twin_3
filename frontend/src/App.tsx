@@ -8,6 +8,7 @@ import { MaintenanceView } from './components/views/MaintenanceView';
 import { TelemetryView } from './components/views/TelemetryView';
 import { DataModelCardView } from './components/views/DataModelCardView';
 import { Transformer3DView } from './components/views/Transformer3DView';
+import { HistoricalPerformanceView } from './components/views/HistoricalPerformanceView';
 import { FeedbackModal } from './components/FeedbackModal';
 import { ModelCardModal } from './components/ModelCardModal';
 
@@ -44,6 +45,7 @@ export default function App(): React.ReactElement {
 
   const [historyEvents, setHistoryEvents] = useState<CanonicalEvent[]>([]);
   const [modelCard, setModelCard] = useState<ModelCardData | null>(null);
+  const [resetCount, setResetCount] = useState<number>(0);
 
   // Dark mode state with persistence
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -77,13 +79,12 @@ export default function App(): React.ReactElement {
   };
 
   // 1. Fetch Backend Health, Asset State/FactBundle, History, and Model-Card in parallel
-  const loadState = useCallback(async (currentAssetId: string) => {
+  const loadState = useCallback(async (currentAssetId: string, overrideStatus?: ReplayStatusResponse | null) => {
     setIsRefreshing(true);
     try {
-      const [healthRes, stateRes, historyRes, modelCardRes, replayStatusRes] = await Promise.allSettled([
+      const [healthRes, stateRes, modelCardRes, replayStatusRes] = await Promise.allSettled([
         api.getHealthz(),
         api.getAssetState(currentAssetId),
-        api.getAssetHistory(currentAssetId, { limit: 50 }),
         api.getAssetModelCard(currentAssetId),
         api.getReplayStatus(),
       ]);
@@ -95,10 +96,22 @@ export default function App(): React.ReactElement {
         setIsBackendHealthy(false);
       }
 
-      // 2. Process Asset State & FactBundle
+      // 2. Sync Replay Status
+      let effectiveStatus = overrideStatus !== undefined ? overrideStatus : replayStatus;
+      if (replayStatusRes.status === 'fulfilled' && replayStatusRes.value) {
+        effectiveStatus = overrideStatus !== undefined ? overrideStatus : replayStatusRes.value;
+        setReplayStatus(effectiveStatus);
+        if (effectiveStatus && effectiveStatus.processed_events > 0) {
+          setIsTwinStarted(true);
+        }
+      }
+
+      // 3. Process Asset State & FactBundle
+      let currentWatermark: string | null = null;
       if (stateRes.status === 'fulfilled' && stateRes.value) {
         const data = stateRes.value;
         setTwinState(data.twin_state ?? null);
+        currentWatermark = data.twin_state?.event_time_watermark_utc || data.twin_state?.state_time_utc || null;
         if (data.fact_bundle) {
           setHealth(data.fact_bundle.health ?? null);
           setRecommendations(data.fact_bundle.active_recommendations ?? []);
@@ -106,31 +119,53 @@ export default function App(): React.ReactElement {
           if (data.fact_bundle.capabilities) {
             setCapabilities(data.fact_bundle.capabilities);
           }
+        } else {
+          setHealth(null);
+          setRecommendations([]);
+          setEpisodes([]);
+          setCapabilities(null);
         }
+      } else {
+        setTwinState(null);
+        setHealth(null);
+        setRecommendations([]);
+        setEpisodes([]);
+        setCapabilities(null);
       }
 
-      // 3. Process History Events
-      if (historyRes.status === 'fulfilled' && historyRes.value?.events) {
-        setHistoryEvents(historyRes.value.events);
+      // 4. Process History Events (Rolling latest 50 events up to current watermark)
+      const hasProcessedFrames = (effectiveStatus?.processed_events ?? 0) > 0;
+      const queryEndTime = currentWatermark || effectiveStatus?.current_time_utc || null;
+
+      if (hasProcessedFrames && queryEndTime) {
+        try {
+          const historyRes = await api.getAssetHistory(currentAssetId, {
+            endTime: queryEndTime,
+            limit: 50,
+            orderAsc: false,
+          });
+          if (historyRes?.events) {
+            // Sort ascending by event_time_utc for strictly chronological X-axis
+            const chronoSorted = [...historyRes.events].sort(
+              (a, b) => new Date(a.event_time_utc).getTime() - new Date(b.event_time_utc).getTime()
+            );
+            setHistoryEvents(chronoSorted);
+          }
+        } catch {
+          // Preserve current buffer on transient history query failure
+        }
+      } else {
+        setHistoryEvents([]);
       }
 
-      // 4. Process Calibrated Model Card
+      // 5. Process Calibrated Model Card
       if (modelCardRes.status === 'fulfilled' && modelCardRes.value) {
         setModelCard(modelCardRes.value);
-      }
-
-      // 5. Replay Status Sync
-      if (replayStatusRes.status === 'fulfilled' && replayStatusRes.value) {
-        const status = replayStatusRes.value;
-        setReplayStatus(status);
-        if (status.processed_events > 0) {
-          setIsTwinStarted(true);
-        }
       }
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [replayStatus]);
 
   useEffect(() => {
     loadState(assetId);
@@ -147,7 +182,7 @@ export default function App(): React.ReactElement {
       setReplayStatus(res);
       setIsTwinStarted(true);
       setIsPlaying(false);
-      await loadState(assetId);
+      await loadState(assetId, res);
       showToast('Digital Twin initialized. Ready for telemetry replay.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to start Digital Twin';
@@ -171,7 +206,7 @@ export default function App(): React.ReactElement {
         setIsPlaying(false);
         showToast('Dataset replay completed.');
       }
-      await loadState(assetId);
+      await loadState(assetId, res);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Replay step failed';
       showToast(msg);
@@ -229,7 +264,7 @@ export default function App(): React.ReactElement {
           setIsPlaying(false);
           showToast('Replay reached end of dataset.');
         }
-        await loadState(assetId);
+        await loadState(assetId, res);
       } catch {
         setIsPlaying(false);
       } finally {
@@ -257,16 +292,47 @@ export default function App(): React.ReactElement {
     }
   };
 
+  // 6.5. Previous Telemetry Frame Navigation
+  const handlePrevious = async () => {
+    if (isSteppingRef.current || !isTwinStarted) return;
+    const currentCursor = replayStatus?.processed_events ?? 0;
+    if (currentCursor <= 0) return;
+    isSteppingRef.current = true;
+    try {
+      const targetPos = Math.max(0, currentCursor - 1);
+      const res = await api.controlReplay({
+        action: 'seek',
+        seek_position: targetPos,
+        asset_id: assetId,
+      });
+      setReplayStatus(res);
+      await loadState(assetId, res);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Previous step failed';
+      showToast(msg);
+    } finally {
+      isSteppingRef.current = false;
+    }
+  };
+
   // 7. Reset Replay to Frame 0
   const handleReset = async () => {
     setIsPlaying(false);
+    setIsTwinStarted(false);
+    setResetCount((c) => c + 1);
+    setTwinState(null);
+    setHealth(null);
+    setRecommendations([]);
+    setEpisodes([]);
+    setCapabilities(null);
+    setHistoryEvents([]);
     try {
       const res = await api.controlReplay({
         action: 'reset',
         asset_id: assetId,
       });
       setReplayStatus(res);
-      await loadState(assetId);
+      await loadState(assetId, res);
       showToast('Digital Twin reset to frame 0.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Reset failed';
@@ -447,6 +513,7 @@ export default function App(): React.ReactElement {
           isPlaying={isPlaying}
           onPlayToggle={handlePlayToggle}
           onNext={handleNext}
+          onPrevious={handlePrevious}
           speedMultiplier={speedMultiplier}
           onSpeedChange={handleSpeedChange}
           onReset={handleReset}
@@ -474,6 +541,7 @@ export default function App(): React.ReactElement {
             assetId={assetId}
             twinState={twinState}
             health={health}
+            resetKey={resetCount}
             onOpenModelCard={() => setIsModelCardOpen(true)}
           />
         )}
@@ -506,7 +574,12 @@ export default function App(): React.ReactElement {
           />
         )}
 
-        {/* View 6: Data & Model Card */}
+        {/* View 6: Historical Performance & Run Reports */}
+        {activeTab === 'historical' && (
+          <HistoricalPerformanceView assetId={assetId} />
+        )}
+
+        {/* View 7: Data & Model Card */}
         {activeTab === 'model-card' && (
           <DataModelCardView modelCard={modelCard} />
         )}

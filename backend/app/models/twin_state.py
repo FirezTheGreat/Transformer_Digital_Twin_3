@@ -8,6 +8,7 @@ from app.models.features import DerivedFeatures
 from app.models.anomaly import AnomalyEpisode
 from app.models.health import OTHIBundle
 from app.models.maintenance import MaintenanceRecommendation
+from app.models.review import ReviewFlagRecord
 
 
 class ThermalLatentState(BaseModel):
@@ -60,5 +61,6 @@ class TwinState(BaseModel):
     health_bundle: OTHIBundle | None = Field(default=None, description="Current operational health index assessment")
     exposure_state: ExposureState = Field(default_factory=ExposureState, description="Cumulative exposure state")
     active_recommendations: list[MaintenanceRecommendation] = Field(default_factory=list, description="Active advisory maintenance recommendations")
+    active_reviews: list[ReviewFlagRecord] = Field(default_factory=list, description="Active deterministic Review Flags")
     versions: dict[str, str] = Field(default_factory=dict, description="Versions of schema, profile, model, and rules")
     state_hash: str = Field(..., description="Deterministic SHA-256 state checkpoint hash")

@@ -209,13 +209,33 @@ async def control_replay(
                     message=f"Invalid seek position: {payload.seek_position}",
                     details={"total_events": len(replay_engine._events)},
                 )
-            replay_engine.seek(payload.seek_position)
+            target_pos = payload.seek_position
         elif payload.start_time_utc is not None:
-            replay_engine.seek_time(payload.start_time_utc)
+            target_pos = replay_engine.seek_time(payload.start_time_utc)
         else:
             raise ReplayException(
                 message="Seek action requires either seek_position or start_time_utc.",
             )
+
+        replay_engine.seek(target_pos)
+        if reducer.thermal_gate is not None:
+            reducer.thermal_gate.reset()
+
+        if target_pos == 0:
+            app_state.current_state = None
+            app_state.latest_fact_bundle = None
+        else:
+            current_state = None
+            for ev in replay_engine._events[:target_pos]:
+                current_state = reducer.reduce(current_state=current_state, event=ev)
+            if current_state is not None:
+                manifest = capability_evaluator.evaluate(current_state)
+                fact_bundle = assemble_fact_bundle(
+                    state=current_state,
+                    capability_evaluator=capability_evaluator,
+                    capabilities=manifest,
+                )
+                app_state.update_state(current_state, fact_bundle)
 
     elif action == "step":
         if not replay_engine._events and storage is not None:

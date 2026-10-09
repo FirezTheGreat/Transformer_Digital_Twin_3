@@ -48,6 +48,16 @@ CONTINUOUS_WINDING_TEMP_SIGNAL_IDS = {
     "winding_temp_degc",
 }
 
+# Direct hot-spot temperature signals (analog sensor readings, not contact alarms or inferred values)
+HOT_SPOT_SIGNAL_IDS = {
+    "hot_spot_temperature",
+    "hotspot_temperature",
+    "hot_spot_temp",
+    "hotspot_temp",
+    "winding_hot_spot_temp",
+    "hot_spot_temp_degc",
+}
+
 # Electrical Power signals
 ACTIVE_POWER_SIGNAL_IDS = {
     "active_power",
@@ -623,15 +633,25 @@ class CapabilityEvaluator:
         # ------------------------------------------------------------------
         # Tier C4: Thermal Exposure & Equivalent Ageing
         # ------------------------------------------------------------------
-        c4_required = ["C3_thermal_predictive", "verified_insulation_class", "hotspot_estimate"]
+        # Decoupled per post-audit specification:
+        # A credible direct-hot-spot path may enable ageing when C3 (predictive model)
+        # is disabled, provided independent ageing prerequisites (verified insulation + direct hotspot) pass.
+        # Conversely, promoting C3 alone must NOT enable model-derived hot-spot ageing
+        # without verified insulation and hot-spot support.
+        m_hotspot_direct = _find_measurement(obs, HOT_SPOT_SIGNAL_IDS)
+        has_direct_hotspot = (
+            m_hotspot_direct is not None
+            and m_hotspot_direct.quality.severity != QualitySeverity.BAD
+        )
+        has_model_hotspot = (
+            c3_enabled and (self.hotspot_supported or state.exposure_state.is_ageing_enabled)
+        )
+
+        c4_required = ["verified_insulation_class", "hotspot_source"]
         c4_missing: list[str] = []
         c4_reasons: list[str] = []
 
-        if not c3_enabled:
-            c4_missing.append("C3_thermal_predictive")
-            c4_reasons.append("C3_UNAVAILABLE")
-
-        # Verified insulation class check
+        # Verified insulation class check (mandatory for both direct and model ageing)
         has_verified_insulation = False
         if self.profile is not None:
             if self.profile.insulation_paper_class in (
@@ -647,13 +667,11 @@ class CapabilityEvaluator:
             c4_missing.append("verified_insulation_class")
             c4_reasons.append("MISSING_VERIFIED_INSULATION_CLASS")
 
-        # Hot-spot estimate check
-        hotspot_ok = self.hotspot_supported or state.exposure_state.is_ageing_enabled
-        if not hotspot_ok:
-            c4_missing.append("hotspot_estimate")
+        if not (has_direct_hotspot or has_model_hotspot):
+            c4_missing.append("hotspot_source")
             c4_reasons.append("HOTSPOT_ESTIMATE_UNSUPPORTED")
 
-        c4_enabled = c3_enabled and has_verified_insulation and hotspot_ok
+        c4_enabled = c0_enabled and has_verified_insulation and (has_direct_hotspot or has_model_hotspot)
         c4_grade = "A" if c4_enabled else "U"
 
         capabilities["C4"] = CapabilityItem(
@@ -663,9 +681,26 @@ class CapabilityEvaluator:
             missing_inputs=c4_missing,
             disabled_reason_codes=c4_reasons,
             coverage_pct=100.0 if c4_enabled else 0.0,
-            model_status=model_status_str,
+            model_status=model_status_str if has_model_hotspot else "NOT_APPLICABLE",
         )
         capabilities["thermal_ageing"] = capabilities["C4"]
+
+        # ------------------------------------------------------------------
+        # Operational RUL Sub-capability: Truthful Unavailable / Not Qualified
+        # ------------------------------------------------------------------
+        # Per CPRI post-audit brief:
+        # Operational RUL and whole-life failure probabilities are not supported
+        # without validated initial degradation state and life-outcome evidence.
+        capabilities["operational_rul"] = CapabilityItem(
+            enabled=False,
+            evidence_grade="U",
+            required_inputs=["verified_insulation_class", "longitudinal_degradation_state", "life_outcome_evidence"],
+            missing_inputs=["longitudinal_degradation_state", "life_outcome_evidence"],
+            disabled_reason_codes=["NO_VALIDATED_INITIAL_DEGRADATION_STATE_AND_LIFE_OUTCOME_EVIDENCE"],
+            coverage_pct=0.0,
+            model_status="NOT_QUALIFIED",
+        )
+        capabilities["rul_prediction"] = capabilities["operational_rul"]
 
         # ------------------------------------------------------------------
         # Determine highest enabled tier

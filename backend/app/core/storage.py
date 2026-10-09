@@ -863,6 +863,39 @@ class StorageEngine:
         else:
             res = self._con.execute("SELECT count(*) FROM twin_checkpoints").fetchone()
         return int(res[0]) if res else 0
+    def get_checkpoints(self, asset_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        """Return a list of checkpoint metadata (id, asset, timestamp, sequence, hash, created_at).
+        If asset_id is provided, filter to that asset.
+        """
+        query = """
+            SELECT
+                checkpoint_id,
+                asset_id,
+                state_time_utc,
+                last_processed_event_id,
+                state_sequence,
+                state_hash,
+                created_at_utc
+            FROM twin_checkpoints
+        """
+        params: list[Any] = []
+        if asset_id:
+            query += " WHERE asset_id = ?"
+            params.append(asset_id)
+        query += f" ORDER BY state_sequence DESC, state_time_utc DESC LIMIT {int(limit)}"
+        rows = self._con.execute(query, params).fetchall()
+        result: list[dict[str, Any]] = []
+        for r in rows:
+            result.append({
+                "checkpoint_id": r[0],
+                "asset_id": r[1],
+                "state_time_utc": _ensure_utc(r[2]),
+                "last_processed_event_id": r[3],
+                "state_sequence": r[4],
+                "state_hash": r[5],
+                "created_at_utc": _ensure_utc(r[6]),
+            })
+        return result
 
     def close(self) -> None:
         """Close database connection."""

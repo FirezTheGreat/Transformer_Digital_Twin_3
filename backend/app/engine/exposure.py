@@ -141,6 +141,7 @@ class ThermalExposureEngine:
         insulation_profile: InsulationProfile = InsulationProfile.UNKNOWN,
         max_gap_seconds: float = 7200.0,  # 2 hours max gap before breaking continuous integration
         standard_id: Optional[str] = None,
+        integration_convention: Literal["PIECEWISE_LINEAR", "SAMPLE_HOLD"] = "PIECEWISE_LINEAR",
     ) -> None:
         """Initialize ThermalExposureEngine.
 
@@ -149,11 +150,13 @@ class ThermalExposureEngine:
             insulation_profile: Verified asset insulation profile (default UNKNOWN).
             max_gap_seconds: Max allowable telemetry interval before logging a coverage gap.
             standard_id: Optional explicit standard identifier.
+            integration_convention: Numerical integration convention: 'PIECEWISE_LINEAR' (preferred) or 'SAMPLE_HOLD'.
         """
         self.asset_id = asset_id
         self.insulation_profile = insulation_profile
         self.max_gap_seconds = max_gap_seconds
         self.standard_id = standard_id
+        self.integration_convention: Literal["PIECEWISE_LINEAR", "SAMPLE_HOLD"] = integration_convention
 
         # Stateful accumulators for observed top-oil exposure
         self.first_timestamp_utc: Optional[datetime] = None
@@ -163,6 +166,8 @@ class ThermalExposureEngine:
         self.valid_sample_count: int = 0
         self.peak_top_oil_temp_c: Optional[float] = None
         self.weighted_temp_sum: float = 0.0  # sum(T_o * dt) for time-weighted mean
+        self.last_valid_top_oil: Optional[float] = None
+        self.last_valid_top_oil_time: Optional[datetime] = None
 
         # Threshold band accumulators in seconds
         self.band_durations_s: Dict[str, float] = {
@@ -182,6 +187,8 @@ class ThermalExposureEngine:
         self.peak_hotspot_temp_c: Optional[float] = None
         self.last_relative_ageing_rate: Optional[float] = None
         self.last_standard_metadata: Optional[AgeingStandardMetadata] = None
+        self.last_valid_hotspot: Optional[float] = None
+        self.last_valid_hotspot_rate: Optional[float] = None
 
     def _extract_top_oil_measurement(self, event: CanonicalEvent) -> Optional[float]:
         """Extract continuous top-oil temperature from event, rejecting discrete binary contacts."""
@@ -260,22 +267,62 @@ class ThermalExposureEngine:
             if self.peak_top_oil_temp_c is None or top_oil > self.peak_top_oil_temp_c:
                 self.peak_top_oil_temp_c = top_oil
 
-            if dt_s > 0.0 and not is_gap:
+            if dt_s > 0.0 and not is_gap and self.last_valid_top_oil is not None:
                 self.total_monitored_seconds += dt_s
-                self.weighted_temp_sum += top_oil * dt_s
+                t0_val = self.last_valid_top_oil
+                t1_val = top_oil
 
-                # Update temperature threshold band durations
-                if top_oil > 85.0:
-                    self.band_durations_s["T_gt_85C"] += dt_s
-                    self.degree_hours_85 += (top_oil - 85.0) * (dt_s / 3600.0)
+                if self.integration_convention == "PIECEWISE_LINEAR":
+                    # Exact piecewise-linear integration between endpoints (t0_val, t1_val)
+                    self.weighted_temp_sum += ((t0_val + t1_val) / 2.0) * dt_s
 
-                if top_oil > 95.0:
-                    self.band_durations_s["T_gt_95C"] += dt_s
-                    self.degree_hours_95 += (top_oil - 95.0) * (dt_s / 3600.0)
+                    # Integrate duration and degree-hours above each configured threshold
+                    for band_name, threshold in [("T_gt_85C", 85.0), ("T_gt_95C", 95.0), ("T_gt_105C", 105.0)]:
+                        if t0_val >= threshold and t1_val >= threshold:
+                            dur_s = dt_s
+                            dh = (((t0_val + t1_val) / 2.0) - threshold) * (dt_s / 3600.0)
+                        elif t0_val <= threshold and t1_val <= threshold:
+                            dur_s = 0.0
+                            dh = 0.0
+                        elif t0_val < threshold < t1_val:
+                            # Rising crossing at fraction alpha
+                            alpha = (threshold - t0_val) / (t1_val - t0_val)
+                            dur_s = (1.0 - alpha) * dt_s
+                            dh = 0.5 * (t1_val - threshold) * (dur_s / 3600.0)
+                        else:
+                            # Falling crossing at fraction alpha (t0_val > threshold > t1_val)
+                            alpha = (t0_val - threshold) / (t0_val - t1_val)
+                            dur_s = alpha * dt_s
+                            dh = 0.5 * (t0_val - threshold) * (dur_s / 3600.0)
 
-                if top_oil > 105.0:
-                    self.band_durations_s["T_gt_105C"] += dt_s
-                    self.degree_hours_105 += (top_oil - 105.0) * (dt_s / 3600.0)
+                        self.band_durations_s[band_name] += dur_s
+                        if threshold == 85.0:
+                            self.degree_hours_85 += dh
+                        elif threshold == 95.0:
+                            self.degree_hours_95 += dh
+                        elif threshold == 105.0:
+                            self.degree_hours_105 += dh
+                else:
+                    # Explicit sample-hold convention: D_b = sum max(T_o,i - T_b, 0) * dt_i
+                    self.weighted_temp_sum += t1_val * dt_s
+                    for band_name, threshold in [("T_gt_85C", 85.0), ("T_gt_95C", 95.0), ("T_gt_105C", 105.0)]:
+                        if t1_val > threshold:
+                            self.band_durations_s[band_name] += dt_s
+                            dh = (t1_val - threshold) * (dt_s / 3600.0)
+                            if threshold == 85.0:
+                                self.degree_hours_85 += dh
+                            elif threshold == 95.0:
+                                self.degree_hours_95 += dh
+                            elif threshold == 105.0:
+                                self.degree_hours_105 += dh
+
+            # Update endpoint tracking
+            self.last_valid_top_oil = top_oil
+            self.last_valid_top_oil_time = current_time
+        elif is_gap:
+            # Gaps terminate endpoint continuity: do NOT carry readings across gaps
+            self.last_valid_top_oil = None
+            self.last_valid_top_oil_time = None
 
         # Compute summary top-oil statistics
         total_monitored_hours = self.total_monitored_seconds / 3600.0
@@ -302,6 +349,17 @@ class ThermalExposureEngine:
                 percentage_of_monitored_time=pct,
             )
 
+        wall_clock_hours = None
+        cov_ratio = None
+        if self.first_timestamp_utc is not None and self.last_timestamp_utc is not None:
+            total_wall_clock_s = (self.last_timestamp_utc - self.first_timestamp_utc).total_seconds()
+            if total_wall_clock_s > 0:
+                wall_clock_hours = round(total_wall_clock_s / 3600.0, 4)
+                cov_ratio = round(min(1.0, max(0.0, self.total_monitored_seconds / total_wall_clock_s)), 4)
+            else:
+                wall_clock_hours = 0.0
+                cov_ratio = 1.0
+
         observed_exposure = ObservedThermalExposure(
             asset_id=self.asset_id,
             first_timestamp_utc=self.first_timestamp_utc,
@@ -317,6 +375,9 @@ class ThermalExposureEngine:
             degree_hours_above_105c=self.degree_hours_105,
             bands=bands,
             is_valid=(self.valid_sample_count > 0),
+            integration_convention=self.integration_convention,
+            wall_clock_coverage_hours=wall_clock_hours,
+            monitored_coverage_ratio=cov_ratio,
         )
 
         # 3. Evaluate Standards-Derived Ageing & Capability Gating
@@ -367,10 +428,20 @@ class ThermalExposureEngine:
             self.last_standard_metadata = meta
             std_metadata = meta
 
-            if dt_s > 0.0 and not is_gap:
+            if dt_s > 0.0 and not is_gap and self.last_valid_hotspot_rate is not None:
                 dt_hours = dt_s / 3600.0
-                self.equivalent_ageing_hours += rate * dt_hours
+                if self.integration_convention == "PIECEWISE_LINEAR":
+                    step_rate = (self.last_valid_hotspot_rate + rate) / 2.0
+                else:
+                    step_rate = rate
+                self.equivalent_ageing_hours += step_rate * dt_hours
                 self.hotspot_integrated_seconds += dt_s
+
+            self.last_valid_hotspot = active_hotspot
+            self.last_valid_hotspot_rate = rate
+        elif is_gap:
+            self.last_valid_hotspot = None
+            self.last_valid_hotspot_rate = None
 
         hotspot_hours = self.hotspot_integrated_seconds / 3600.0
         avg_rate = (
@@ -399,4 +470,6 @@ class ThermalExposureEngine:
             standards_ageing=standards_ageing,
             whole_life_rul_supported=False,
             failure_probability_supported=False,
+            rul_status="NOT_QUALIFIED",
+            rul_rationale="No validated initial degradation state and life-outcome evidence for operational RUL",
         )

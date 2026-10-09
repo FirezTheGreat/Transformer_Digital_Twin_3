@@ -125,7 +125,7 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
               <span className="font-mono font-semibold text-ink">{card.test_metrics.rmse_degc.toFixed(2)}°C</span>
             </div>
             <div className="kv">
-              <span>90% Coverage</span>
+              <span>90% Marginal Coverage (Test)</span>
               <span className="font-mono font-semibold text-ink">{card.test_metrics.marginal_coverage_90_pct.toFixed(1)}%</span>
             </div>
           </div>

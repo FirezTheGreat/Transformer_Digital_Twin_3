@@ -188,20 +188,53 @@ def test_fallback_and_invalid_inputs_disabled():
 # 5. Qualification & Authority Isolation Tests
 # ---------------------------------------------------------------------------
 
-def test_unqualified_cusum_emits_shadow_hypothesis_only():
-    """Verify unqualified artifact (Tripura) emits SHADOW hypotheses, NOT confirmed fault alarms."""
+def test_unqualified_or_disabled_cusum_accumulators_remain_zero_and_no_alarm():
+    """Verify unqualified/disabled CUSUM accumulators remain strictly 0.0 and never emit alarms."""
     tracker = TwoSidedCUSUMTracker(
         reference_k=0.50,
         decision_limit_h=4.50,
         calibration_median=0.0,
         calibration_mad=1.0,
-        is_qualified=False,  # Unqualified Tripura state
+        is_qualified=False,  # Unqualified / disabled state
     )
-    # Trip alarm with large shift
-    tracker.update(residual_degc=3.0)
-    step_res = tracker.update(residual_degc=3.0)
+    # Feed repeated extreme residuals
+    for _ in range(5):
+        step_res = tracker.update(residual_degc=5.0)
+        assert step_res.cusum_pos == 0.0
+        assert step_res.cusum_neg == 0.0
+        assert step_res.alarm_active is False
+        assert step_res.is_positive_alarm is False
+        assert step_res.is_negative_alarm is False
+        assert step_res.direction == CUSUMDirection.NORMAL
+
+    t = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    ev = tracker.create_evidence_item(
+        event_time_utc=t,
+        asset_id="tripura_dt_01",
+        observed_top_oil=65.0,
+        expected_top_oil=60.0,
+        step_result=step_res,
+    )
+    assert ev is None  # Never emits anomaly evidence while unqualified/disabled
+
+
+def test_qualified_cusum_accumulates_and_emits_authoritative_evidence():
+    """Verify that when formally qualified, CUSUM accumulates drift and trips authoritative alarm."""
+    tracker = TwoSidedCUSUMTracker(
+        reference_k=0.50,
+        decision_limit_h=4.50,
+        calibration_median=0.0,
+        calibration_mad=1.0,
+        is_qualified=True,
+    )
+    # Trip alarm with large shift (z = 3.0, z - k = 2.5 per step)
+    tracker.update(residual_degc=3.0)  # C+ = 2.5
+    step_res = tracker.update(residual_degc=3.0)  # C+ = 5.0 >= 4.5
+    assert step_res.cusum_pos == 5.0
     assert step_res.alarm_active is True
-    assert step_res.trust_status == CUSUMTrustStatus.SHADOW_EXPLORATORY
+    assert step_res.is_positive_alarm is True
+    assert step_res.direction == CUSUMDirection.POSITIVE_SHIFT
+    assert step_res.trust_status == CUSUMTrustStatus.QUALIFIED_ACTIVE
 
     t = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     ev = tracker.create_evidence_item(
@@ -213,14 +246,8 @@ def test_unqualified_cusum_emits_shadow_hypothesis_only():
     )
     assert ev is not None
     assert ev.category == AnomalyCategory.THERMAL_DEVIATION
-    assert ev.reason_codes == ["PERSISTENT_MODEL_DEVIATION_HYPOTHESIS"]
-    assert "MODEL_MISSPECIFICATION_POSSIBLE" in ev.hypothesis_codes
-
-    # Strict: Must NOT declare transformer fault or cooling failure
-    for hyp in ev.hypothesis_codes:
-        assert "TRANSFORMER_FAULT" not in hyp
-        assert "COOLING_FAILURE" not in hyp
-        assert "CONFIRMED_ANOMALY" not in hyp
+    assert ev.reason_codes == ["CUSUM_RESIDUAL_DRIFT_DETECTED"]
+    assert "POSSIBLE_COOLING_DEGRADATION" in ev.hypothesis_codes
 
 
 # ---------------------------------------------------------------------------
@@ -231,8 +258,8 @@ def test_cusum_replay_determinism():
     """Verify identical residual stream produces identical accumulator trajectories."""
     residuals = [0.2, 0.4, 0.8, 1.2, 1.5, 2.0, 1.8, 0.5, -0.2, -0.8, -1.5, -2.0]
 
-    tracker1 = TwoSidedCUSUMTracker(calibration_median=0.20, calibration_mad=0.96)
-    tracker2 = TwoSidedCUSUMTracker(calibration_median=0.20, calibration_mad=0.96)
+    tracker1 = TwoSidedCUSUMTracker(calibration_median=0.20, calibration_mad=0.96, is_qualified=True)
+    tracker2 = TwoSidedCUSUMTracker(calibration_median=0.20, calibration_mad=0.96, is_qualified=True)
 
     traj1 = [tracker1.update(r) for r in residuals]
     traj2 = [tracker2.update(r) for r in residuals]
@@ -257,7 +284,7 @@ def test_cusum_checkpoint_restore_determinism():
         decision_limit_h=4.50,
         calibration_median=0.20,
         calibration_mad=0.96,
-        is_qualified=False,
+        is_qualified=True,
     )
     full_results_a = [tracker_a.update(r) for r in residuals]
 
@@ -267,7 +294,7 @@ def test_cusum_checkpoint_restore_determinism():
         decision_limit_h=4.50,
         calibration_median=0.20,
         calibration_mad=0.96,
-        is_qualified=False,
+        is_qualified=True,
     )
     results_b1 = [tracker_b.update(r) for r in residuals[:k_split]]
 
@@ -282,7 +309,7 @@ def test_cusum_checkpoint_restore_determinism():
         decision_limit_h=4.50,
         calibration_median=0.20,
         calibration_mad=0.96,
-        is_qualified=False,
+        is_qualified=True,
     )
     tracker_restored.cusum_pos = saved_c_pos
     tracker_restored.cusum_neg = saved_c_neg
@@ -301,4 +328,34 @@ def test_cusum_checkpoint_restore_determinism():
         assert ra.alarm_active == rb.alarm_active
         assert ra.direction == rb.direction
         assert ra.trust_status == rb.trust_status
+
+
+def test_disabled_cusum_zero_invariant_across_checkpoint_and_restart():
+    """Verify that when CUSUM is disabled, both accumulators remain exactly 0.0 across splits and restore."""
+    residuals = [1.5, 2.5, 3.5, 4.0, 5.0, 2.0, 1.0]
+    k_split = 3
+
+    tracker_a = TwoSidedCUSUMTracker(is_qualified=False)
+    results_a = [tracker_a.update(r) for r in residuals[:k_split]]
+    for r in results_a:
+        assert r.cusum_pos == 0.0
+        assert r.cusum_neg == 0.0
+
+    # Save state
+    saved_pos = tracker_a.cusum_pos
+    saved_neg = tracker_a.cusum_neg
+    assert saved_pos == 0.0
+    assert saved_neg == 0.0
+
+    # Restore fresh tracker
+    tracker_restored = TwoSidedCUSUMTracker(is_qualified=False)
+    tracker_restored.cusum_pos = saved_pos
+    tracker_restored.cusum_neg = saved_neg
+
+    results_b = [tracker_restored.update(r) for r in residuals[k_split:]]
+    for r in results_b:
+        assert r.cusum_pos == 0.0
+        assert r.cusum_neg == 0.0
+        assert r.alarm_active is False
+
 

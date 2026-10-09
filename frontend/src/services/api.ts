@@ -184,6 +184,7 @@ export const api = {
       endTime?: string;
       limit?: number;
       offset?: number;
+      orderAsc?: boolean;
     }
   ): Promise<HistoryResponse> {
     const searchParams = new URLSearchParams();
@@ -191,6 +192,7 @@ export const api = {
     if (params?.endTime) searchParams.append('end_time', params.endTime);
     if (params?.limit !== undefined) searchParams.append('limit', params.limit.toString());
     if (params?.offset !== undefined) searchParams.append('offset', params.offset.toString());
+    if (params?.orderAsc !== undefined) searchParams.append('order_asc', params.orderAsc.toString());
     const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
     const res = await fetch(`${API_BASE}/v1/assets/${encodeURIComponent(assetId)}/history${query}`);
     return handleResponse<HistoryResponse>(res);
@@ -252,4 +254,33 @@ export const api = {
     });
     return handleResponse<OperatorFeedbackEvent>(res);
   },
+
+  // Persisted Checkpoint Runs & Reports
+  async getRuns(assetId?: string, limit?: number): Promise<CheckpointRunRecord[]> {
+    const searchParams = new URLSearchParams();
+    if (assetId) searchParams.append('asset_id', assetId);
+    if (limit !== undefined) searchParams.append('limit', limit.toString());
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const res = await fetch(`${API_BASE}/v1/reports/runs${query}`);
+    return handleResponse<CheckpointRunRecord[]>(res);
+  },
+
+  getReportDownloadUrl(format: 'json' | 'csv' | 'pdf', assetId?: string, checkpointId?: string): string {
+    const searchParams = new URLSearchParams();
+    if (assetId) searchParams.append('asset_id', assetId);
+    if (checkpointId) searchParams.append('checkpoint_id', checkpointId);
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return `${API_BASE}/v1/reports/summary.${format}${query}`;
+  },
 };
+
+export interface CheckpointRunRecord {
+  checkpoint_id: string;
+  asset_id: string;
+  state_time_utc: string;
+  last_processed_event_id?: string;
+  state_sequence: number;
+  state_hash: string;
+  created_at_utc: string;
+}
+

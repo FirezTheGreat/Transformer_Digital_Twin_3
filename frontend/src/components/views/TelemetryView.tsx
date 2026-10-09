@@ -37,7 +37,7 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
   };
 
   useEffect(() => {
-    if (propHistoryEvents && propHistoryEvents.length > 0) {
+    if (propHistoryEvents !== undefined) {
       setEvents(propHistoryEvents);
     } else {
       fetchHistory();

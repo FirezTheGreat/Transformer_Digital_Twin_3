@@ -65,6 +65,9 @@ async def submit_operator_feedback(
         inspection_outcome=request.inspection_outcome,
         authorized_role=request.authorized_role,
         override_expiry_utc=request.override_expiry_utc,
+        review_id=request.review_id,
+        expected_revision=request.expected_revision,
+        idempotency_key=request.idempotency_key,
     )
 
     # 3. Locate target recommendation if present in state for P0 safety checks
@@ -155,5 +158,26 @@ async def submit_operator_feedback(
             app_state.latest_fact_bundle = app_state.latest_fact_bundle.model_copy(
                 update={"active_recommendations": updated_bundle_recs}
             )
+
+    # 6. Synchronize active state ReviewFlag workflow metadata if review_id is specified
+    if request.review_id and app_state.current_state is not None:
+        if app_state.reducer and app_state.reducer.review_engine:
+            try:
+                updated_reviews = app_state.reducer.review_engine.apply_feedback_mutation(
+                    reviews=app_state.current_state.active_reviews,
+                    review_id=request.review_id,
+                    action=request.action,
+                    actor_id=request.actor_id or request.operator_id,
+                    rationale=request.rationale or request.notes,
+                    expected_revision=request.expected_revision,
+                    idempotency_key=request.idempotency_key,
+                    event_time_utc=ts,
+                    stream_position=app_state.current_state.state_sequence,
+                )
+                app_state.current_state = app_state.current_state.model_copy(
+                    update={"active_reviews": updated_reviews}
+                )
+            except (ValueError, KeyError) as e:
+                raise ValidationException(message=str(e), details={"review_id": request.review_id})
 
     return recorded_event

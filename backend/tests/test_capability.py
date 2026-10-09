@@ -304,3 +304,77 @@ def test_tripura_adapter_end_to_end_capability_integration() -> None:
     assert manifest.capabilities["voltage_imbalance"].enabled is True
     assert manifest.capabilities["C3"].enabled is False  # Model unpromoted
     assert "MODEL_NOT_PROMOTED" in manifest.capabilities["C3"].disabled_reason_codes
+
+
+def test_direct_hotspot_enables_c4_when_c3_disabled() -> None:
+    """Decoupled C4: A direct analog hot-spot measurement enables C4 even when C3 is unpromoted."""
+    obs = {
+        "active_power": _make_measurement("active_power", 50.0, "kW"),
+        "hot_spot_temperature": _make_measurement("hot_spot_temperature", 72.5, "Cel"),
+    }
+    state = _make_twin_state(obs, model_status="UNCALIBRATED")
+    verified_profile = AssetProfile(
+        asset_id="DT-001",
+        insulation_paper_class=InsulationClass.THERMALLY_UPGRADED,
+        profile_status=ProfileVerificationStatus.VERIFIED,
+        fields={
+            "insulation_paper_class": ProfileField(
+                value="THERMALLY_UPGRADED",
+                source_document="Nameplate_Report.pdf",
+                status=ProfileVerificationStatus.VERIFIED,
+            )
+        },
+    )
+
+    manifest = evaluate_capabilities(
+        state,
+        profile=verified_profile,
+        model_version="1.0.0",
+        is_model_promoted=False,  # C3 disabled
+        hotspot_supported=False,
+    )
+
+    assert manifest.capabilities["C3"].enabled is False
+    assert manifest.capabilities["C4"].enabled is True
+    assert manifest.capabilities["C4"].evidence_grade == "A"
+    assert manifest.capabilities["C4"].model_status == "NOT_APPLICABLE"
+
+
+def test_promoting_c3_alone_does_not_enable_c4_without_insulation_or_hotspot() -> None:
+    """Promoting C3 alone must NOT enable C4 without verified insulation and hot-spot source."""
+    obs = {
+        "apparent_power": _make_measurement("apparent_power", 50.0, "kVA"),
+        "top_oil_temperature": _make_measurement("top_oil_temperature", 60.0, "Cel"),
+        "ambient_temperature": _make_measurement("ambient_temperature", 28.0, "Cel"),
+    }
+    state = _make_twin_state(obs, model_status="PROMOTED")
+
+    # Case A: Missing verified insulation
+    manifest_no_insulation = evaluate_capabilities(
+        state,
+        profile=None,
+        model_version="1.0.0",
+        is_model_promoted=True,
+        hotspot_supported=True,
+    )
+    assert manifest_no_insulation.capabilities["C3"].enabled is True
+    assert manifest_no_insulation.capabilities["C4"].enabled is False
+    assert "MISSING_VERIFIED_INSULATION_CLASS" in manifest_no_insulation.capabilities["C4"].disabled_reason_codes
+
+    # Case B: Verified insulation, but no direct or model hot-spot source
+    verified_profile = AssetProfile(
+        asset_id="DT-001",
+        insulation_paper_class=InsulationClass.THERMALLY_UPGRADED,
+        profile_status=ProfileVerificationStatus.VERIFIED,
+    )
+    manifest_no_hotspot = evaluate_capabilities(
+        state,
+        profile=verified_profile,
+        model_version="1.0.0",
+        is_model_promoted=True,
+        hotspot_supported=False,  # No model hotspot, and no direct hotspot in obs
+    )
+    assert manifest_no_hotspot.capabilities["C3"].enabled is True
+    assert manifest_no_hotspot.capabilities["C4"].enabled is False
+    assert "HOTSPOT_ESTIMATE_UNSUPPORTED" in manifest_no_hotspot.capabilities["C4"].disabled_reason_codes
+

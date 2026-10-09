@@ -76,7 +76,7 @@ const MetricTile: React.FC<{
   </div>
 );
 
-type TrendMetric = 'topOil' | 'activePower' | 'apparentPower';
+type TrendMetric = 'topOil' | 'ambient' | 'activePower' | 'apparentPower';
 
 export const OverviewView: React.FC<OverviewViewProps> = ({
   assetId,
@@ -180,6 +180,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const [trendMetric, setTrendMetric] = useState<TrendMetric>('topOil');
   const trendOptions: Record<TrendMetric, { label: string; unit: string; ids: string[] }> = {
     topOil: { label: 'Top-oil', unit: '°C', ids: ['top_oil_temperature'] },
+    ambient: { label: 'Ambient', unit: '°C', ids: ['ambient_temperature'] },
     activePower: { label: 'Active power', unit: 'kW', ids: ['active_power_total', 'active_power'] },
     apparentPower: { label: 'Apparent power', unit: 'kVA', ids: ['apparent_power_total', 'apparent_power'] },
   };
@@ -643,7 +644,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <ul className="space-y-1.5 text-ink-2">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-ok flex-shrink-0" />
-                    <span>Electrical telemetry & symmetrical components (C0/C1)</span>
+                    <span>Three-phase electrical telemetry & unbalance metrics (C0/C1)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-ok flex-shrink-0" />
@@ -665,7 +666,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   </li>
                   <li className="flex items-center gap-2">
                     <ShieldAlert className="w-3.5 h-3.5 text-warn flex-shrink-0" />
-                    <span>Thermal ageing & RUL claims (C4 requires verified insulation class)</span>
+                    <span>Thermal ageing (C4 requires verified insulation class)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <ShieldAlert className="w-3.5 h-3.5 text-warn flex-shrink-0" />
+                    <span>Operational RUL (Unavailable: no validated initial degradation state &amp; life-outcome data)</span>
                   </li>
                 </ul>
               </div>

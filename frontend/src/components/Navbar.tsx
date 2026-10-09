@@ -10,6 +10,7 @@ import {
   Zap,
   FileText,
   Box,
+  History,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -43,6 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'anomalies', label: 'Anomalies & Evidence', icon: ScanSearch },
     { id: 'maintenance', label: 'Maintenance Advisories', icon: Wrench },
     { id: 'telemetry', label: 'Electrical Telemetry', icon: Zap },
+    { id: 'historical', label: 'Historical & Reports', icon: History },
     { id: 'model-card', label: 'Model Card & Specs', icon: FileText },
     { id: 'twin-3d', label: '3D Component View', icon: Box },
   ];

@@ -337,3 +337,42 @@ def test_deterministic_execution_replay(default_params):
         assert o1.cusum_pos == o2.cusum_pos
         assert o1.cusum_neg == o2.cusum_neg
         assert o1.cusum_alarm_active == o2.cusum_alarm_active
+
+
+def test_isolated_thermal_inversion_does_not_trigger_fallback_and_sustained_does(default_gate):
+    """Verify isolated moderate inversion (-10 to -15 C) emits contextual evidence without fallback; sustained triggers fallback."""
+    t0 = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    # Step 1: Isolated rapid ambient rise: Ta=35.0, To=23.5 (delta = -11.5 C)
+    out1 = default_gate.evaluate_step(t0, top_oil_obs=23.5, ambient_obs=35.0, load_obs=100.0)
+    assert ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY not in out1.fallback_reasons
+    assert out1.trust_state != ThermalTrustState.FALLBACK_PERSISTENCE
+    assert any("TOP_OIL_AMBIENT_INVERSION_CONTEXTUAL" in ev.reason_codes for ev in out1.emitted_evidence)
+
+    # Step 2: Sustained inversion on next step: Ta=35.0, To=23.5
+    t1 = t0 + timedelta(minutes=15)
+    out2 = default_gate.evaluate_step(t1, top_oil_obs=23.5, ambient_obs=35.0, load_obs=100.0)
+    assert ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY in out2.fallback_reasons
+    assert out2.trust_state == ThermalTrustState.FALLBACK_PERSISTENCE
+    assert any("SUSTAINED_TOP_OIL_AMBIENT_INVERSION" in ev.reason_codes for ev in out2.emitted_evidence)
+
+
+def test_inversion_recovery_clears_consecutive_counter(default_gate):
+    """Verify returning to normal temperature delta resets inversion counter."""
+    t0 = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    # Step 1: Inversion delta = -11.5 C
+    out1 = default_gate.evaluate_step(t0, top_oil_obs=23.5, ambient_obs=35.0, load_obs=100.0)
+    assert ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY not in out1.fallback_reasons
+    assert default_gate.consecutive_inversions == 1
+
+    # Step 2: Oil heats up to 28.0 C (delta = -7.0 C, within normal lag)
+    t1 = t0 + timedelta(minutes=15)
+    out2 = default_gate.evaluate_step(t1, top_oil_obs=28.0, ambient_obs=35.0, load_obs=100.0)
+    assert default_gate.consecutive_inversions == 0
+    assert ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY not in out2.fallback_reasons
+
+    # Step 3: Another isolated inversion delta = -11.5 C (counter restarted at 1, no fallback)
+    t2 = t1 + timedelta(minutes=15)
+    out3 = default_gate.evaluate_step(t2, top_oil_obs=23.5, ambient_obs=35.0, load_obs=100.0)
+    assert ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY not in out3.fallback_reasons
+    assert default_gate.consecutive_inversions == 1
+

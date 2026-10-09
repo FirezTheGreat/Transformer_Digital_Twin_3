@@ -9,25 +9,37 @@ interface TwinAnalysisViewProps {
   assetId: string;
   twinState: TwinState | null;
   health: OTHIBundle | null;
+  resetKey?: number;
   onOpenModelCard: () => void;
 }
 
 export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
   assetId,
   twinState,
+  resetKey,
   onOpenModelCard,
 }) => {
   const [showMathDetails, setShowMathDetails] = useState<boolean>(false);
 
   const obs = twinState?.current_observations ?? {};
-  const topOilObs = obs['top_oil_temperature']?.value ?? 74.8;
-  const topOilExpected = twinState?.thermal_latent?.top_oil_expected_degc ?? 70.5;
-  const residual = typeof topOilObs === 'number' && typeof topOilExpected === 'number'
-    ? (topOilObs - topOilExpected).toFixed(1)
-    : '4.3';
-  const tauHours = twinState?.thermal_latent?.time_constant_tau_hours ?? 0.5;
+  const topOilObsVal = typeof obs['top_oil_temperature']?.value === 'number'
+    ? obs['top_oil_temperature'].value
+    : null;
+  const topOilObs = topOilObsVal !== null ? topOilObsVal.toFixed(1) : null;
 
-  const isAbove = Number(residual) > 3;
+  const isThermalWarmup = (twinState?.thermal_latent?.warmup_samples_remaining ?? 0) > 0;
+  const topOilExpectedNum = twinState?.thermal_latent?.top_oil_expected_degc;
+  const hasValidExpected = typeof topOilExpectedNum === 'number' && !isThermalWarmup;
+  const topOilExpected = hasValidExpected ? (topOilExpectedNum as number).toFixed(1) : null;
+
+  const residualNum = (topOilObsVal !== null && hasValidExpected)
+    ? (topOilObsVal - (topOilExpectedNum as number))
+    : null;
+  const residual = residualNum !== null ? residualNum.toFixed(1) : null;
+  const isAbove = residualNum !== null && residualNum > 3;
+  const tauHours = twinState?.thermal_latent?.time_constant_tau_hours
+    ? twinState.thermal_latent.time_constant_tau_hours.toFixed(2)
+    : '0.50';
 
   return (
     <div className="space-y-8">
@@ -59,8 +71,10 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
             </span>
           </div>
           <div className="mt-4 flex items-baseline gap-1.5">
-            <span className="metric-value text-[40px] text-on-inverse">{String(topOilObs)}</span>
-            <span className="text-sm text-on-inverse/72">°C</span>
+            <span className={`metric-value text-[40px] text-on-inverse ${topOilObs === null ? 'font-normal text-on-inverse/50' : ''}`}>
+              {topOilObs !== null ? topOilObs : '—'}
+            </span>
+            {topOilObs !== null && <span className="text-sm text-on-inverse/72">°C</span>}
           </div>
           <span className="text-[11px] text-on-inverse/72 mt-3 block">
             Direct PT100 probe reading
@@ -72,25 +86,29 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
             <span className="eyebrow">Model Expected Temperature</span>
           </div>
           <div className="mt-4 flex items-baseline gap-1.5">
-            <span className="metric-value text-[40px]">{topOilExpected}</span>
-            <span className="metric-unit">°C</span>
+            <span className={`metric-value text-[40px] ${topOilExpected === null ? 'text-faint font-normal' : ''}`}>
+              {topOilExpected !== null ? topOilExpected : '—'}
+            </span>
+            {topOilExpected !== null && <span className="metric-unit">°C</span>}
           </div>
           <span className="text-[11px] text-muted mt-3 block">
-            First-order ODE baseline
+            {isThermalWarmup ? 'Shadow model warming up' : 'First-order ODE baseline'}
           </span>
         </div>
 
         <div className="bg-surface p-5">
           <div className="pb-3 border-b border-line flex items-center justify-between">
             <span className="eyebrow">Temperature Difference</span>
-            <span className={`dot w-2 h-2 ${isAbove ? 'bg-warn' : 'bg-ok'}`} />
+            <span className={`dot w-2 h-2 ${isAbove ? 'bg-warn' : residualNum !== null ? 'bg-ok' : 'bg-line-strong'}`} />
           </div>
           <div className="mt-4 flex items-baseline gap-1.5">
-            <span className={`metric-value text-[40px] ${isAbove ? 'text-warn' : ''}`}>+{residual}</span>
-            <span className="metric-unit">°C</span>
+            <span className={`metric-value text-[40px] ${isAbove ? 'text-warn' : residual === null ? 'text-faint font-normal' : ''}`}>
+              {residual !== null ? (Number(residual) >= 0 ? `+${residual}` : residual) : '—'}
+            </span>
+            {residual !== null && <span className="metric-unit">°C</span>}
           </div>
           <span className="text-[11px] text-muted mt-3 block">
-            {isAbove ? 'Running above expected model' : 'Within normal tolerance'}
+            {residualNum !== null ? (isAbove ? 'Running above expected model' : 'Within normal tolerance') : 'Awaiting telemetry'}
           </span>
         </div>
 
@@ -108,7 +126,7 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
       </div>
 
       {/* 2-Hour What-If Scenario Simulator Engine */}
-      <ScenarioSimulator assetId={assetId} />
+      <ScenarioSimulator assetId={assetId} resetKey={resetKey} />
 
       {/* Progressive Disclosure: Mathematical Formulation & CUSUM Statistics */}
       <div className="card-muted px-5 py-4 text-xs">

@@ -17,9 +17,10 @@ import { useChartTheme, LegendItem } from './common/TrendChart';
 
 interface ScenarioSimulatorProps {
   assetId: string;
+  resetKey?: number;
 }
 
-export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId }) => {
+export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId, resetKey }) => {
   const [loadMultiplier, setLoadMultiplier] = useState<number>(1.25);
   const [ambientDelta, setAmbientDelta] = useState<number>(3.0);
   const [warningThreshold, setWarningThreshold] = useState<number>(85.0);
@@ -28,6 +29,11 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [result, setResult] = useState<ScenarioProjectionResultData | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setResult(null);
+    setError(null);
+  }, [resetKey]);
 
   const chartTheme = useChartTheme();
 
@@ -51,18 +57,30 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
   };
 
   // Build chart dataset
-  const chartData = (result?.trajectory || []).map((step) => ({
-    time: `+${step.horizon_minutes}m`,
-    projected: Number(step.projected_top_oil_degc.toFixed(2)),
-    baseline: step.baseline_top_oil_degc ? Number(step.baseline_top_oil_degc.toFixed(2)) : null,
-    lower: Number(step.conformal_lower_degc.toFixed(2)),
-    upper: Number(step.conformal_upper_degc.toFixed(2)),
-    conformalRange: [
-      Number(step.conformal_lower_degc.toFixed(2)),
-      Number(step.conformal_upper_degc.toFixed(2)),
-    ],
-  }));
+  const chartData = (result?.trajectory || []).map((step) => {
+    const lower = Number(step.conformal_lower_degc.toFixed(2));
+    const upper = Number(step.conformal_upper_degc.toFixed(2));
+    return {
+      time: `+${step.horizon_minutes}m`,
+      projected: Number(step.projected_top_oil_degc.toFixed(2)),
+      baseline: step.baseline_top_oil_degc ? Number(step.baseline_top_oil_degc.toFixed(2)) : null,
+      lower,
+      upper,
+      bandWidth: Number(Math.max(0, upper - lower).toFixed(2)),
+    };
+  });
   const hasBaseline = chartData.some((d) => d.baseline !== null);
+
+  const yDomain = React.useMemo(() => {
+    if (!chartData.length) return ['auto', 'auto'];
+    const minVal = Math.min(...chartData.map((d) => d.lower));
+    const maxVal = Math.max(
+      ...chartData.map((d) => d.upper),
+      warningThreshold,
+      criticalThreshold
+    );
+    return [Math.floor(Math.max(0, minVal - 5)), Math.ceil(maxVal + 5)];
+  }, [chartData, warningThreshold, criticalThreshold]);
 
   return (
     <div>
@@ -188,12 +206,12 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
 
         {/* Output & Chart Column */}
         <div className="lg:col-span-8 flex flex-col gap-4">
-          {error && (
+          {(error || (result && !result.is_enabled && result.disabled_reason)) && (
             <div className="p-4 rounded-card bg-warn/5 border border-warn/25 text-xs flex items-start gap-3">
               <AlertTriangle className="w-4 h-4 text-warn flex-shrink-0 mt-0.5" />
               <div className="text-ink-2">
                 <span className="font-semibold text-warn">Scenario Qualified Notice</span>
-                <p className="mt-1">{error}</p>
+                <p className="mt-1">{error || result?.disabled_reason}</p>
                 <p className="mt-1.5 text-[11px] text-muted">
                   Because the Tripura thermal grey-box model is unpromoted, forward projections are withheld under frozen capability gates to prevent ungrounded operational advice.
                 </p>
@@ -281,15 +299,20 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                           tickMargin={10}
                         />
                         <YAxis
-                          domain={['auto', 'auto']}
+                          domain={yDomain}
                           tick={{ fill: chartTheme.axis, fontSize: 10.5 }}
                           tickLine={false}
                           axisLine={false}
                           unit="°C"
                           width={56}
+                          tickFormatter={(v: number) => String(Math.round(v))}
                         />
                         <Tooltip
                           cursor={{ stroke: chartTheme.axis, strokeWidth: 1, strokeDasharray: '3 3' }}
+                          formatter={(value: unknown, name: string) => [
+                            typeof value === 'number' ? `${value.toFixed(1)} °C` : '—',
+                            name,
+                          ]}
                           labelStyle={{ color: 'rgb(var(--muted))', fontSize: 11, marginBottom: 4 }}
                           itemStyle={{ color: 'rgb(var(--ink))', fontSize: 11, padding: 0 }}
                         />
@@ -309,16 +332,27 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                         />
                         <Area
                           type="monotone"
-                          dataKey="conformalRange"
+                          dataKey="lower"
+                          stackId="conformal"
+                          stroke="none"
+                          fill="transparent"
+                          isAnimationActive={false}
+                          legendType="none"
+                          tooltipType="none"
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="bandWidth"
+                          stackId="conformal"
                           stroke="none"
                           fill={chartTheme.series[0]}
-                          fillOpacity={0.14}
+                          fillOpacity={0.16}
                           name="90% Conformal Band"
                           isAnimationActive={false}
                           tooltipType="none"
                         />
-                        <Line type="monotone" dataKey="upper" stroke={chartTheme.series[0]} strokeOpacity={0.35} strokeWidth={1} dot={false} name="90% Upper Bound" isAnimationActive={false} />
-                        <Line type="monotone" dataKey="lower" stroke={chartTheme.series[0]} strokeOpacity={0.35} strokeWidth={1} dot={false} name="90% Lower Bound" isAnimationActive={false} />
+                        <Line type="monotone" dataKey="upper" stroke={chartTheme.series[0]} strokeOpacity={0.4} strokeDasharray="3 3" strokeWidth={1} dot={false} name="90% Upper Bound" isAnimationActive={false} />
+                        <Line type="monotone" dataKey="lower" stroke={chartTheme.series[0]} strokeOpacity={0.4} strokeDasharray="3 3" strokeWidth={1} dot={false} name="90% Lower Bound" isAnimationActive={false} />
                         {hasBaseline && (
                           <Line type="monotone" dataKey="baseline" stroke={chartTheme.muted} strokeDasharray="5 4" strokeWidth={1.5} dot={false} name="Baseline θ_o" isAnimationActive={false} connectNulls />
                         )}

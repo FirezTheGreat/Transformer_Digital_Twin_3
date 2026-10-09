@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Play,
   Pause,
+  StepBack,
   StepForward,
   RotateCcw,
   Clock,
@@ -19,6 +20,7 @@ interface ReplayBarProps {
   isPlaying: boolean;
   onPlayToggle: () => void;
   onNext: (batchSize?: number) => void;
+  onPrevious?: () => void;
   speedMultiplier: number;
   onSpeedChange: (speed: number) => void;
   onReset: () => void;
@@ -35,6 +37,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
   isPlaying,
   onPlayToggle,
   onNext,
+  onPrevious,
   speedMultiplier,
   onSpeedChange,
   onReset,
@@ -158,8 +161,17 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
 
           <div className="segmented">
             <button
+              onClick={onPrevious}
+              disabled={!isTwinStarted || processed <= 0}
+              title="Step back to previous telemetry frame"
+              className="flex items-center gap-1.5"
+            >
+              <StepBack className="w-3.5 h-3.5" />
+              <span>Prev</span>
+            </button>
+            <button
               onClick={() => onNext(1)}
-              disabled={!isTwinStarted}
+              disabled={!isTwinStarted || Boolean(replayStatus?.is_completed)}
               title="Process exactly the next 1 telemetry frame"
               className="flex items-center gap-1.5"
             >
@@ -168,7 +180,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
             </button>
             <button
               onClick={() => onNext(5)}
-              disabled={!isTwinStarted}
+              disabled={!isTwinStarted || Boolean(replayStatus?.is_completed)}
               title="Process the next 5 telemetry frames"
             >
               +5

@@ -167,45 +167,69 @@ def test_unknown_or_unsupported_profile_raises_value_error() -> None:
 
 
 def test_observed_top_oil_exposure_accumulation() -> None:
-    """Top-oil exposure accumulates continuous time-in-band and degree-hours."""
-    engine = ThermalExposureEngine(asset_id="DT-001", max_gap_seconds=7200.0)
+    """Top-oil exposure accumulates continuous time-in-band and degree-hours under piecewise-linear and sample-hold."""
+    # 1. Piecewise-Linear (preferred frozen convention)
+    engine_pl = ThermalExposureEngine(
+        asset_id="DT-001",
+        max_gap_seconds=7200.0,
+        integration_convention="PIECEWISE_LINEAR",
+    )
 
     t0 = _make_utc(12, 0, 0)
     # Event 0: 80 Cel (12:00)
     e0 = _make_canonical_event("e0", t0, measurements=[_make_measurement("top_oil_temperature", 80.0)])
-    b0 = engine.step(e0)
+    b0 = engine_pl.step(e0)
     assert b0.observed_exposure.valid_sample_count == 1
     assert b0.observed_exposure.peak_top_oil_temp_c == 80.0
     assert b0.observed_exposure.total_monitored_seconds == 0.0
 
     # Event 1: 90 Cel (12:30 -> dt = 1800s / 0.5h)
-    # 90 Cel > 85 Cel by 5 Cel -> degree-hours_85 = 5 * 0.5 = 2.5 degree-hours
+    # Piecewise-linear crossing at 85 Cel: alpha = (85 - 80)/(90 - 80) = 0.5
+    # Active duration = (1 - 0.5) * 1800s = 900s (0.25h)
+    # Degree-hours_85 = 0.5 * (90 - 85) * 0.25h = 0.625 degree-hours
     t1 = t0 + timedelta(minutes=30)
     e1 = _make_canonical_event("e1", t1, measurements=[_make_measurement("top_oil_temperature", 90.0)])
-    b1 = engine.step(e1)
+    b1 = engine_pl.step(e1)
     assert b1.observed_exposure.valid_sample_count == 2
     assert b1.observed_exposure.total_monitored_seconds == 1800.0
     assert b1.observed_exposure.total_monitored_hours == pytest.approx(0.5)
     assert b1.observed_exposure.peak_top_oil_temp_c == 90.0
-    assert b1.observed_exposure.degree_hours_above_85c == pytest.approx(2.5)
+    assert b1.observed_exposure.degree_hours_above_85c == pytest.approx(0.625)
     assert b1.observed_exposure.degree_hours_above_95c == 0.0
-    assert b1.observed_exposure.bands["T_gt_85C"].duration_seconds == 1800.0
+    assert b1.observed_exposure.bands["T_gt_85C"].duration_seconds == 900.0
     assert b1.observed_exposure.bands["T_gt_95C"].duration_seconds == 0.0
 
     # Event 2: 100 Cel (13:00 -> dt = 1800s / 0.5h)
-    # 100 Cel > 85 Cel by 15 Cel -> +7.5 deg-h (total 10.0)
-    # 100 Cel > 95 Cel by 5 Cel -> +2.5 deg-h (total 2.5)
+    # Segment (90 -> 100): Entirely above 85 Cel -> duration +1800s (total 2700s)
+    # Mean temp = 95 Cel -> + (95 - 85) * 0.5h = 5.0 deg-h (total 5.625 deg-h)
+    # For 95 Cel threshold: crosses at alpha = 0.5 -> active duration 900s, dh = 0.5 * (100 - 95) * 0.25h = 0.625 deg-h
     t2 = t1 + timedelta(minutes=30)
     e2 = _make_canonical_event("e2", t2, measurements=[_make_measurement("top_oil_temperature", 100.0)])
-    b2 = engine.step(e2)
+    b2 = engine_pl.step(e2)
     assert b2.observed_exposure.valid_sample_count == 3
     assert b2.observed_exposure.total_monitored_hours == pytest.approx(1.0)
     assert b2.observed_exposure.peak_top_oil_temp_c == 100.0
-    assert b2.observed_exposure.degree_hours_above_85c == pytest.approx(10.0)
-    assert b2.observed_exposure.degree_hours_above_95c == pytest.approx(2.5)
-    assert b2.observed_exposure.degree_hours_above_105c == 0.0
-    assert b2.observed_exposure.bands["T_gt_85C"].duration_seconds == 3600.0
-    assert b2.observed_exposure.bands["T_gt_95C"].duration_seconds == 1800.0
+    assert b2.observed_exposure.degree_hours_above_85c == pytest.approx(5.625)
+    assert b2.observed_exposure.degree_hours_above_95c == pytest.approx(0.625)
+    assert b2.observed_exposure.bands["T_gt_85C"].duration_seconds == 2700.0
+    assert b2.observed_exposure.bands["T_gt_95C"].duration_seconds == 900.0
+
+    # 2. Sample-Hold comparison (explicitly labelled convention)
+    engine_sh = ThermalExposureEngine(
+        asset_id="DT-001",
+        max_gap_seconds=7200.0,
+        integration_convention="SAMPLE_HOLD",
+    )
+    engine_sh.step(e0)
+    b1_sh = engine_sh.step(e1)
+    assert b1_sh.observed_exposure.degree_hours_above_85c == pytest.approx(2.5)
+    assert b1_sh.observed_exposure.bands["T_gt_85C"].duration_seconds == 1800.0
+
+    b2_sh = engine_sh.step(e2)
+    assert b2_sh.observed_exposure.degree_hours_above_85c == pytest.approx(10.0)
+    assert b2_sh.observed_exposure.degree_hours_above_95c == pytest.approx(2.5)
+    assert b2_sh.observed_exposure.bands["T_gt_85C"].duration_seconds == 3600.0
+    assert b2_sh.observed_exposure.bands["T_gt_95C"].duration_seconds == 1800.0
 
 
 def test_telemetry_gap_does_not_accumulate_thermal_stress() -> None:
@@ -293,9 +317,20 @@ def test_direct_hotspot_enabled_with_verified_profile_even_if_model_unpromoted()
 
     assert b1.standards_ageing.is_enabled is True
     assert b1.standards_ageing.current_relative_ageing_rate == pytest.approx(2.7088, rel=1e-3)
-    assert b1.standards_ageing.equivalent_ageing_hours == pytest.approx(2.7088, rel=1e-3)
+    # Piecewise-linear trapezoidal endpoint integration: (1.0 + 2.7088) / 2 * 1h = 1.8544 h
+    assert b1.standards_ageing.equivalent_ageing_hours == pytest.approx(1.8544, rel=1e-3)
     assert b1.standards_ageing.observed_interval_hours == pytest.approx(1.0)
-    assert b1.standards_ageing.average_relative_ageing_rate == pytest.approx(2.7088, rel=1e-3)
+    assert b1.standards_ageing.average_relative_ageing_rate == pytest.approx(1.8544, rel=1e-3)
+
+    # Sample-Hold comparison
+    engine_sh = ThermalExposureEngine(
+        asset_id="DT-001",
+        insulation_profile=InsulationProfile.CELLULOSIC_THERMALLY_UPGRADED,
+        integration_convention="SAMPLE_HOLD",
+    )
+    engine_sh.step(e0, is_model_promoted=False)
+    b1_sh = engine_sh.step(e1, is_model_promoted=False)
+    assert b1_sh.standards_ageing.equivalent_ageing_hours == pytest.approx(2.7088, rel=1e-3)
 
 
 def test_missing_direct_hotspot_gates_off_when_model_unpromoted() -> None:

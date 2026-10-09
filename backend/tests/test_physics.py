@@ -266,3 +266,56 @@ def test_tripura_adapter_to_physics_integration() -> None:
     assert features.neutral_current_ratio is not None and features.neutral_current_ratio > 0.0
     assert features.relative_load_index is not None and features.relative_load_index > 0.0
 
+
+def test_signed_power_factor_and_boundaries() -> None:
+    """Verify signed power factor respecting export (- active power) and boundaries."""
+    # Export flow: P = -40 kW, S = 50 kVA -> signed PF = -0.8, unsigned PF = 0.8
+    assert calculate_power_factor(-40.0, 50.0, signed=True) == -0.8
+    assert calculate_power_factor(-40.0, 50.0, signed=False) == 0.8
+
+    # Import flow: P = 40 kW, S = 50 kVA -> signed PF = 0.8
+    assert calculate_power_factor(40.0, 50.0, signed=True) == 0.8
+
+    # Edge cases: S below floor
+    assert calculate_power_factor(-40.0, 0.0005, signed=True) is None
+    # Floating point clamp
+    assert calculate_power_factor(100.5, 100.0, signed=True) == 1.0
+    assert calculate_power_factor(-100.5, 100.0, signed=True) == -1.0
+
+
+def test_observed_apparent_power_preferred_over_derived_for_pf() -> None:
+    """Verify extract_electrical_features prefers direct observed apparent power S_obs for PF."""
+    # S_obs = 100 kVA measured by revenue meter, but P=50, Q=50 which yields S_derived = 70.71
+    measurements = [
+        _make_measurement("active_power_total", 50.0, "kW"),
+        _make_measurement("reactive_power_total", 50.0, "kvar"),
+        _make_measurement("apparent_power_total", 100.0, "kVA"),
+        _make_measurement("current_l1", 50.0, "A", phase="L1"),
+        _make_measurement("current_l2", 50.0, "A", phase="L2"),
+        _make_measurement("current_l3", 50.0, "A", phase="L3"),
+    ]
+    event = _make_event(measurements)
+    features = extract_electrical_features(event)
+
+    # Derived apparent power remains sqrt(P^2 + Q^2)
+    assert features.apparent_power_derived_kva == pytest.approx(math.sqrt(50**2 + 50**2), rel=1e-3)
+    # But PF is calculated against S_obs (50 / 100 = 0.5)
+    assert features.power_factor_derived == 0.5
+
+
+def test_unknown_signal_semantics_retained_safely() -> None:
+    """Verify unknown or unresolved signals do not crash feature extraction or promote electrical fields."""
+    measurements = [
+        _make_measurement("unknown_proprietary_sensor", 999.0, "1"),
+        _make_measurement("status_register_raw", 42.0, "1"),
+    ]
+    event = _make_event(measurements)
+    features = extract_electrical_features(event)
+
+    assert features.timestamp_utc == event.event_time_utc
+    assert features.apparent_power_derived_kva is None
+    assert features.power_factor_derived is None
+    assert features.current_mean_a is None
+    assert features.voltage_magnitude_imbalance_pct is None
+
+

@@ -84,6 +84,8 @@ class FeedbackAction(str, Enum):
     INSPECTION_OUTCOME = "INSPECTION_OUTCOME"
     INSPECTION_RECORDED = "INSPECTION_RECORDED"  # Backward-compatibility alias
     OVERRIDE = "OVERRIDE"
+    RESOLVE = "RESOLVE"
+    REOPEN = "REOPEN"
 
 
 class OperatorFeedbackEvent(BaseModel):
@@ -104,4 +106,7 @@ class OperatorFeedbackEvent(BaseModel):
     inspection_outcome: Optional[dict[str, Any]] = Field(default=None, description="Structured physical inspection findings")
     authorized_role: Optional[str] = Field(default=None, description="Role of operator if performing an authorized override")
     override_expiry_utc: Optional[datetime] = Field(default=None, description="Expiry timestamp for advisory override")
+    review_id: Optional[str] = Field(default=None, description="Linked review flag ID if applicable")
+    expected_revision: Optional[int] = Field(default=None, description="Expected review revision for optimistic concurrency check")
+    idempotency_key: Optional[str] = Field(default=None, description="Client idempotency key for replay and duplicate prevention")
 

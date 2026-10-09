@@ -16,6 +16,7 @@ from app.core.checkpoint import CheckpointStore, compute_twin_state_hash
 from app.engine.physics import extract_electrical_features
 from app.models.anomaly import AnomalyEpisode, EvidenceItem
 from app.models.features import DerivedFeatures
+from app.models.maintenance import MaintenanceRecommendation, OperatorFeedbackEvent
 from app.models.profile import AssetProfile
 from app.models.telemetry import CanonicalEvent, Measurement, QualitySeverity
 from app.models.twin_state import (
@@ -41,6 +42,7 @@ class TwinReducer:
         exposure_engine: Any | None = None,
         maintenance_engine: Any | None = None,
         thermal_gate: Any | None = None,
+        review_engine: Any | None = None,
     ) -> None:
         """Initialize TwinReducer.
 
@@ -55,6 +57,7 @@ class TwinReducer:
             exposure_engine: Optional ThermalExposureEngine instance to evaluate thermal exposure and ageing.
             maintenance_engine: Optional MaintenanceEngine instance to evaluate advisory maintenance policies.
             thermal_gate: Optional ThermalFallbackGate instance to step physical thermal ODE.
+            review_engine: Optional ReviewFlagEngine instance to evaluate deterministic review flags.
         """
         self.profile = profile
         self.load_reference_kva = load_reference_kva
@@ -66,6 +69,7 @@ class TwinReducer:
         self.exposure_engine = exposure_engine
         self.maintenance_engine = maintenance_engine
         self.thermal_gate = thermal_gate
+        self.review_engine = review_engine
         self.latest_emitted_evidence: list[EvidenceItem] = []
 
     def reduce(
@@ -223,6 +227,19 @@ class TwinReducer:
                 list(current_state.active_recommendations) if current_state is not None else []
             )
 
+        if self.review_engine is not None:
+            active_reviews = self.review_engine.evaluate_step(
+                event_time_utc=ev_time,
+                stream_position=seq,
+                evidence_items=self.latest_emitted_evidence,
+                open_episodes=open_episodes,
+                previous_reviews=current_state.active_reviews if current_state is not None else [],
+            )
+        else:
+            active_reviews = (
+                list(current_state.active_reviews) if current_state is not None else []
+            )
+
         # 7. Construct TwinState
         temp_state = TwinState(
             asset_id=event.asset_id,
@@ -238,6 +255,7 @@ class TwinReducer:
             health_bundle=health_bundle,
             exposure_state=exposure_state,
             active_recommendations=active_recommendations,
+            active_reviews=active_reviews,
             versions=versions,
             state_hash="",
         )
@@ -265,4 +283,93 @@ class TwinReducer:
         state = initial_state
         for event in events:
             state = self.reduce(state, event)
+        return state
+
+    def apply_feedback(
+        self,
+        current_state: TwinState,
+        feedback: OperatorFeedbackEvent,
+    ) -> TwinState:
+        """Apply a recorded human feedback event to current TwinState deterministically.
+
+        Guarantees zero wall-clock dependency: uses recorded feedback timestamp and stream position.
+        """
+        ts = feedback.timestamp_utc
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+
+        updated_reviews = list(current_state.active_reviews)
+        if feedback.review_id and self.review_engine is not None:
+            updated_reviews = self.review_engine.apply_feedback_mutation(
+                reviews=current_state.active_reviews,
+                review_id=feedback.review_id,
+                action=feedback.action.value if hasattr(feedback.action, "value") else str(feedback.action),
+                actor_id=feedback.actor_id or feedback.operator_id,
+                rationale=feedback.rationale or feedback.notes,
+                expected_revision=feedback.expected_revision,
+                idempotency_key=feedback.idempotency_key,
+                event_time_utc=ts,
+                stream_position=current_state.state_sequence,
+            )
+
+        updated_recs = list(current_state.active_recommendations)
+        action_val = feedback.action.value if hasattr(feedback.action, "value") else str(feedback.action)
+        if action_val == "ACKNOWLEDGE":
+            new_recs = []
+            for r in updated_recs:
+                match = (feedback.recommendation_id and r.recommendation_id == feedback.recommendation_id) or (
+                    feedback.merge_key and r.merge_key == feedback.merge_key
+                )
+                if match:
+                    r_dict = r.model_dump()
+                    r_dict["acknowledged"] = True
+                    r_dict["acknowledged_at_utc"] = ts
+                    r_dict["acknowledged_by"] = feedback.operator_id
+                    new_recs.append(MaintenanceRecommendation.model_validate(r_dict))
+                else:
+                    new_recs.append(r)
+            updated_recs = new_recs
+        elif action_val == "DISMISS":
+            updated_recs = [
+                r for r in updated_recs
+                if not (
+                    (feedback.recommendation_id and r.recommendation_id == feedback.recommendation_id)
+                    or (feedback.merge_key and r.merge_key == feedback.merge_key)
+                )
+            ]
+
+        # Construct new immutable state and recompute deterministic hash
+        temp_state = current_state.model_copy(
+            update={
+                "active_reviews": updated_reviews,
+                "active_recommendations": updated_recs,
+            }
+        )
+        state_hash = compute_twin_state_hash(temp_state.model_dump(mode="json"))
+        return temp_state.model_copy(update={"state_hash": state_hash})
+
+    def reduce_stream_with_feedback(
+        self,
+        events: Sequence[CanonicalEvent],
+        feedback_events: Sequence[OperatorFeedbackEvent],
+        initial_state: TwinState | None = None,
+    ) -> TwinState | None:
+        """Process an interleaved stream of canonical events and recorded feedback deterministically."""
+        items: list[tuple[datetime, int, Any]] = []
+        for ev in events:
+            t = ev.event_time_utc if ev.event_time_utc.tzinfo else ev.event_time_utc.replace(tzinfo=timezone.utc)
+            items.append((t, 0, ev))
+        for fb in feedback_events:
+            t = fb.timestamp_utc if fb.timestamp_utc.tzinfo else fb.timestamp_utc.replace(tzinfo=timezone.utc)
+            items.append((t, 1, fb))
+
+        # Stable chronological sort: at same timestamp, process telemetry (0) before feedback (1)
+        items.sort(key=lambda x: (x[0], x[1]))
+
+        state = initial_state
+        for _, item_type, payload in items:
+            if item_type == 0:
+                state = self.reduce(state, payload)
+            elif item_type == 1 and state is not None:
+                state = self.apply_feedback(state, payload)
         return state

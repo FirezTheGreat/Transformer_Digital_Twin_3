@@ -55,6 +55,7 @@ class BaselineMetricEntry(BaseModel):
     rmse_degc: float
     bias_degc: float
     marginal_coverage_90_pct: Optional[float] = None
+    simultaneous_path_coverage_90_pct: Optional[float] = None
     mean_width_degc: Optional[float] = None
 
 

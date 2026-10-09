@@ -75,14 +75,14 @@ class OperatorFeedbackLedger:
         action_val = event.action.value if hasattr(event.action, "value") else str(event.action)
 
         if action_val == "ACKNOWLEDGE":
-            if not event.recommendation_id and not event.merge_key:
-                raise ValueError("ACKNOWLEDGE action requires recommendation_id or merge_key.")
+            if not event.recommendation_id and not event.merge_key and not event.review_id:
+                raise ValueError("ACKNOWLEDGE action requires recommendation_id, merge_key, or review_id.")
 
         elif action_val == "DISMISS":
             actor = event.actor_id or event.operator_id
             if not actor:
                 raise ValueError("DISMISS action requires an authenticated operator/actor ID.")
-            if not event.reason_code:
+            if not event.reason_code and not event.review_id:
                 raise ValueError("DISMISS action requires a structured reason_code.")
             rationale = event.rationale or event.notes
             if not rationale or not rationale.strip():
@@ -102,6 +102,10 @@ class OperatorFeedbackLedger:
                         f"P0 Safety/Protection recommendations cannot be dismissed without documented resolution. "
                         f"Reason code '{event.reason_code}' is not an authorized resolution code ({ALLOWED_P0_RESOLUTION_REASON_CODES})."
                     )
+
+        elif action_val in ("RESOLVE", "REOPEN"):
+            if not event.review_id and not event.recommendation_id and not event.merge_key:
+                raise ValueError(f"{action_val} action requires review_id, recommendation_id, or merge_key.")
 
         elif action_val in ("INSPECTION_OUTCOME", "INSPECTION_RECORDED"):
             has_notes = event.notes and event.notes.strip()

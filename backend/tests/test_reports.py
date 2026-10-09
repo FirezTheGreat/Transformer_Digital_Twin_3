@@ -976,3 +976,115 @@ def test_pdf_renderer_executes_weasyprint_when_available(sample_fact_bundle: Fac
     mock_html_instance.write_pdf.assert_called_once()
 
 
+# ==============================================================================
+# 6. Checkpoint Report & Historical Runs Tests
+# ==============================================================================
+
+@pytest.fixture
+def test_app_with_checkpoint(sample_fact_bundle: FactBundle) -> tuple[TestClient, str, str]:
+    """Client with a pre-saved checkpoint and known ID."""
+    from app.core.checkpoint import CheckpointStore
+
+    settings = Settings(
+        default_asset_id="tripura_dt_01",
+        db_path=":memory:",
+    )
+    storage = StorageEngine(db_path=":memory:")
+    chk_store = CheckpointStore(storage)
+    cid = chk_store.save_checkpoint(sample_fact_bundle.twin_state)
+
+    app_state = AppState(
+        settings=settings,
+        storage=storage,
+        current_state=sample_fact_bundle.twin_state,
+        latest_fact_bundle=sample_fact_bundle,
+    )
+
+    app = create_app(settings=settings, app_state=app_state)
+    return TestClient(app), cid, sample_fact_bundle.twin_state.asset_id
+
+
+def test_api_checkpoint_reports_success(test_app_with_checkpoint: tuple[TestClient, str, str]) -> None:
+    """Verify JSON, CSV, and PDF exports all succeed with valid checkpoint_id and consistent filename."""
+    client, cid, asset_id = test_app_with_checkpoint
+
+    # JSON export
+    resp_json = client.get(f"/v1/reports/summary.json?checkpoint_id={cid}")
+    assert resp_json.status_code == 200
+    assert resp_json.headers["content-type"] == "application/json"
+    assert f"summary_{asset_id}_{cid}.json" in resp_json.headers.get("content-disposition", "")
+    data = resp_json.json()
+    assert data["asset"]["asset_id"] == asset_id
+    assert data["metadata"]["state_hash"] != ""
+
+    # CSV export
+    resp_csv = client.get(f"/v1/reports/summary.csv?checkpoint_id={cid}")
+    assert resp_csv.status_code == 200
+    assert "text/csv" in resp_csv.headers["content-type"]
+    assert f"summary_{asset_id}_{cid}.csv" in resp_csv.headers.get("content-disposition", "")
+    assert "# SECTION: METADATA_AND_PROVENANCE" in resp_csv.text
+
+    # PDF export
+    resp_pdf = client.get(f"/v1/reports/summary.pdf?checkpoint_id={cid}")
+    assert resp_pdf.status_code == 200
+    assert resp_pdf.headers["content-type"] == "application/pdf"
+    assert f"summary_{asset_id}_{cid}.pdf" in resp_pdf.headers.get("content-disposition", "")
+    assert resp_pdf.content.startswith(b"%PDF-")
+
+
+def test_api_checkpoint_missing_returns_404(test_app_with_checkpoint: tuple[TestClient, str, str]) -> None:
+    """Verify non-existent checkpoint IDs return HTTP 404, not unhandled 500, across all formats."""
+    client, _, _ = test_app_with_checkpoint
+    fake_cid = "chk_nonexistent_999999"
+
+    for ext in ("json", "csv", "pdf"):
+        resp = client.get(f"/v1/reports/summary.{ext}?checkpoint_id={fake_cid}")
+        assert resp.status_code == 404
+        error_payload = resp.json()
+        assert "error" in error_payload
+        assert error_payload["error"]["code"] == "NOT_FOUND"
+        assert fake_cid in error_payload["error"]["message"]
+
+
+def test_api_checkpoint_asset_mismatch_returns_400(test_app_with_checkpoint: tuple[TestClient, str, str]) -> None:
+    """Verify mismatched asset_id and checkpoint_id returns HTTP 400 to prevent cross-asset reports."""
+    client, cid, _ = test_app_with_checkpoint
+    wrong_asset = "other_asset_99"
+
+    for ext in ("json", "csv", "pdf"):
+        resp = client.get(f"/v1/reports/summary.{ext}?asset_id={wrong_asset}&checkpoint_id={cid}")
+        assert resp.status_code == 400
+        error_payload = resp.json()
+        assert "error" in error_payload
+        assert error_payload["error"]["code"] == "BAD_REQUEST"
+        assert "belongs to asset" in error_payload["error"]["message"]
+
+
+def test_api_list_runs_endpoint(test_app_with_checkpoint: tuple[TestClient, str, str]) -> None:
+    """Verify GET /v1/reports/runs returns genuine checkpoint run records."""
+    client, cid, asset_id = test_app_with_checkpoint
+
+    # List all runs
+    resp = client.get("/v1/reports/runs")
+    assert resp.status_code == 200
+    runs = resp.json()
+    assert len(runs) >= 1
+    target = next((r for r in runs if r["checkpoint_id"] == cid), None)
+    assert target is not None
+    assert target["asset_id"] == asset_id
+    assert "state_sequence" in target
+    assert "state_hash" in target
+    assert "state_time_utc" in target
+
+    # Filter matching asset
+    resp_match = client.get(f"/v1/reports/runs?asset_id={asset_id}")
+    assert resp_match.status_code == 200
+    assert len(resp_match.json()) >= 1
+
+    # Filter non-matching asset
+    resp_nomatch = client.get("/v1/reports/runs?asset_id=nonexistent_asset")
+    assert resp_nomatch.status_code == 200
+    assert len(resp_nomatch.json()) == 0
+
+
+

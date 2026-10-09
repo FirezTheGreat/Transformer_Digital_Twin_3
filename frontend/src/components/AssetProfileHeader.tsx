@@ -117,7 +117,7 @@ export const AssetProfileHeader: React.FC<AssetProfileHeaderProps> = ({
             Top-Oil Temperature
           </span>
           <span className="font-mono font-medium text-slate-800 text-[11px] mt-0.5 block">
-            {topOilObs ? `${topOilObs} °C` : '74.8 °C'}
+            {topOilObs ? `${topOilObs} °C` : '—'}
             {topOilExpected && <span className="text-slate-500 font-normal"> (Exp: {topOilExpected} °C)</span>}
           </span>
         </div>

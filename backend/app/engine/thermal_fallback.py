@@ -136,13 +136,19 @@ class ThermalFallbackGate:
         else:
             self.min_warmup_samples = max(1, int(min_warmup_samples))
 
-        # CUSUM tracker
+        # CUSUM tracker: qualified only if formal qualification is granted
+        if qualification is not None:
+            is_cusum_qual = (qualification.cusum_qualification == QualificationStatus.QUALIFIED)
+        else:
+            is_cusum_qual = bool(is_model_promoted)
+
         self.cusum_tracker = CUSUMTracker(
             reference_k=0.50,
             decision_limit_h=cusum_decision_limit_h,
             calibration_median=calibration_residual_median,
             calibration_mad=calibration_residual_mad,
             sensor_resolution_floor=0.50,
+            is_qualified=is_cusum_qual,
         )
 
         # Internal state
@@ -151,6 +157,16 @@ class ThermalFallbackGate:
         self.free_running_top_oil_degc: Optional[float] = None
         self.warmup_samples_remaining: int = 0
         self.evidence_counter: int = 0
+
+        # Provisional policy convention (not a universal physical law):
+        # Oil-ambient differences between -10 degC and -15 degC are contextual plausibility
+        # evidence (such as rapid solar ambient rise or transient thermal lag).
+        # Persistence requires both at least 2 observations AND elapsed time >= min_inversion_persistence_s.
+        self.min_inversion_persistence_s: float = (
+            float(nominal_cadence_s) if nominal_cadence_s and nominal_cadence_s > 0 else 900.0
+        )
+        self.consecutive_inversions: int = 0
+        self.first_inversion_time_utc: Optional[datetime] = None
 
     @classmethod
     def from_artifact(
@@ -242,6 +258,7 @@ class ThermalFallbackGate:
         self.last_valid_top_oil_degc = None
         self.free_running_top_oil_degc = None
         self.warmup_samples_remaining = 0
+        self.consecutive_inversions = 0
         self.cusum_tracker.reset()
 
     def evaluate_step(
@@ -301,32 +318,7 @@ class ThermalFallbackGate:
         if not load_ok or load_val is None:
             fallback_reasons.append(ThermalFallbackReason.MISSING_LOAD_DRIVER)
 
-        # 3. Check physical plausibility if measurements are present
-        if t_oil_val is not None and t_amb_val is not None:
-            # Physical impossibility: top-oil colder than ambient by more than 10 degC
-            # or extreme temperatures outside realistic operating range
-            if t_oil_val < (t_amb_val - 10.0) or t_oil_val > 160.0 or t_oil_val < -40.0:
-                fallback_reasons.append(ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY)
-                emitted_evidence.append(
-                    self._create_evidence(
-                        event_time_utc=event_time_utc,
-                        category=AnomalyCategory.SENSOR_PLAUSIBILITY,
-                        detector_id="thermal_physical_impossibility",
-                        observed_value=t_oil_val,
-                        expected_value=t_amb_val,
-                        direction="IMPOSSIBLE_VALUE",
-                        severity=1.0,
-                        confidence=0.95,
-                        reason_codes=["TOP_OIL_TEMPERATURE_PHYSICALLY_IMPOSSIBLE"],
-                        hypothesis_codes=["POSSIBLE_SENSOR_BIAS", "SENSOR_DISCONNECTED"],
-                    )
-                )
-
-        # Update last valid observed top-oil
-        if t_oil_ok and t_oil_val is not None:
-            self.last_valid_top_oil_degc = t_oil_val
-
-        # 4. Compute elapsed interval dt and check for gaps
+        # 3. Compute elapsed interval dt and check for gaps
         dt_hours = 0.25  # default nominal 15-min
         is_gap_detected = False
 
@@ -347,7 +339,112 @@ class ThermalFallbackGate:
             # Gaps terminate residual sequence: reinitialize state on next valid point and restart warm-up
             self.free_running_top_oil_degc = t_oil_val if (t_oil_ok and t_oil_val is not None) else None
             self.warmup_samples_remaining = self.min_warmup_samples
+            self.consecutive_inversions = 0
+            self.first_inversion_time_utc = None
             self.cusum_tracker.reset()
+
+        # 4. Check physical plausibility if measurements are present
+        if t_oil_val is not None and t_amb_val is not None:
+            # Extreme range checks: physically impossible values outside sensor operational domain
+            if t_oil_val > 160.0 or t_oil_val < -40.0:
+                fallback_reasons.append(ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY)
+                emitted_evidence.append(
+                    self._create_evidence(
+                        event_time_utc=event_time_utc,
+                        category=AnomalyCategory.SENSOR_PLAUSIBILITY,
+                        detector_id="thermal_physical_impossibility",
+                        observed_value=t_oil_val,
+                        expected_value=t_amb_val,
+                        direction="IMPOSSIBLE_VALUE",
+                        severity=1.0,
+                        confidence=0.95,
+                        reason_codes=["TOP_OIL_TEMPERATURE_PHYSICALLY_IMPOSSIBLE"],
+                        hypothesis_codes=["POSSIBLE_SENSOR_BIAS", "SENSOR_DISCONNECTED"],
+                    )
+                )
+            else:
+                # Contextual thermal plausibility: oil-ambient inversion check
+                # Note: Provisional policy convention, not an absolute physical law.
+                delta_inv = t_oil_val - t_amb_val
+                if delta_inv <= -15.0:
+                    # Extreme inversion (>=15 degC colder than ambient): physically impossible even with rapid ambient rise
+                    self.consecutive_inversions += 1
+                    fallback_reasons.append(ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY)
+                    emitted_evidence.append(
+                        self._create_evidence(
+                            event_time_utc=event_time_utc,
+                            category=AnomalyCategory.SENSOR_PLAUSIBILITY,
+                            detector_id="thermal_physical_impossibility",
+                            observed_value=t_oil_val,
+                            expected_value=t_amb_val,
+                            direction="IMPOSSIBLE_VALUE",
+                            severity=1.0,
+                            confidence=0.95,
+                            reason_codes=["TOP_OIL_TEMPERATURE_PHYSICALLY_IMPOSSIBLE"],
+                            hypothesis_codes=["POSSIBLE_SENSOR_BIAS", "SENSOR_DISCONNECTED"],
+                        )
+                    )
+                elif delta_inv < -10.0:
+                    # Moderate inversion (-10 to -15 degC): contextual plausibility evidence (e.g. rapid solar rise)
+                    # Isolated observation does NOT force hard fallback.
+                    # Persistence requires both >=2 consecutive observations AND elapsed duration >= min_inversion_persistence_s.
+                    if self.first_inversion_time_utc is None or self.consecutive_inversions == 0:
+                        self.first_inversion_time_utc = event_time_utc
+                        self.consecutive_inversions = 1
+                        elapsed_inversion_s = 0.0
+                    else:
+                        self.consecutive_inversions += 1
+                        elapsed_inversion_s = (event_time_utc - self.first_inversion_time_utc).total_seconds()
+
+                    is_sustained = (
+                        self.consecutive_inversions >= 2
+                        and elapsed_inversion_s >= self.min_inversion_persistence_s
+                    )
+
+                    if is_sustained:
+                        fallback_reasons.append(ThermalFallbackReason.PHYSICAL_IMPOSSIBILITY)
+                        emitted_evidence.append(
+                            self._create_evidence(
+                                event_time_utc=event_time_utc,
+                                category=AnomalyCategory.SENSOR_PLAUSIBILITY,
+                                detector_id="thermal_physical_impossibility",
+                                observed_value=t_oil_val,
+                                expected_value=t_amb_val,
+                                direction="SUSTAINED_INVERSION",
+                                severity=0.85,
+                                confidence=0.90,
+                                reason_codes=["SUSTAINED_TOP_OIL_AMBIENT_INVERSION"],
+                                hypothesis_codes=["POSSIBLE_SENSOR_BIAS", "SENSOR_MISCALIBRATION"],
+                            )
+                        )
+                    else:
+                        # Isolated single observation or duration within persistence threshold:
+                        # emit plausibility advisory evidence without forcing hard fallback
+                        emitted_evidence.append(
+                            self._create_evidence(
+                                event_time_utc=event_time_utc,
+                                category=AnomalyCategory.SENSOR_PLAUSIBILITY,
+                                detector_id="thermal_contextual_plausibility",
+                                observed_value=t_oil_val,
+                                expected_value=t_amb_val,
+                                direction="CONTEXTUAL_INVERSION",
+                                severity=0.35,
+                                confidence=0.60,
+                                reason_codes=["TOP_OIL_AMBIENT_INVERSION_CONTEXTUAL"],
+                                hypothesis_codes=["RAPID_AMBIENT_RISE", "TRANSIENT_THERMAL_LAG"],
+                            )
+                        )
+                else:
+                    self.consecutive_inversions = 0
+                    self.first_inversion_time_utc = None
+        else:
+            # Missing temperature inputs suspend/reset inversion tracking
+            self.consecutive_inversions = 0
+            self.first_inversion_time_utc = None
+
+        # Update last valid observed top-oil
+        if t_oil_ok and t_oil_val is not None:
+            self.last_valid_top_oil_degc = t_oil_val
 
         self.last_event_time_utc = event_time_utc
 
@@ -476,6 +573,7 @@ class ThermalFallbackGate:
                 trust_state = ThermalTrustState.SHADOW_DESCRIPTIVE
                 what_if_enabled = False
 
+            self.cusum_tracker.is_qualified = is_cusum_qualified
             if is_cusum_qualified:
                 cusum_res = self.cusum_tracker.update(
                     residual_degc=residual,

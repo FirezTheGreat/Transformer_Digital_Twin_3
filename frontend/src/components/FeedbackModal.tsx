@@ -78,7 +78,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Action Choice */}
           <div>
-            <label className="eyebrow text-[10px] block mb-2">
+            <label className="eyebrow text-[11px] block mb-2">
               Action Selection
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -109,7 +109,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
 
           {/* Operator ID */}
           <div>
-            <label htmlFor="feedback-operator-id" className="eyebrow text-[10px] block mb-2">
+            <label htmlFor="feedback-operator-id" className="eyebrow text-[11px] block mb-2">
               Operator Identifier
             </label>
             <div className="relative">
@@ -127,7 +127,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
 
           {/* Notes / Rationale */}
           <div>
-            <label htmlFor="feedback-operator-notes" className="eyebrow text-[10px] block mb-2">
+            <label htmlFor="feedback-operator-notes" className="eyebrow text-[11px] block mb-2">
               Resolution Notes / Dispatch Memo
             </label>
             <textarea

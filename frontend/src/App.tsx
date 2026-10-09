@@ -530,7 +530,7 @@ export default function App(): React.ReactElement {
             </span>
             <span>· Distribution Transformer Digital Twin · POWERNext-AI Hackathon 2026 (Track 2)</span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono text-faint">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono text-muted">
             <span>DT-TRIPURA-001</span>
             <span>·</span>
             <span>Multi-Domain OTHI</span>

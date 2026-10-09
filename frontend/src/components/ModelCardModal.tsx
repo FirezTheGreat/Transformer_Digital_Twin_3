@@ -90,7 +90,7 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
 
         {/* 1. ODE Equation & Parameters */}
         <div className="card-inverse p-4 mb-4">
-          <span className="text-[10px] font-semibold uppercase tracking-eyebrow text-on-inverse/70 block mb-2">
+          <span className="text-[11px] font-semibold uppercase tracking-eyebrow text-on-inverse/70 block mb-2">
             ODE Formulation
           </span>
           <div className="font-mono text-[13px] text-on-inverse">
@@ -115,7 +115,7 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
         {/* 2. Validation Metrics & Test Partition */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           <div className="card-muted px-4 py-3">
-            <span className="eyebrow text-[10px] block mb-1">Test Accuracy</span>
+            <span className="eyebrow text-[11px] block mb-1">Test Accuracy</span>
             <div className="kv">
               <span>MAE</span>
               <span className="font-mono font-semibold text-ink">{card.test_metrics.mae_degc.toFixed(2)}°C</span>
@@ -131,7 +131,7 @@ export const ModelCardModal: React.FC<ModelCardModalProps> = ({
           </div>
 
           <div className="card-muted px-4 py-3">
-            <span className="eyebrow text-[10px] block mb-1">Qualification Status</span>
+            <span className="eyebrow text-[11px] block mb-1">Qualification Status</span>
             <div className="kv">
               <span>Interpretability</span>
               <span className="font-mono text-ink-2">{card.qualification.parameter_interpretability}</span>

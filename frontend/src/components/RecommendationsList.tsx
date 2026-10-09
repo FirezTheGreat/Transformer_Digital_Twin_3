@@ -76,7 +76,7 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
                       </span>
                     )}
 
-                    <span className="text-[10.5px] font-mono text-muted">
+                    <span className="text-[11px] font-mono text-muted">
                       Rule: {rec.rule_id}
                     </span>
                   </div>
@@ -97,7 +97,7 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
                 {/* Action Window & Button */}
                 <div className="flex md:flex-col items-center md:items-end justify-between gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-line">
                   <div className="md:text-right">
-                    <span className="eyebrow text-[10px] block">Action Window</span>
+                    <span className="eyebrow text-[11px] block">Action Window</span>
                     <span className="text-[13px] font-medium font-mono text-ink mt-1.5 block">
                       {rec.action_window.replace(/_/g, ' ')}
                     </span>

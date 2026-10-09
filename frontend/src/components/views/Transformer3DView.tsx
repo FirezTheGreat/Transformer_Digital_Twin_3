@@ -354,7 +354,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
 
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-ink-2">
-          <span className="eyebrow text-[10px]">Status</span>
+          <span className="eyebrow text-[11px]">Status</span>
           <span className="flex items-center gap-1.5"><span className="dot w-2 h-2 bg-ok" />Normal</span>
           <span className="flex items-center gap-1.5"><span className="dot w-2 h-2 bg-accent" />Watch</span>
           <span className="flex items-center gap-1.5"><span className="dot w-2 h-2 bg-warn" />Warning</span>
@@ -374,7 +374,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
                 2.5D Isometric Component Layout
               </span>
             </div>
-            <span className="text-[10.5px] font-mono text-muted">
+            <span className="text-[11px] font-mono text-muted">
               {timestamp}
             </span>
           </div>
@@ -731,7 +731,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
 
           {/* Component Selection Quick Bar */}
           <div className="mt-4 pt-4 border-t border-line">
-            <span className="eyebrow text-[10px] block mb-2.5">
+            <span className="eyebrow text-[11px] block mb-2.5">
               COMPONENTS
             </span>
             <div className="flex flex-wrap gap-2">
@@ -775,7 +775,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
             {/* Component Header & Status Banner */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="eyebrow text-[10px]">
+                <span className="eyebrow text-[11px]">
                   {currentComp.category}
                 </span>
                 <span
@@ -796,7 +796,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
 
             {/* Metrics List */}
             <div className="space-y-2.5">
-              <span className="eyebrow text-[10px] block pt-2">
+              <span className="eyebrow text-[11px] block pt-2">
                 State-Linked Telemetry
               </span>
 
@@ -816,7 +816,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
                     <span
                       className={`font-mono font-semibold text-right ${
                         m.isUnavailable
-                          ? 'text-faint italic text-[11px] font-normal'
+                          ? 'text-muted italic text-[11px] font-normal'
                           : 'text-ink'
                       }`}
                     >
@@ -824,7 +824,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
                     </span>
                   </div>
                   {m.sublabel && (
-                    <span className="text-[10px] text-muted block mt-1">
+                    <span className="text-[11px] text-muted block mt-1">
                       {m.sublabel}
                     </span>
                   )}
@@ -846,7 +846,7 @@ export const Transformer3DView: React.FC<Transformer3DViewProps> = ({
             )}
 
             <div className="text-center">
-              <span className="text-[10px] text-faint block">
+              <span className="text-[11px] text-muted block">
                 Telemetry synchronized from active FactBundle state vector.
               </span>
             </div>

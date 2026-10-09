@@ -84,10 +84,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               GridPulse
             </span>
           </div>
-          <p className="mt-3 text-[11.5px] text-muted leading-[1.45]">
+          <p className="mt-3 text-[10.5px] font-medium text-muted leading-[1.55] tracking-[-0.02em]">
             Distribution Transformer Digital Twin
             <br />
-            <span className="text-faint">Tripura 33/11kV Substation</span>
+            <span className="text-muted">Tripura 33/11kV Substation</span>
           </p>
         </div>
 
@@ -103,15 +103,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 aria-current={isActive ? 'page' : undefined}
                 className={`relative w-full h-10 px-3 flex items-center gap-3 rounded text-[13.5px] tracking-[-0.01em] text-left transition-colors ${
                   isActive
-                    ? 'bg-accent-soft text-ink font-medium ring-1 ring-accent/15'
-                    : 'text-ink-2 hover:text-ink hover:bg-ink/[0.035]'
+                    ? 'bg-accent-soft text-ink font-semibold ring-1 ring-accent/15'
+                    : 'text-ink-2 font-medium hover:text-ink hover:bg-ink/[0.035]'
                 }`}
               >
                 {isActive && (
                   <span className="absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full bg-accent" />
                 )}
                 <Icon
-                  className={`w-[17px] h-[17px] flex-shrink-0 ${isActive ? 'text-accent' : 'text-faint'}`}
+                  className={`w-[17px] h-[17px] flex-shrink-0 ${isActive ? 'text-accent' : 'text-muted'}`}
                   strokeWidth={1.6}
                 />
                 <span className="truncate">{item.label}</span>

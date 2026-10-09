@@ -74,7 +74,7 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
           <h2 className="section-title">Active Anomaly Episodes ({episodes.length})</h2>
-          <span className="text-[10.5px] text-muted font-mono">
+          <span className="text-[11px] text-muted font-mono">
             FSM: OPEN → CORROBORATED → RESOLVED / CLOSED
           </span>
         </div>
@@ -132,11 +132,11 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
 
                         {/* Hypothesis Codes */}
                         <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                          <span className="eyebrow text-[10px] mr-1">Hypotheses</span>
+                          <span className="eyebrow text-[11px] mr-1">Hypotheses</span>
                           {ep.hypothesis_codes.map((code) => (
                             <span
                               key={code}
-                              className="px-1.5 py-0.5 rounded font-mono text-[10.5px] text-ink-2 border border-line bg-surface-2"
+                              className="px-1.5 py-0.5 rounded font-mono text-[11px] text-ink-2 border border-line bg-surface-2"
                             >
                               {code}
                             </span>
@@ -146,12 +146,12 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
                     </div>
 
                     <div className="sm:text-right flex-shrink-0 pl-7 sm:pl-0">
-                      <span className="eyebrow text-[10px]">Severity</span>
+                      <span className="eyebrow text-[11px]">Severity</span>
                       <div className="metric-value text-[28px] mt-1.5">
                         {(ep.severity_score * 100).toFixed(0)}
                         <span className="metric-unit ml-0.5">%</span>
                       </div>
-                      <div className="text-[10.5px] font-mono text-muted mt-1.5">
+                      <div className="text-[11px] font-mono text-muted mt-1.5">
                         Seen: {new Date(ep.start_time_utc).toISOString().replace('T', ' ').slice(0, 19)}
                       </div>
                     </div>
@@ -190,9 +190,9 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
               { label: 'Persistence Window', note: 'Gate status: Inactive' },
             ].map((c) => (
               <div key={c.label} className="bg-surface-2 p-4">
-                <span className="eyebrow text-[10px] block">{c.label}</span>
-                <div className="metric-value text-[28px] text-faint mt-3">—</div>
-                <span className="text-[10.5px] text-muted mt-2 block">{c.note}</span>
+                <span className="eyebrow text-[11px] block">{c.label}</span>
+                <div className="metric-value text-[28px] font-normal text-faint mt-3">—</div>
+                <span className="text-[11px] text-muted mt-2 block">{c.note}</span>
               </div>
             ))}
           </div>

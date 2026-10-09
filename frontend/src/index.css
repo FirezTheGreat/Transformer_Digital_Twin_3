@@ -19,13 +19,15 @@
     --surface-3: 234 234 236;   /* wells, tracks, neutral chips */
     --line: 226 226 229;        /* low-contrast grey border */
     --line-strong: 205 205 209;
-    --ink: 28 28 30;            /* foreground — charcoal */
-    --ink-2: 66 66 70;
-    --muted: 112 112 118;       /* foreground-muted — grey */
-    --faint: 162 162 168;
-    --accent: 84 112 148;        /* muted blue — links, bars, sliders */
+    /* Text hierarchy — blue-black → slate. Every text level clears WCAG AA
+       (≥4.5:1) on canvas, cards, wells and the light-blue accent fills. */
+    --ink: 13 21 35;            /* primary — deep blue-black (≈16.8:1) */
+    --ink-2: 36 48 68;          /* secondary — dark slate-blue (≈12:1) */
+    --muted: 70 84 106;         /* tertiary — muted slate (≈6.5–7.4:1) */
+    --faint: 118 130 150;       /* disabled / decorative only (≈3.3:1) */
+    --accent: 52 86 132;         /* muted blue — links, bars, sliders */
     --accent-soft: 228 237 247;  /* very light blue — accent fills */
-    --accent-ink: 46 70 102;
+    --accent-ink: 32 58 96;
     --primary: 36 36 40;        /* primary action — charcoal */
     --on-primary: 248 248 249;
     --inverse: 38 38 42;        /* anchor tiles — charcoal */
@@ -39,7 +41,7 @@
     --chart-2: #b5772c;
     --chart-3: #0e9180;
     --chart-grid: #e8e8ea;
-    --chart-axis: #9a9aa0;
+    --chart-axis: #5f6c80;
     --chart-surface: #fbfbfc;
 
     color-scheme: light;
@@ -53,13 +55,13 @@
     --surface-3: 46 46 49;
     --line: 46 46 49;           /* borders recede */
     --line-strong: 66 66 70;
-    --ink: 228 228 230;         /* soft, not white */
-    --ink-2: 170 170 174;
-    --muted: 126 126 131;
-    --faint: 84 84 88;
-    --accent: 112 130 156;       /* dull blue-grey — no shine */
+    --ink: 226 230 236;         /* primary — soft off-white, never pure white */
+    --ink-2: 184 192 204;       /* secondary — muted blue-grey */
+    --muted: 146 156 172;       /* tertiary — subdued, still AA on cards */
+    --faint: 108 116 130;       /* disabled / decorative only */
+    --accent: 132 156 190;       /* dull blue-grey — no shine */
     --accent-soft: 30 37 49;     /* very dark matte blue — accent fills */
-    --accent-ink: 172 184 202;
+    --accent-ink: 182 196 216;
     --primary: 74 74 80;        /* lifted graphite — no glare */
     --on-primary: 244 244 246;
     --inverse: 54 54 58;        /* highlighted tiles lift above cards */
@@ -72,7 +74,7 @@
     --chart-2: #c08540;
     --chart-3: #2ba392;
     --chart-grid: #2a2a2d;
-    --chart-axis: #6c6c71;
+    --chart-axis: #8c96a6;
     --chart-surface: #1d1d1f;
 
     color-scheme: dark;
@@ -84,28 +86,36 @@
 
   body {
     margin: 0;
-    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 14px;
-    line-height: 1.5;
-    letter-spacing: -0.003em;
+    font-weight: 400;
+    line-height: 1.55;
+    letter-spacing: -0.008em;
     background-color: rgb(var(--canvas));
     color: rgb(var(--ink));
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    /* Lining, tabular figures everywhere so measurements align */
-    font-variant-numeric: lining-nums tabular-nums;
+    /* Lining figures in running text; tabular figures are opted into by the
+       numeric classes (.metric-*, .num, tabular-nums) so punctuation keeps
+       its natural width in prose. */
+    font-variant-numeric: lining-nums;
+    font-feature-settings: 'lnum' 1;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 600;
     letter-spacing: -0.02em;
     color: rgb(var(--ink));
   }
 
+  /* Mono is reserved for IDs, hashes and timestamps — slashed zero, medium weight */
   .font-mono {
-    letter-spacing: -0.01em;
+    font-weight: 450;
+    letter-spacing: -0.015em;
+    font-feature-settings: 'zero' 1;
   }
 
   ::selection {
@@ -117,17 +127,16 @@
     accent-color: rgb(var(--accent));
   }
 
-  /* Specific selective class for rare editorial accents if needed */
-  .font-editorial {
-    font-family: 'Bodoni Moda', Didot, 'Bodoni 72', serif;
-    letter-spacing: 0;
-  }
 }
 
 /* ==========================================================================
    Presentational primitives
-   Hierarchy: page-title (Didone) > metric-value (Didone) > section-title (Didone)
-              > card-title (sans) > eyebrow (sans) > meta (mono, muted)
+   Two voices: Poppins for all letters — headings, labels, body, UI;
+               Gotham (→ Montserrat fallback) for numeric readings.
+   Hierarchy: page-title (Poppins 600) > section-title (Poppins 600)
+              > metric-value (Gotham 600) > card-title (Poppins 600)
+              > body (Poppins 400) > eyebrow / label (Poppins 600, caps)
+              > meta (JetBrains Mono 450, IDs & timestamps)
    ========================================================================== */
 @layer components {
   /* Surfaces — layered by tone, not shadow */
@@ -141,50 +150,49 @@
     @apply bg-inverse text-on-inverse rounded-card;
   }
 
-  /* Display typography — Didone */
+  /* Display typography — Poppins, tight tracking for a confident geometric title */
   .page-title {
-    @apply font-display text-[34px] sm:text-[46px] font-semibold leading-[1.04] tracking-[-0.012em] text-ink;
-    font-variation-settings: 'opsz' 28;
-    font-optical-sizing: auto;
+    @apply font-display text-[32px] sm:text-[42px] font-semibold leading-[1.1] tracking-[-0.025em] text-ink;
   }
   .section-title {
-    @apply font-display text-[21px] sm:text-[23px] font-semibold leading-tight tracking-[-0.005em] text-ink;
-    font-variation-settings: 'opsz' 20;
-    font-optical-sizing: auto;
+    @apply font-display text-[20px] sm:text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink;
   }
-  /* Hero numerals: Didone, text optical size so hairlines stay legible */
+  /* Instrument readings: Gotham, lining tabular figures */
   .metric-value {
-    @apply font-display font-semibold tracking-[-0.005em] text-ink leading-none;
-    font-variation-settings: 'opsz' 18;
+    @apply font-num font-semibold tracking-[-0.02em] text-ink leading-none;
     font-variant-numeric: lining-nums tabular-nums;
     font-feature-settings: 'lnum' 1, 'tnum' 1;
   }
-  /* Compact readings (tables / rows): precision sans for small sizes */
+  /* Compact readings (tables / rows) */
   .metric-compact {
-    @apply font-sans font-light tracking-[-0.025em] text-ink leading-none;
+    @apply font-num font-medium tracking-[-0.01em] text-ink leading-none;
     font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: 'lnum' 1, 'tnum' 1;
   }
 
   /* UI typography — sans */
+  /* Small caps labels: heavier weight + restrained tracking so words stay whole */
   .eyebrow {
-    @apply text-[10.5px] font-medium uppercase tracking-[0.11em] text-muted leading-none;
+    @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-muted leading-none;
   }
   .card-title {
-    @apply text-[14.5px] font-medium leading-snug tracking-[-0.012em] text-ink;
+    @apply text-[14.5px] font-semibold leading-snug tracking-[-0.014em] text-ink;
   }
+  /* Units sit clearly apart from the value: smaller, medium weight, slate */
   .metric-unit {
-    @apply font-sans text-[12.5px] font-normal text-muted tracking-[0.01em] leading-none;
+    @apply font-sans text-[13px] font-medium text-muted tracking-normal leading-none;
   }
   .meta {
-    @apply font-mono text-[10.5px] text-muted;
+    @apply font-mono text-[11px] text-muted;
   }
   .num {
-    @apply tabular-nums;
+    @apply font-num tabular-nums;
+    font-feature-settings: 'lnum' 1, 'tnum' 1;
   }
 
   /* Chips & dots — neutral by default; semantic only for real state */
   .chip {
-    @apply inline-flex items-center gap-1.5 px-[7px] py-[3px] rounded-[3px] text-[9.5px] font-medium uppercase tracking-[0.1em] leading-none whitespace-nowrap;
+    @apply inline-flex items-center gap-1.5 px-[7px] py-[3px] rounded-[3px] text-[10.5px] font-semibold uppercase tracking-[0.05em] leading-none whitespace-nowrap;
   }
   .chip-neutral {
     @apply bg-surface-3 text-ink-2;
@@ -202,7 +210,7 @@
     @apply bg-crit/[0.09] text-crit;
   }
   .chip-outline {
-    @apply border border-line-strong/70 text-muted bg-transparent;
+    @apply border border-line-strong text-ink-2 bg-transparent;
   }
   .dot {
     @apply inline-block w-1.5 h-1.5 rounded-full flex-shrink-0;
@@ -210,7 +218,7 @@
 
   /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-medium tracking-[-0.005em] transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[12.5px] font-semibold tracking-[-0.008em] transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
     @apply bg-primary text-on-primary hover:bg-primary/90;
@@ -222,21 +230,21 @@
     @apply border border-line bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink;
   }
   .btn-quiet {
-    @apply text-muted hover:text-ink hover:bg-surface-2;
+    @apply text-ink-2 hover:text-ink hover:bg-surface-2;
   }
   .btn-danger {
     @apply border border-crit/25 bg-transparent text-crit hover:bg-crit/[0.06];
   }
   .icon-btn {
-    @apply inline-flex items-center justify-center w-8 h-8 rounded border border-line bg-surface text-muted hover:text-ink hover:bg-surface-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center w-8 h-8 rounded border border-line bg-surface text-muted hover:text-ink hover:bg-surface-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .link {
-    @apply text-[12px] font-medium text-accent hover:underline underline-offset-[3px];
+    @apply text-[12.5px] font-semibold text-accent hover:underline underline-offset-[3px];
   }
 
   /* Form controls */
   .input {
-    @apply w-full bg-surface border border-line rounded px-2.5 py-1.5 text-[12px] text-ink placeholder:text-faint focus:outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/15 transition-colors;
+    @apply w-full bg-surface border border-line rounded px-2.5 py-1.5 text-[12.5px] font-medium text-ink placeholder:text-muted focus:outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/15 transition-colors;
   }
 
   /* Segmented control */
@@ -244,18 +252,18 @@
     @apply inline-flex items-center p-0.5 rounded border border-line bg-surface-3/60;
   }
   .segmented > button {
-    @apply px-2.5 py-1 rounded-[3px] text-[11.5px] font-medium text-muted transition-colors hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply px-2.5 py-1 rounded-[3px] text-[12px] font-medium text-ink-2 transition-colors hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .segmented > button[data-active='true'] {
-    @apply bg-surface text-ink shadow-subtle;
+    @apply bg-surface text-ink font-semibold shadow-subtle;
   }
 
   /* Key/value spec rows */
   .kv {
-    @apply flex items-baseline justify-between gap-4 py-2.5 border-b border-line last:border-b-0 text-[12.5px];
+    @apply flex items-baseline justify-between gap-4 py-2.5 border-b border-line last:border-b-0 text-[13px];
   }
   .kv > dt, .kv > span:first-child {
-    @apply text-muted;
+    @apply text-muted font-medium;
   }
 
   /* Modal */

@@ -1,0 +1,98 @@
+{
+  "dataset_name": "tripura_distribution_transformer",
+  "source_dir": "C:\\1st year learning programs\\CPRI\\Transformer_Digital_Twin\\data\\tripura_raw",
+  "output_dir": "C:\\1st year learning programs\\CPRI\\Transformer_Digital_Twin\\data\\processed",
+  "partition_timestamp_utc": "2026-10-03T23:38:15.181914+00:00",
+  "total_aligned_samples": 18324,
+  "split_ratios": {
+    "fit": 0.6,
+    "calibration": 0.2,
+    "test": 0.2
+  },
+  "embargo_hours": 2.0,
+  "embargo_1_window": {
+    "start": "2019-11-24 21:00:00",
+    "end": "2019-11-24 23:00:00",
+    "duration_minutes": 120
+  },
+  "embargo_2_window": {
+    "start": "2020-02-13 14:00:00",
+    "end": "2020-02-13 16:00:00",
+    "duration_minutes": 120
+  },
+  "partitions": {
+    "fit": {
+      "name": "fit",
+      "row_count": 10994,
+      "column_count": 51,
+      "min_timestamp": "2019-06-27T10:51",
+      "max_timestamp": "2019-11-24T21:00",
+      "span_days": 150.42,
+      "sha256_hash": "7ccab8aeca8fd2bf1bd44de2a7667b3d63b491ae8bf9ca1a94efc593acbcd4e5",
+      "file_path": "C:\\1st year learning programs\\CPRI\\Transformer_Digital_Twin\\data\\processed\\tripura_fit.parquet"
+    },
+    "calibration": {
+      "name": "calibration",
+      "row_count": 3657,
+      "column_count": 51,
+      "min_timestamp": "2019-11-24T23:00",
+      "max_timestamp": "2020-02-13T14:00",
+      "span_days": 80.62,
+      "sha256_hash": "de21cc32a832fb25c72bd614a8830df046416d899c6ba1974912a2ff32b9b21f",
+      "file_path": "C:\\1st year learning programs\\CPRI\\Transformer_Digital_Twin\\data\\processed\\tripura_calibration.parquet"
+    },
+    "test": {
+      "name": "test",
+      "row_count": 3659,
+      "column_count": 51,
+      "min_timestamp": "2020-02-13T16:00",
+      "max_timestamp": "2020-04-14T00:30",
+      "span_days": 60.35,
+      "sha256_hash": "18106e0ce26e7f047536121d7620bb2dbbd6660d65389da16c4e6c416be6caa5",
+      "file_path": "C:\\1st year learning programs\\CPRI\\Transformer_Digital_Twin\\data\\processed\\tripura_test.parquet"
+    }
+  },
+  "feasibility": {
+    "status": "PASS",
+    "total_samples": 18324,
+    "fit_samples": 10994,
+    "fit_span_days": 150.42291666666668,
+    "fit_load_cv": 0.521617625733725,
+    "fit_load_range_kva": 142.898,
+    "calib_samples": 3657,
+    "calib_valid_2h_origins": 3544,
+    "test_samples": 3659,
+    "embargo_duration_hours": 2.0,
+    "observed_facts": [
+      "Fit partition contains 10,994 samples spanning 150.4 calendar days.",
+      "Fit partition load driver (KVA) dynamic range: [0.0, 142.9] kVA, mean=57.0 kVA, std=29.7 kVA.",
+      "Calibration partition contains 3,657 samples with 3,544 valid continuous 2-hour forecast origins.",
+      "Test partition contains 3,659 untouched holdout samples."
+    ],
+    "derived_statistics": {
+      "fit_sample_count": 10994,
+      "fit_span_days": 150.42,
+      "fit_load_cv": 0.5216,
+      "fit_load_range_kva": 142.9,
+      "calib_valid_2h_origins": 3544,
+      "passes_min_fit_samples": true,
+      "passes_min_fit_days": true,
+      "passes_load_variation": true,
+      "passes_calib_origins": true
+    },
+    "unresolved_semantics": [
+      "Transformer Nameplate Capacity: Actual rated kVA is not provided in raw telemetry; relative load index in Phase 4 must reference declared AssetProfile rating or frozen fit partition max.",
+      "WTI Semantics: WTI is confirmed as binary contact status; direct winding hot-spot tracking is disabled.",
+      "Temperature Integer Quantization: OTI/ATI are recorded in 1.0 deg C increments."
+    ],
+    "assumptions": [
+      "Ambient and Top-oil sensors are installed at standard physical monitoring locations on the tank.",
+      "Nominal 15-minute sampling interval is maintained with irregular delta t retained without artificial interpolation."
+    ],
+    "capability_implications": [
+      "Thermal Grey-Box Model (beta0, beta1, tau) calibration is FEASIBLE on the Fit partition.",
+      "Conformal uncertainty band calibration is FEASIBLE on the Calibration partition using 3,544 valid origins.",
+      "Holdout evaluation is STRICTLY PRESERVED on the untouched Test partition without data leakage."
+    ]
+  }
+}

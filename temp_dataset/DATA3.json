@@ -1,0 +1,158 @@
+{
+  "dataset_id": "cpri_onan_practical_schema_synthetic",
+  "version": "3.0.2",
+  "generator_version": "3.0.2",
+  "synthetic": true,
+  "timezone": "Asia/Kolkata",
+  "cadence_minutes": 30,
+  "assets": 8,
+  "asset_ids": [
+    "TX_100_RES",
+    "TX_160_RURAL",
+    "TX_250_MIX",
+    "TX_315_RES",
+    "TX_400_COMM",
+    "TX_500_RURAL",
+    "TX_630_MIX",
+    "TX_1000_COMM"
+  ],
+  "ratings_kva": {
+    "TX_100_RES": 100,
+    "TX_160_RURAL": 160,
+    "TX_250_MIX": 250,
+    "TX_315_RES": 315,
+    "TX_400_COMM": 400,
+    "TX_500_RURAL": 500,
+    "TX_630_MIX": 630,
+    "TX_1000_COMM": 1000
+  },
+  "seed": 2026100902,
+  "rng": {
+    "bit_generator": "PCG64",
+    "rule": "SeedSequence(base_seed, spawn_key=(asset_index, stream_id))",
+    "asset_index": "0-based position in config.assets",
+    "streams": {
+      "ambient": 0,
+      "load": 1,
+      "electrical_latent": 2,
+      "electrical_noise": 3,
+      "thermal_noise": 4,
+      "condition_noise": 5,
+      "event_schedule": 6,
+      "fault_perturbation": 7,
+      "dq": 8
+    }
+  },
+  "fit_period": [
+    "2024-01-01T00:00:00+05:30",
+    "2025-01-01T00:00:00+05:30"
+  ],
+  "cal_period": [
+    "2025-01-01T00:00:00+05:30",
+    "2025-07-03T00:00:00+05:30"
+  ],
+  "test_period": [
+    "2025-07-03T00:00:00+05:30",
+    "2026-01-01T00:00:00+05:30"
+  ],
+  "partition_rule": "assigned by timestamp after a single continuous simulation per asset",
+  "fault_classes": [
+    "overload",
+    "phase_imbalance",
+    "cooling_degradation",
+    "abnormal_internal_heating",
+    "oil_sensor_bias",
+    "oil_sensor_drift",
+    "oil_sensor_stuck",
+    "power_quality_disturbance",
+    "oil_leak",
+    "bushing_overheating",
+    "vibration_anomaly",
+    "communication_gap"
+  ],
+  "fault_labels_available": true,
+  "labels_are_runtime_inputs": false,
+  "label_columns": [
+    "y_anomaly",
+    "y_fault_type",
+    "y_fault_domain",
+    "y_severity",
+    "y_event_id",
+    "y_thermal_alert_level",
+    "y_wti_alarm",
+    "y_fit_eligible"
+  ],
+  "metadata_columns": [
+    "meta_transformer_id",
+    "meta_timestamp",
+    "meta_partition"
+  ],
+  "fit_eligibility_column": "y_fit_eligible",
+  "ratings_verified": true,
+  "ratings_note": "Ratings are the declared configuration of synthetic assets (verified to equal x_rating_kva in data); they are not nameplate data of real transformers.",
+  "continuous_state_across_splits": true,
+  "iec_compliance_claimed": false,
+  "files": {
+    "transformer_practical_schema_v3.0.2_30min.csv": {
+      "sha256": "f33c3951b7622575f3026de897534b57e86e56681a929d091540b9074d982a63"
+    },
+    "transformer_practical_schema_v3.0.2_with_dq.csv": {
+      "sha256": "f361b9d513e51608fed2d2567510e5354c05867533313194c0e7ca20b6673dae"
+    },
+    "v3.0.2_event_windows.csv": {
+      "sha256": "1492a39be89f783af1c16a725488a50287a213f1d085332c25649f5e9344b7b7"
+    },
+    "v3.0.2_dq_defects.csv": {
+      "sha256": "1c61db158edfef5c3490d1f5304a99bcd22ff6030918d76dc03d00020adc3556"
+    }
+  },
+  "rows": {
+    "clean": 280182,
+    "with_dq": 280126,
+    "events": 360,
+    "dq_defects": 104
+  },
+  "generation_stats": {
+    "TX_100_RES": {
+      "pqs_noise_redraws": 0
+    },
+    "TX_160_RURAL": {
+      "pqs_noise_redraws": 10
+    },
+    "TX_250_MIX": {
+      "pqs_noise_redraws": 0
+    },
+    "TX_315_RES": {
+      "pqs_noise_redraws": 3
+    },
+    "TX_400_COMM": {
+      "pqs_noise_redraws": 13
+    },
+    "TX_500_RURAL": {
+      "pqs_noise_redraws": 5
+    },
+    "TX_630_MIX": {
+      "pqs_noise_redraws": 0
+    },
+    "TX_1000_COMM": {
+      "pqs_noise_redraws": 4
+    }
+  },
+  "environment": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "scipy": "1.18.1"
+  },
+  "config_sha256": "af627fb16ea346455f917b68b000bf5f38e35c1a0449f4926598bb97fb471384",
+  "methodology_doc": {
+    "file": "DATASET_METHODOLOGY_V3.0.2.md",
+    "sha256": "57de6e95fec24bac052d640986ae12878c797bb7c60d1c29253225a948115ce3"
+  },
+  "generator_source_sha256": "d652a09ca828aec60ccc7d339b40ced7b9eea6903c61449bfd214c949058419f",
+  "validation": {
+    "report": "validation_report_v3.0.2.json",
+    "result": "PASS",
+    "checks": 27
+  }
+}

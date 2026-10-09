@@ -1,0 +1,113 @@
+{
+  "dataset_id": "cpri_onan_practical_schema_synthetic",
+  "version": "3.0.2",
+  "source_archive_clean": "DATA6.xz",
+  "source_clean_file_sha256": "1a33d1419ccf9bf602693f10d11ff2f7769ee873884813837db74f58df167bab",
+  "source_clean_decompressed_sha256": "f33c3951b7622575f3026de897534b57e86e56681a929d091540b9074d982a63",
+  "total_clean_rows": 280182,
+  "cadence_minutes": 30,
+  "assets": [
+    "TX_1000_COMM",
+    "TX_100_RES",
+    "TX_160_RURAL",
+    "TX_250_MIX",
+    "TX_315_RES",
+    "TX_400_COMM",
+    "TX_500_RURAL",
+    "TX_630_MIX"
+  ],
+  "ratings_kva": {
+    "TX_100_RES": 100.0,
+    "TX_160_RURAL": 160.0,
+    "TX_250_MIX": 250.0,
+    "TX_315_RES": 315.0,
+    "TX_400_COMM": 400.0,
+    "TX_500_RURAL": 500.0,
+    "TX_630_MIX": 630.0,
+    "TX_1000_COMM": 1000.0
+  },
+  "partitions": {
+    "FIT": {
+      "name": "FIT",
+      "row_count": 140387,
+      "column_count": 47,
+      "min_timestamp": "2024-01-01 00:00:00+05:30",
+      "max_timestamp": "2024-12-31 23:30:00+05:30",
+      "sha256_hash": "8e258d78587069636457a505bd03a166098fa503846d98d47c4a433b815190f4",
+      "file_path": "data/processed/cpri_v3_fit.parquet",
+      "asset_counts": {
+        "TX_400_COMM": 17556,
+        "TX_100_RES": 17552,
+        "TX_315_RES": 17550,
+        "TX_500_RURAL": 17549,
+        "TX_1000_COMM": 17546,
+        "TX_250_MIX": 17546,
+        "TX_160_RURAL": 17544,
+        "TX_630_MIX": 17544
+      },
+      "anomaly_prevalence_pct": 7.03,
+      "fit_eligible_share_pct": 92.37
+    },
+    "CAL": {
+      "name": "CAL",
+      "row_count": 70082,
+      "column_count": 47,
+      "min_timestamp": "2025-01-01 00:00:00+05:30",
+      "max_timestamp": "2025-07-02 23:30:00+05:30",
+      "sha256_hash": "48d44e9e0e1746d29216741d7d73bb27e293494ab601c435858f067ead699371",
+      "file_path": "data/processed/cpri_v3_calibration.parquet",
+      "asset_counts": {
+        "TX_315_RES": 8767,
+        "TX_160_RURAL": 8765,
+        "TX_1000_COMM": 8761,
+        "TX_500_RURAL": 8761,
+        "TX_100_RES": 8758,
+        "TX_250_MIX": 8757,
+        "TX_400_COMM": 8757,
+        "TX_630_MIX": 8756
+      },
+      "anomaly_prevalence_pct": 13.09,
+      "fit_eligible_share_pct": 85.7
+    },
+    "TEST": {
+      "name": "TEST",
+      "row_count": 69713,
+      "column_count": 47,
+      "min_timestamp": "2025-07-03 00:00:00+05:30",
+      "max_timestamp": "2025-12-31 23:30:00+05:30",
+      "sha256_hash": "c57adadd838a1a7fb79b1225cda06333817c34709a9bfcfd9de5e42be7527679",
+      "file_path": "data/processed/cpri_v3_test.parquet",
+      "asset_counts": {
+        "TX_1000_COMM": 8720,
+        "TX_400_COMM": 8718,
+        "TX_630_MIX": 8717,
+        "TX_250_MIX": 8714,
+        "TX_100_RES": 8713,
+        "TX_160_RURAL": 8711,
+        "TX_315_RES": 8711,
+        "TX_500_RURAL": 8709
+      },
+      "anomaly_prevalence_pct": 13.44,
+      "fit_eligible_share_pct": 85.34
+    }
+  },
+  "validation_status": "PASS",
+  "validation_checks": {
+    "row_count_match_280182": true,
+    "column_count_47": true,
+    "assets_match_expected_8": true,
+    "rating_match_TX_100_RES": true,
+    "rating_match_TX_160_RURAL": true,
+    "rating_match_TX_250_MIX": true,
+    "rating_match_TX_315_RES": true,
+    "rating_match_TX_400_COMM": true,
+    "rating_match_TX_500_RURAL": true,
+    "rating_match_TX_630_MIX": true,
+    "rating_match_TX_1000_COMM": true,
+    "partitions_fit_cal_test": true,
+    "no_duplicate_asset_timestamp": true,
+    "cadence_predominantly_30m": true,
+    "fit_cal_no_overlap": true,
+    "cal_test_no_overlap": true
+  }
+}

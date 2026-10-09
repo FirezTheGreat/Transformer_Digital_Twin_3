@@ -87,19 +87,5 @@ generated_reports/
 *.duckdb
 *.duckdb.wal
 
-# ==========================================
-# 9. Large Datasets & Generated Data Partitions
-# ==========================================
-# Ignore downloaded raw dataset files while preserving directory structure
-data/tripura_raw/*
-!data/tripura_raw/.gitkeep
 
-# Ignore processed partition batches and large temporal parquet stores
-data/processed/*
-!data/processed/.gitkeep
-
-# Ignore temporary staged benchmark datasets and local raw data
-temp_dataset/
-data/cpri_raw/*
-!data/cpri_raw/.gitkeep
 

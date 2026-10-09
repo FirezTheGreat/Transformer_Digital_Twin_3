@@ -1,0 +1,256 @@
+{
+  "schema_version": "1.2.0",
+  "model_version": "greybox_v1_0",
+  "asset_id": "tripura_dt_01",
+  "created_at_utc": "2026-10-07T07:55:17.709092+00:00",
+  "selected_load_driver": "rms_current_a",
+  "load_driver_reference_value": 153.8652332400013,
+  "parameters": {
+    "beta_0": 1.088,
+    "beta_1": 2.8979,
+    "tau_hours": 0.5
+  },
+  "identifiability": {
+    "is_identifiable": false,
+    "fit_samples_count": 10941,
+    "fit_span_days": 150.39,
+    "load_cv": 0.5331,
+    "load_range": 226.34,
+    "tau_cv_across_folds": 0.0,
+    "boundary_hit": true,
+    "diagnostic_messages": [
+      "Parameters sit on bounds: beta0=1.088, beta1=2.8979, tau=0.5 (domain: [0.5, 24.0] h)"
+    ]
+  },
+  "conformal_uncertainty": {
+    "horizon_steps": 8,
+    "horizon_scales_degc": [
+      0.5,
+      0.5186,
+      0.5622,
+      0.681,
+      0.842,
+      1.0498,
+      1.3694,
+      1.596
+    ],
+    "block_quantile_90": 5.9891,
+    "horizon_half_widths_degc": [
+      2.9945,
+      3.1057,
+      3.367,
+      4.0787,
+      5.0427,
+      6.2871,
+      8.2012,
+      9.5585
+    ],
+    "calibration_residual_median": 0.2062,
+    "calibration_residual_mad": 0.9613,
+    "num_calibration_origins": 3551
+  },
+  "baselines": {
+    "persistence": {
+      "model_name": "persistence_2h_trajectory",
+      "mae_degc": 2.03,
+      "rmse_degc": 2.8684,
+      "bias_degc": 0.0502,
+      "marginal_coverage_90_pct": null,
+      "mean_width_degc": null
+    },
+    "ambient_median_rise": {
+      "model_name": "ambient_median_rise_2h_trajectory",
+      "mae_degc": 1.6143,
+      "rmse_degc": 2.2617,
+      "bias_degc": 0.0,
+      "marginal_coverage_90_pct": null,
+      "mean_width_degc": null
+    },
+    "static_robust_regression": {
+      "model_name": "static_robust_regression_2h_trajectory",
+      "mae_degc": 1.748,
+      "rmse_degc": 2.3853,
+      "bias_degc": 0.0,
+      "marginal_coverage_90_pct": null,
+      "mean_width_degc": null
+    }
+  },
+  "test_metrics": {
+    "model_name": "greybox_ode_2h_trajectory",
+    "mae_degc": 1.6527,
+    "rmse_degc": 2.2929,
+    "bias_degc": 0.2473,
+    "marginal_coverage_90_pct": 97.33,
+    "mean_width_degc": 10.6589
+  },
+  "promotion": {
+    "status": "NOT_PROMOTED",
+    "primary_evaluation_horizon": "2_hour_multi_step_trajectory",
+    "mae_improvement_pct": 18.59,
+    "passes_mae_criterion": true,
+    "passes_bias_criterion": false,
+    "passes_coverage_criterion": true,
+    "passes_scenario_criterion": true,
+    "passes_identifiability_criterion": false,
+    "secondary_1step_closed_loop_mae_improvement_pct": 2.73,
+    "all_criteria_met": false,
+    "reasons": [
+      "2-Hour trajectory MAE improvement (18.59%) exceeds the 5.0% threshold vs multi-step persistence.",
+      "2-Hour trajectory signed bias (+0.25 degC) exceeds multi-step persistence bias (+0.05 degC).",
+      "Test empirical 90% trajectory coverage (97.3%) is within expected [80%, 98%] band.",
+      "Secondary 1-step closed-loop diagnostic: MAE=0.7252 degC vs persistence=0.7456 degC (improvement: +2.73%).",
+      "Identifiability failure: parameter solution sits on boundary (tau=0.5000 h in [0.5, 24.0] h)."
+    ]
+  },
+  "qualification": {
+    "parameter_interpretability": "UNVERIFIED",
+    "forecast_qualification": "PENDING_VALIDATION",
+    "scenario_qualification": "PENDING_VALIDATION",
+    "residual_display_qualification": "DESCRIPTIVE_ONLY",
+    "residual_anomaly_qualification": "NOT_QUALIFIED",
+    "cusum_qualification": "DISABLED",
+    "maintenance_inference_qualification": "DISABLED",
+    "dimension_reasons": {
+      "parameter_interpretability": "Parameter identifiability failure: boundary hit on tau.",
+      "forecast_qualification": "Autonomous 2-hour forward forecasting pending independent validation under revised qualification policy.",
+      "scenario_qualification": "Scenario what-if projection pending explicit independent causal validation beyond historical rolling-origin forecast accuracy.",
+      "residual_display_qualification": "First-order grey-box ODE runs continuously on valid telemetry to compute descriptive shadow residuals without diagnostic validation.",
+      "residual_anomaly_qualification": "Thermal residuals are descriptive-only; not qualified as statistical anomaly evidence.",
+      "cusum_qualification": "CUSUM drift tracker disabled on unpromoted thermal model to prevent unvalidated false drift alarms.",
+      "maintenance_inference_qualification": "Model-driven maintenance recommendations disabled until parameter identifiability and causal degradation models are qualified."
+    }
+  },
+  "dataset_hashes": {
+    "tripura_fit_sha256": "7ccab8aeca8fd2bf1bd44de2a7667b3d63b491ae8bf9ca1a94efc593acbcd4e5",
+    "tripura_calibration_sha256": "de21cc32a832fb25c72bd614a8830df046416d899c6ba1974912a2ff32b9b21f",
+    "tripura_test_sha256": "18106e0ce26e7f047536121d7620bb2dbbd6660d65389da16c4e6c416be6caa5"
+  },
+  "metadata": {
+    "fit_diagnostics": {
+      "fit_loss": 1.803,
+      "fit_mae_degc": 1.6259,
+      "fit_rmse_degc": 2.2246,
+      "fit_bias_degc": 0.2276,
+      "tau_grid_best": 0.5,
+      "huber_delta_degc": 1.9941,
+      "fit_sigma_mad_degc": 1.4826
+    },
+    "load_driver_comparison": {
+      "apparent_power_kva": {
+        "mean_rolling_mae": 1.5421,
+        "tau_cv": 0.0,
+        "fold_maes": [
+          1.8922,
+          1.599,
+          1.4269,
+          1.4736,
+          1.319
+        ]
+      },
+      "rms_current_a": {
+        "mean_rolling_mae": 1.5116,
+        "tau_cv": 0.0,
+        "fold_maes": [
+          1.8133,
+          1.6581,
+          1.367,
+          1.4321,
+          1.2876
+        ]
+      }
+    },
+    "horizon_breakdown": [
+      {
+        "horizon_step": 1,
+        "horizon_minutes": 15,
+        "model_mae_degc": 0.7444,
+        "persistence_mae_degc": 0.7509,
+        "mae_improvement_pct": 0.87,
+        "model_rmse_degc": 0.9861,
+        "model_bias_degc": 0.1072,
+        "conformal_coverage_pct": 99.19
+      },
+      {
+        "horizon_step": 2,
+        "horizon_minutes": 30,
+        "model_mae_degc": 0.9682,
+        "persistence_mae_degc": 1.0998,
+        "mae_improvement_pct": 11.97,
+        "model_rmse_degc": 1.3084,
+        "model_bias_degc": 0.1764,
+        "conformal_coverage_pct": 96.57
+      },
+      {
+        "horizon_step": 3,
+        "horizon_minutes": 45,
+        "model_mae_degc": 1.1985,
+        "persistence_mae_degc": 1.4719,
+        "mae_improvement_pct": 18.58,
+        "model_rmse_degc": 1.6185,
+        "model_bias_degc": 0.2236,
+        "conformal_coverage_pct": 95.14
+      },
+      {
+        "horizon_step": 4,
+        "horizon_minutes": 60,
+        "model_mae_degc": 1.4582,
+        "persistence_mae_degc": 1.8435,
+        "mae_improvement_pct": 20.9,
+        "model_rmse_degc": 1.9365,
+        "model_bias_degc": 0.2555,
+        "conformal_coverage_pct": 95.46
+      },
+      {
+        "horizon_step": 5,
+        "horizon_minutes": 75,
+        "model_mae_degc": 1.7479,
+        "persistence_mae_degc": 2.229,
+        "mae_improvement_pct": 21.58,
+        "model_rmse_degc": 2.2842,
+        "model_bias_degc": 0.2813,
+        "conformal_coverage_pct": 96.07
+      },
+      {
+        "horizon_step": 6,
+        "horizon_minutes": 90,
+        "model_mae_degc": 2.0521,
+        "persistence_mae_degc": 2.59,
+        "mae_improvement_pct": 20.77,
+        "model_rmse_degc": 2.6467,
+        "model_bias_degc": 0.2999,
+        "conformal_coverage_pct": 97.67
+      },
+      {
+        "horizon_step": 7,
+        "horizon_minutes": 105,
+        "model_mae_degc": 2.3633,
+        "persistence_mae_degc": 2.9502,
+        "mae_improvement_pct": 19.9,
+        "model_rmse_degc": 3.0235,
+        "model_bias_degc": 0.3128,
+        "conformal_coverage_pct": 99.07
+      },
+      {
+        "horizon_step": 8,
+        "horizon_minutes": 120,
+        "model_mae_degc": 2.6888,
+        "persistence_mae_degc": 3.3046,
+        "mae_improvement_pct": 18.64,
+        "model_rmse_degc": 3.412,
+        "model_bias_degc": 0.3215,
+        "conformal_coverage_pct": 99.48
+      }
+    ],
+    "secondary_1step_closed_loop": {
+      "evaluation_name": "1_step_closed_loop_diagnostic",
+      "sample_count": 3628,
+      "greybox_mae_degc": 0.7252,
+      "greybox_rmse_degc": 0.9584,
+      "greybox_bias_degc": 0.1,
+      "persistence_mae_degc": 0.7456,
+      "persistence_rmse_degc": 1.0768,
+      "persistence_bias_degc": 0.0008,
+      "mae_improvement_pct": 2.73
+    }
+  }
+}

@@ -54,15 +54,15 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-line border border-line rounded-card overflow-hidden">
         <div className="bg-inverse text-on-inverse p-5">
           <div className="pb-3 border-b border-on-inverse/15 flex items-center">
-            <span className="text-[11px] font-semibold uppercase tracking-eyebrow text-on-inverse/70 leading-none">
+            <span className="text-[11px] font-semibold uppercase tracking-eyebrow text-on-inverse/80 leading-none">
               Observed Temperature
             </span>
           </div>
           <div className="mt-4 flex items-baseline gap-1.5">
             <span className="metric-value text-[40px] text-on-inverse">{String(topOilObs)}</span>
-            <span className="text-sm text-on-inverse/60">°C</span>
+            <span className="text-sm text-on-inverse/72">°C</span>
           </div>
-          <span className="text-[11px] text-on-inverse/60 mt-3 block">
+          <span className="text-[11px] text-on-inverse/72 mt-3 block">
             Direct PT100 probe reading
           </span>
         </div>

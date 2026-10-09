@@ -105,7 +105,7 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
           <h2 className="section-title">Recorded trends</h2>
-          <span className="text-[10.5px] font-mono text-muted">
+          <span className="text-[11px] font-mono text-muted">
             {events.length > 0
               ? `${events.length} frames · ${formatUtcTick(events[0].event_time_utc)} → ${formatUtcTick(
                   events[events.length - 1].event_time_utc
@@ -187,11 +187,11 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-line bg-surface-2">
-                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Event ID</th>
-                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Timestamp (UTC)</th>
-                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Source</th>
-                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Primary Signals</th>
-                    <th className="py-3 px-4 eyebrow text-[10px] font-semibold">Quality Status</th>
+                    <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Event ID</th>
+                    <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Timestamp (UTC)</th>
+                    <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Source</th>
+                    <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Primary Signals</th>
+                    <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Quality Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line font-mono text-[11px]">

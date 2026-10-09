@@ -21,7 +21,7 @@ const ReadingRow: React.FC<{ tag: string; label: string; value: string; unit?: s
 }) => (
   <div className="flex items-baseline justify-between gap-3 py-2.5 border-b border-line last:border-b-0">
     <span className="flex items-center gap-2 text-[11.5px] text-muted min-w-0">
-      <span className="font-mono text-[10px] font-semibold text-ink-2 bg-surface-3 rounded px-1.5 py-0.5">{tag}</span>
+      <span className="font-mono text-[11px] font-semibold text-ink-2 bg-surface-3 rounded px-1.5 py-0.5">{tag}</span>
       <span className="truncate">{label}</span>
     </span>
     <span className="flex items-baseline gap-1.5 flex-shrink-0">
@@ -55,7 +55,7 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
   const panelHeader = (title: string, icon: React.ReactNode) => (
     <div className="flex items-center justify-between pb-3 border-b border-line">
       <span className="eyebrow">{title}</span>
-      <span className="text-faint">{icon}</span>
+      <span className="text-muted">{icon}</span>
     </div>
   );
 
@@ -142,7 +142,7 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
                 className={`p-4 ${isEnabled ? 'bg-surface' : 'bg-surface-2'}`}
               >
                 <div className="flex items-center justify-between mb-4">
-                  <span className={`font-mono text-[22px] font-light ${isEnabled ? 'text-ink' : 'text-faint'}`}>
+                  <span className={`metric-compact text-[22px] ${isEnabled ? 'text-ink' : 'text-faint'}`}>
                     {t.tier}
                   </span>
                   <span className={`chip ${isEnabled ? 'chip-ok' : 'chip-outline'}`}>

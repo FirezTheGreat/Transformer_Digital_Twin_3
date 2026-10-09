@@ -52,7 +52,7 @@ const MetricTile: React.FC<{
     <div>
       <div className="flex items-center justify-between gap-2 pb-3 border-b border-line">
         <span className="eyebrow flex items-center gap-2">
-          <span className="text-faint">{icon}</span>
+          <span className="text-muted">{icon}</span>
           {label}
         </span>
         {onOpen && (
@@ -66,7 +66,7 @@ const MetricTile: React.FC<{
         )}
       </div>
       <div className="mt-4 flex items-baseline gap-1.5">
-        <span className={`metric-value text-[38px] ${value === null ? 'text-faint' : ''}`}>
+        <span className={`metric-value text-[38px] ${value === null ? 'text-faint font-normal' : ''}`}>
           {value !== null ? value : '—'}
         </span>
         {value !== null && unit && <span className="metric-unit">{unit}</span>}
@@ -228,7 +228,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             className="btn btn-ghost font-medium group"
             title="Click to understand Current Operating Capability"
           >
-            <span className="eyebrow text-[10px]">Capability</span>
+            <span className="eyebrow text-[11px]">Capability</span>
             <span className="text-ink">{getTierTitle(highestTier)}</span>
             <Info className="w-3.5 h-3.5 text-faint group-hover:text-accent" />
           </button>
@@ -256,10 +256,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 className="w-full flex items-center justify-between pb-3 border-b border-on-inverse/15 group"
                 title="Click to understand Health Index (OTHI)"
               >
-                <span className="text-[11px] font-semibold uppercase tracking-eyebrow text-on-inverse/70 group-hover:text-on-inverse">
+                <span className="text-[11px] font-semibold uppercase tracking-eyebrow text-on-inverse/80 group-hover:text-on-inverse">
                   Health Index · OTHI
                 </span>
-                <Info className="w-3.5 h-3.5 text-on-inverse/50 group-hover:text-on-inverse" />
+                <Info className="w-3.5 h-3.5 text-on-inverse/65 group-hover:text-on-inverse" />
               </button>
 
               <div className="mt-6">
@@ -268,12 +268,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <span className="metric-value text-[84px] text-on-inverse">
                       {Math.round(Number(othiScore))}
                     </span>
-                    <span className="text-base text-on-inverse/50">/100</span>
+                    <span className="text-base text-on-inverse/65">/100</span>
                   </div>
                 ) : (
                   <>
-                    <span className="metric-value text-[84px] text-on-inverse/40">—</span>
-                    <span className="block text-xs text-on-inverse/70 mt-3">
+                    <span className="metric-value text-[84px] font-normal text-on-inverse/55">—</span>
+                    <span className="block text-xs text-on-inverse/80 mt-3">
                       Insufficient current evidence
                     </span>
                   </>
@@ -295,7 +295,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     {healthStatus}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-on-inverse/70">
+                  <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-on-inverse/80">
                     <span className="dot w-2 h-2 border border-on-inverse/50" />
                     Status: Insufficient evidence
                   </span>
@@ -303,7 +303,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               </div>
             </div>
 
-            <div className="mt-6 pt-3 border-t border-on-inverse/15 space-y-1.5 text-[11px] text-on-inverse/60">
+            <div className="mt-6 pt-3 border-t border-on-inverse/15 space-y-1.5 text-[11px] text-on-inverse/72">
               <button
                 onClick={() => setIsEvidenceModalOpen(true)}
                 className="flex items-center gap-1.5 text-on-inverse/85 hover:text-on-inverse font-medium"
@@ -315,7 +315,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <div>
                 {isScoreShown ? 'Composite health index' : 'Gated (requires ≥2 corroborated domains)'}
               </div>
-              {asOf && <div className="font-mono text-[10.5px] text-on-inverse/50">As of {asOf}</div>}
+              {asOf && <div className="font-mono text-[11px] text-on-inverse/65">As of {asOf}</div>}
             </div>
           </div>
 
@@ -336,7 +336,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   </span>
                 </div>
                 {!hasValidExpected && (
-                  <span className="block text-[10.5px] text-warn">
+                  <span className="block text-[11px] text-warn">
                     {isThermalWarmup ? 'Shadow model warming up' : 'Thermal shadow unavailable'}
                   </span>
                 )}
@@ -418,7 +418,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       <span className={`chip ${priorityChip(rec.priority)}`}>
                         {rec.priority_label || `Priority ${rec.priority}`}
                       </span>
-                      <span className="text-[10.5px] font-mono text-muted truncate">
+                      <span className="text-[11px] font-mono text-muted truncate">
                         {rec.action_window.replace(/_/g, ' ')}
                       </span>
                     </div>
@@ -480,7 +480,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               <span className="eyebrow text-ink-2">
                 {activeTrend.label} · {activeTrend.unit}
               </span>
-              <span className="text-[10.5px] font-mono text-muted">
+              <span className="text-[11px] font-mono text-muted">
                 {trendRange ? `${historyEvents.length} recorded frames · ${trendRange}` : 'No recorded frames'}
               </span>
             </div>
@@ -559,7 +559,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     </div>
                     <span className={`chip ${chipClass}`}>{statusLabel}</span>
                   </div>
-                  <div className="mt-2.5 flex items-center gap-3 text-[10.5px] text-muted font-mono">
+                  <div className="mt-2.5 flex items-center gap-3 text-[11px] text-muted font-mono">
                     <div className="flex-1 h-[3px] rounded-full bg-surface-3 overflow-hidden">
                       <div
                         className={`h-full rounded-full ${barClass}`}
@@ -670,7 +670,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </ul>
               </div>
 
-              <div className="pt-3 border-t border-line text-[11px] text-faint">
+              <div className="pt-3 border-t border-line text-[11px] text-muted">
                 <span>Technical details: Capability Tier {highestTier} evaluated per IEC 60076-7 and IEEE C57.91 standards.</span>
               </div>
             </div>
@@ -746,7 +746,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </>
               )}
 
-              <div className="pt-3 border-t border-line text-[11px] text-faint">
+              <div className="pt-3 border-t border-line text-[11px] text-muted">
                 <span>Grading Hierarchy: Grade A (≥3 domains) · Grade B (2 domains) · Grade C (single domain) · Grade U (uncorroborated / gated).</span>
               </div>
             </div>
@@ -792,7 +792,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-line text-[11px] text-faint">
+              <div className="pt-3 border-t border-line text-[11px] text-muted">
                 <span>Non-Learning Contract: Evaluation is deterministic and executes without modifying model parameters.</span>
               </div>
             </div>

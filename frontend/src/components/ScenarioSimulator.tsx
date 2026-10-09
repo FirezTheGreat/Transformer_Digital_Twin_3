@@ -116,7 +116,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                 onChange={(e) => setLoadMultiplier(parseFloat(e.target.value))}
                 className="w-full cursor-pointer"
               />
-              <div className="flex justify-between text-[10px] text-faint mt-1 font-mono">
+              <div className="flex justify-between text-[11px] text-muted mt-1 font-mono">
                 <span>0.50x (50%)</span>
                 <span>1.00x (Nominal)</span>
                 <span>1.60x (160%)</span>
@@ -140,7 +140,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                 onChange={(e) => setAmbientDelta(parseFloat(e.target.value))}
                 className="w-full cursor-pointer"
               />
-              <div className="flex justify-between text-[10px] text-faint mt-1 font-mono">
+              <div className="flex justify-between text-[11px] text-muted mt-1 font-mono">
                 <span>-10.0°C</span>
                 <span>0.0°C</span>
                 <span>+15.0°C</span>
@@ -150,7 +150,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
             {/* Warning & Critical Threshold Limits */}
             <div className="grid grid-cols-2 gap-3 pt-5 border-t border-line">
               <div>
-                <label htmlFor="sim-warning-threshold" className="eyebrow text-[10px] flex items-center gap-1.5 mb-2">
+                <label htmlFor="sim-warning-threshold" className="eyebrow text-[11px] flex items-center gap-1.5 mb-2">
                   <span className="dot bg-warn" /> Warning Limit
                 </label>
                 <input
@@ -162,7 +162,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                 />
               </div>
               <div>
-                <label htmlFor="sim-critical-threshold" className="eyebrow text-[10px] flex items-center gap-1.5 mb-2">
+                <label htmlFor="sim-critical-threshold" className="eyebrow text-[11px] flex items-center gap-1.5 mb-2">
                   <span className="dot bg-crit" /> Critical Limit
                 </label>
                 <input
@@ -206,7 +206,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
               {/* Scenario Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-line border border-line rounded-card overflow-hidden">
                 <div className="bg-inverse text-on-inverse p-4">
-                  <span className="text-[10px] font-semibold uppercase tracking-eyebrow text-on-inverse/70 block">Max Projected Temp</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-eyebrow text-on-inverse/70 block">Max Projected Temp</span>
                   <span className="metric-value text-[28px] text-on-inverse mt-3 block">
                     {result.peak_projected_top_oil_degc?.toFixed(1) ?? '--'}
                     <span className="text-sm text-on-inverse/60 ml-1">°C</span>
@@ -214,7 +214,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                 </div>
 
                 <div className="bg-surface p-4">
-                  <span className="eyebrow text-[10px] block">Steady State Temp</span>
+                  <span className="eyebrow text-[11px] block">Steady State Temp</span>
                   <span className="metric-value text-[28px] mt-3 block">
                     {result.asymptotic_steady_state_degc?.toFixed(1) ?? (result.trajectory[result.trajectory.length - 1]?.projected_top_oil_degc?.toFixed(1) ?? '--')}
                     <span className="metric-unit ml-1">°C</span>
@@ -222,7 +222,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                 </div>
 
                 <div className="bg-surface p-4">
-                  <span className="eyebrow text-[10px] flex items-center gap-1.5">
+                  <span className="eyebrow text-[11px] flex items-center gap-1.5">
                     <span className="dot bg-warn" /> Warning Crossing
                   </span>
                   <span className={`text-lg font-mono mt-3 block ${result.earliest_warning_crossing_minutes != null ? 'text-warn font-semibold' : 'text-ink-2'}`}>
@@ -233,7 +233,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                 </div>
 
                 <div className="bg-surface p-4">
-                  <span className="eyebrow text-[10px] flex items-center gap-1.5">
+                  <span className="eyebrow text-[11px] flex items-center gap-1.5">
                     <span className="dot bg-crit" /> Critical Crossing
                   </span>
                   <span className={`text-lg font-mono mt-3 block ${result.earliest_critical_crossing_minutes != null ? 'text-crit font-semibold' : 'text-ink-2'}`}>
@@ -262,7 +262,7 @@ export const ScenarioSimulator: React.FC<ScenarioSimulatorProps> = ({ assetId })
                     <div className="flex flex-wrap items-center gap-4">
                       <LegendItem label="Projected" />
                       {hasBaseline && <LegendItem label="Baseline" color={chartTheme.muted} dashed />}
-                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-2">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-2">
                         <span className="inline-block w-3 h-2 rounded-[2px]" style={{ background: chartTheme.series[0], opacity: 0.18 }} />
                         90% Conformal Band
                       </span>

@@ -26,6 +26,9 @@ export interface ChartTheme {
   crit: string;
 }
 
+/** Numeric face for axis ticks — mirrors the Tailwind `font-num` stack. */
+const NUM_FONT = "Gotham, 'Gotham SSm', Montserrat, sans-serif";
+
 const readTheme = (): ChartTheme => {
   const s = getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback;
@@ -97,7 +100,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({
           <CartesianGrid vertical={false} stroke={theme.grid} />
           <XAxis
             dataKey={xKey}
-            tick={{ fill: theme.axis, fontSize: 10.5 }}
+            tick={{ fill: theme.axis, fontSize: 11.5, fontWeight: 500, fontFamily: NUM_FONT }}
             tickLine={false}
             axisLine={false}
             minTickGap={36}
@@ -105,7 +108,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({
           />
           <YAxis
             domain={['auto', 'auto']}
-            tick={{ fill: theme.axis, fontSize: 10.5 }}
+            tick={{ fill: theme.axis, fontSize: 11.5, fontWeight: 500, fontFamily: NUM_FONT }}
             tickLine={false}
             axisLine={false}
             width={48}
@@ -158,7 +161,7 @@ export const LegendItem: React.FC<{ label: string; colorIndex?: 0 | 1 | 2; color
 }) => {
   const theme = useChartTheme();
   return (
-    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-muted">
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.09em] text-muted">
       <span
         className="inline-block w-3 h-0"
         style={{ borderTop: `2px ${dashed ? 'dashed' : 'solid'} ${color ?? theme.series[colorIndex]}` }}

@@ -10,9 +10,12 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Geist"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
-        mono: ['"Geist Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
-        display: ['"Bodoni Moda"', 'Didot', '"Bodoni 72"', '"Bodoni MT"', 'serif'],
+        sans: ['"Poppins"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        display: ['"Poppins"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        // Gotham is commercial: used when installed locally, otherwise its
+        // closest open equivalent (Montserrat) is served from Google Fonts.
+        num: ['"Gotham"', '"Gotham SSm"', '"Montserrat"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       colors: {
         // Semantic design tokens (switch automatically between cream light and graphite dark)

@@ -98,3 +98,8 @@ data/tripura_raw/*
 data/processed/*
 !data/processed/.gitkeep
 
+# Ignore temporary staged benchmark datasets and local raw data
+temp_dataset/
+data/cpri_raw/*
+!data/cpri_raw/.gitkeep
+

@@ -25,6 +25,7 @@ Strictly implements the offline calibration and evaluation workflow:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import math
 from dataclasses import dataclass
@@ -161,9 +162,15 @@ def extract_load_driver(
     if driver_type == "apparent_power_kva":
         if "KVA" in df.columns:
             return np.maximum(0.0, df["KVA"].to_numpy(dtype=float))
+        elif "x_apparent_power_kva" in df.columns:
+            return np.maximum(0.0, df["x_apparent_power_kva"].to_numpy(dtype=float))
         elif "KW" in df.columns and "KVAR" in df.columns:
             kw = df["KW"].to_numpy(dtype=float)
             kvar = df["KVAR"].to_numpy(dtype=float)
+            return np.sqrt(kw * kw + kvar * kvar)
+        elif "x_active_power_kw" in df.columns and "x_reactive_power_kvar" in df.columns:
+            kw = df["x_active_power_kw"].to_numpy(dtype=float)
+            kvar = df["x_reactive_power_kvar"].to_numpy(dtype=float)
             return np.sqrt(kw * kw + kvar * kvar)
         else:
             raise ValueError("Cannot extract apparent power: 'KVA' or 'KW'+'KVAR' missing from dataframe")
@@ -174,6 +181,13 @@ def extract_load_driver(
             i2 = df["IL2"].to_numpy(dtype=float)
             i3 = df["IL3"].to_numpy(dtype=float)
             return np.sqrt((i1 * i1 + i2 * i2 + i3 * i3) / 3.0)
+        elif "x_i_l1_a" in df.columns and "x_i_l2_a" in df.columns and "x_i_l3_a" in df.columns:
+            i1 = df["x_i_l1_a"].to_numpy(dtype=float)
+            i2 = df["x_i_l2_a"].to_numpy(dtype=float)
+            i3 = df["x_i_l3_a"].to_numpy(dtype=float)
+            return np.sqrt((i1 * i1 + i2 * i2 + i3 * i3) / 3.0)
+        elif "x_current_a" in df.columns:
+            return np.maximum(0.0, df["x_current_a"].to_numpy(dtype=float))
         else:
             raise ValueError("Cannot extract RMS current: 'IL1', 'IL2', 'IL3' missing from dataframe")
 
@@ -190,7 +204,8 @@ def prepare_thermal_series(
     """Prepare and clean chronological time series, segmenting across long gaps.
 
     Args:
-        df: Partition DataFrame with 'ts' (or 'DeviceTimeStamp'), 'OTI', 'ATI', and load columns.
+        df: Partition DataFrame with 'ts' (or 'DeviceTimeStamp' or 'meta_timestamp'),
+            thermal columns ('OTI'/'x_oil_temp_c', 'ATI'/'x_ambient_temp_c'), and load columns.
         driver_type: 'apparent_power_kva' or 'rms_current_a'.
         reference_value: Frozen reference value P95(FIT) for load normalization.
             If None, computed from this DataFrame's 95th percentile.
@@ -204,10 +219,18 @@ def prepare_thermal_series(
         df_sorted["ts"] = pd.to_datetime(df_sorted["ts"])
     elif "DeviceTimeStamp" in df_sorted.columns:
         df_sorted["ts"] = pd.to_datetime(df_sorted["DeviceTimeStamp"])
+    elif "meta_timestamp" in df_sorted.columns:
+        df_sorted["ts"] = pd.to_datetime(df_sorted["meta_timestamp"])
     else:
-        raise ValueError("DataFrame must contain 'ts' or 'DeviceTimeStamp' column")
+        raise ValueError("DataFrame must contain 'ts', 'DeviceTimeStamp', or 'meta_timestamp' column")
 
     df_sorted = df_sorted.sort_values("ts").reset_index(drop=True)
+
+    # Support CPRI v3.0.2 column names for thermal temperatures
+    if "OTI" not in df_sorted.columns and "x_oil_temp_c" in df_sorted.columns:
+        df_sorted["OTI"] = df_sorted["x_oil_temp_c"]
+    if "ATI" not in df_sorted.columns and "x_ambient_temp_c" in df_sorted.columns:
+        df_sorted["ATI"] = df_sorted["x_ambient_temp_c"]
 
     # Filter physical thermal validity
     valid_mask = (
@@ -230,11 +253,13 @@ def prepare_thermal_series(
 
     load_u = raw_load / ref_val
 
-    # Compute dt in hours
+    # Compute dt in hours respecting actual sampling cadence (15-min, 30-min, etc.)
     ts_series = df_clean["ts"]
-    dt_seconds = ts_series.diff().dt.total_seconds().fillna(900.0).to_numpy()
+    dt_seconds_diff = ts_series.diff().dt.total_seconds().dropna()
+    median_cadence_s = float(dt_seconds_diff.median()) if len(dt_seconds_diff) > 0 else 900.0
+    dt_seconds = ts_series.diff().dt.total_seconds().fillna(median_cadence_s).to_numpy()
     dt_hours = np.maximum(0.0, dt_seconds / 3600.0)
-    dt_hours[0] = 0.25  # default nominal 15 minutes for initial point
+    dt_hours[0] = max(0.01, median_cadence_s / 3600.0)
 
     # Detect gaps and build segment IDs
     segment_ids = np.zeros(len(df_clean), dtype=int)
@@ -613,6 +638,7 @@ def calibrate_block_conformal_uncertainty(
     horizon_steps: int = 8,
     coverage_target: float = 0.90,
     min_scale_floor: float = MIN_CONFORMAL_SCALE_FLOOR_DEGC,
+    nominal_cadence_s: float = 900.0,
 ) -> ConformalUncertaintyParams:
     """Calibrate empirical 90% block-conformal path uncertainty bounds on CAL partition."""
     cal_series = prepare_thermal_series(
@@ -624,11 +650,14 @@ def calibrate_block_conformal_uncertainty(
     if n < horizon_steps + 1:
         raise ValueError(f"Insufficient CAL samples for 2-hour forecast: {n} < {horizon_steps + 1}")
 
+    median_dt = float(np.median(cal_series.dt_hours)) if len(cal_series.dt_hours) > 0 else (nominal_cadence_s / 3600.0)
+    max_step_dt = max(0.55, median_dt * 1.5)
+
     valid_origins: List[int] = []
     for i in range(n - horizon_steps):
         window_dt = cal_series.dt_hours[i + 1 : i + horizon_steps + 1]
         window_segs = cal_series.segment_ids[i : i + horizon_steps + 1]
-        if (window_dt > 0.55).any() or (window_segs != window_segs[0]).any():
+        if (window_dt > max_step_dt).any() or (window_segs != window_segs[0]).any():
             continue
         valid_origins.append(i)
 
@@ -718,13 +747,14 @@ def evaluate_on_test_partition(
     driver_type: str,
     reference_value: float,
     horizon_steps: int = 8,
+    nominal_cadence_s: float = 900.0,
 ) -> Tuple[BaselineMetricEntry, Dict[str, BaselineMetricEntry], PromotionDecision, List[HorizonMetricBreakdown], Dict[str, Any]]:
     """Execute frozen evaluation against untouched TEST partition and evaluate promotion rules.
 
     Evaluation Framework:
-    - Primary Metric: 2-Hour / 8-Step Forward Trajectory Projection initialized from actual OTI.
+    - Primary Metric: 2-Hour Forward Trajectory Projection initialized from actual OTI.
       Forecast rollout runs without future OTI feedback under constant scenario inputs.
-      Compared against equivalent 8-step Persistence Baseline (T_{t+h} = T_t).
+      Compared against equivalent multi-step Persistence Baseline (T_{t+h} = T_t).
     - Secondary Metric: 1-Step Closed-Loop Prediction (step-by-step update from actual T_{k-1}).
     """
     test_series = prepare_thermal_series(
@@ -734,12 +764,15 @@ def evaluate_on_test_partition(
     )
     n = len(test_series.top_oil_degc)
 
+    median_dt = float(np.median(test_series.dt_hours)) if len(test_series.dt_hours) > 0 else (nominal_cadence_s / 3600.0)
+    max_step_dt = max(0.55, median_dt * 1.5)
+
     # 1. Collect valid 2-hour forecast origins in TEST
     valid_origins: List[int] = []
     for i in range(n - horizon_steps):
         window_dt = test_series.dt_hours[i + 1 : i + horizon_steps + 1]
         window_segs = test_series.segment_ids[i : i + horizon_steps + 1]
-        if (window_dt > 0.55).any() or (window_segs != window_segs[0]).any():
+        if (window_dt > max_step_dt).any() or (window_segs != window_segs[0]).any():
             continue
         valid_origins.append(i)
 
@@ -755,6 +788,7 @@ def evaluate_on_test_partition(
     h_static_errs: Dict[int, List[float]] = {h: [] for h in range(1, horizon_steps + 1)}
 
     conformal_hits = 0
+    simultaneous_path_hits = 0
     total_eval_points = len(valid_origins) * horizon_steps
 
     for orig_idx in valid_origins:
@@ -763,6 +797,7 @@ def evaluate_on_test_partition(
         u_const = test_series.load_index_u[orig_idx]
 
         curr_t_ode = t_init
+        path_covered = True
         for h in range(1, horizon_steps + 1):
             target_idx = orig_idx + h
             dt = test_series.dt_hours[target_idx]
@@ -784,6 +819,8 @@ def evaluate_on_test_partition(
             w_h = conformal.horizon_half_widths_degc[h - 1]
             if abs(r_ode) <= w_h:
                 conformal_hits += 1
+            else:
+                path_covered = False
 
             # Persistence rollout (held constant from origin)
             r_per = actual_t - t_init
@@ -802,6 +839,9 @@ def evaluate_on_test_partition(
                 pred_static = ta_const + b_static.b0 + b_static.b1 * (u_const**2)
                 h_static_errs[h].append(abs(actual_t - pred_static))
 
+        if path_covered:
+            simultaneous_path_hits += 1
+
     # 3. Horizon Metric Breakdown Table
     horizon_breakdown: List[HorizonMetricBreakdown] = []
     for h in range(1, horizon_steps + 1):
@@ -813,10 +853,11 @@ def evaluate_on_test_partition(
         w_h = conformal.horizon_half_widths_degc[h - 1]
         h_cov = float(100.0 * np.mean(np.array(h_ode_errs[h]) <= w_h))
 
+        horizon_minutes = int(round(h * (nominal_cadence_s / 60.0)))
         horizon_breakdown.append(
             HorizonMetricBreakdown(
                 horizon_step=h,
-                horizon_minutes=h * 15,
+                horizon_minutes=horizon_minutes,
                 model_mae_degc=round(h_ode_mae, 4),
                 persistence_mae_degc=round(h_per_mae, 4),
                 mae_improvement_pct=round(h_diff_pct, 2),
@@ -841,6 +882,7 @@ def evaluate_on_test_partition(
     persist_bias_2h = float(np.mean(all_per_res))
 
     marginal_coverage_pct = float(100.0 * conformal_hits / total_eval_points) if total_eval_points > 0 else 0.0
+    simultaneous_coverage_pct = float(100.0 * simultaneous_path_hits / len(valid_origins)) if len(valid_origins) > 0 else 0.0
 
     primary_model_metrics = BaselineMetricEntry(
         model_name="greybox_ode_2h_trajectory",
@@ -848,6 +890,7 @@ def evaluate_on_test_partition(
         rmse_degc=round(model_rmse_2h, 4),
         bias_degc=round(model_bias_2h, 4),
         marginal_coverage_90_pct=round(marginal_coverage_pct, 2),
+        simultaneous_path_coverage_90_pct=round(simultaneous_coverage_pct, 2),
         mean_width_degc=round(2.0 * float(np.mean(conformal.horizon_half_widths_degc)), 4),
     )
 
@@ -1007,11 +1050,13 @@ def run_full_calibration_pipeline(
     asset_id: str = "tripura_dt_01",
     model_version: str = "greybox_v1_0",
     dataset_hashes: Optional[Dict[str, str]] = None,
+    dataset_id: str = "tripura_dev",
+    nominal_cadence_s: float = 900.0,
 ) -> CalibratedThermalModelArtifact:
     """Execute complete locked Phase 4.2 thermal calibration and evaluation workflow.
 
     Protocol:
-    1. FIT only: Select load driver (S vs I_eq, K=5).
+    1. FIT only: Select load driver (S vs I_eq, K=5). Filter y_fit_eligible == 1 if present.
     2. FIT only: Estimate sigma_fit and delta = 1.345 * sigma_fit.
     3. FIT only: Fit beta_0, beta_1, tau in [0.5, 24.0] hours.
     4. FIT only: Check identifiability diagnostics.
@@ -1020,16 +1065,22 @@ def run_full_calibration_pipeline(
     7. TEST only: One-shot 2-hour trajectory primary evaluation, 1-step secondary diagnostic, and promotion decision.
     8. Assemble frozen artifact.
     """
-    logger.info("Executing Phase 4.2 Thermal Calibration Pipeline...")
+    logger.info("Executing Phase 4.2 Thermal Calibration Pipeline for %s on %s...", asset_id, dataset_id)
+
+    fit_clean = fit_df.copy()
+    if "y_fit_eligible" in fit_clean.columns:
+        n_before = len(fit_clean)
+        fit_clean = fit_clean[fit_clean["y_fit_eligible"] == 1].reset_index(drop=True)
+        logger.info("Applied y_fit_eligible == 1 filter on FIT: %d -> %d samples", n_before, len(fit_clean))
 
     # Step 1: FIT-only load driver selection
-    winner_driver, candidates = select_best_load_driver_on_fit(fit_df, n_folds=5)
+    winner_driver, candidates = select_best_load_driver_on_fit(fit_clean, n_folds=5)
     selected_driver = winner_driver.driver_type
     ref_value = winner_driver.reference_value
     logger.info("FIT Load Driver Selected: %s (ref=%s)", selected_driver, ref_value)
 
     # Step 2: Fit model parameters on full FIT partition
-    fit_series = prepare_thermal_series(fit_df, driver_type=selected_driver, reference_value=ref_value)
+    fit_series = prepare_thermal_series(fit_clean, driver_type=selected_driver, reference_value=ref_value)
     fitted_params, fit_diag = fit_thermal_model_parameters(fit_series)
     logger.info("FIT Parameters: beta_0=%s, beta_1=%s, tau=%s (huber_delta=%s)", fitted_params.beta_0, fitted_params.beta_1, fitted_params.tau_hours, fit_diag.get("huber_delta_degc"))
 
@@ -1044,12 +1095,15 @@ def run_full_calibration_pipeline(
     }
 
     # Step 5: CAL-only conformal uncertainty calibration
+    horizon_steps = max(1, int(round(7200.0 / nominal_cadence_s)))
     conformal = calibrate_block_conformal_uncertainty(
         cal_df=cal_df,
         params=fitted_params,
         driver_type=selected_driver,
         reference_value=ref_value,
+        horizon_steps=horizon_steps,
         min_scale_floor=MIN_CONFORMAL_SCALE_FLOOR_DEGC,
+        nominal_cadence_s=nominal_cadence_s,
     )
     logger.info("CAL Conformal q90=%s, half-widths=%s", conformal.block_quantile_90, conformal.horizon_half_widths_degc)
 
@@ -1061,12 +1115,14 @@ def run_full_calibration_pipeline(
         baselines=baselines,
         driver_type=selected_driver,
         reference_value=ref_value,
+        horizon_steps=horizon_steps,
+        nominal_cadence_s=nominal_cadence_s,
     )
     logger.info("TEST Evaluation: status=%s, 2h_trajectory_mae=%s", promotion.status, test_metrics.mae_degc)
 
     # Hashes
     hashes = dataset_hashes or {
-        "fit_hash": compute_df_sha256(fit_df),
+        "fit_hash": compute_df_sha256(fit_clean),
         "cal_hash": compute_df_sha256(cal_df),
         "test_hash": compute_df_sha256(test_df),
     }
@@ -1083,10 +1139,11 @@ def run_full_calibration_pipeline(
         },
         "horizon_breakdown": [h.model_dump() for h in horizon_breakdown],
         "secondary_1step_closed_loop": sec_diag,
+        "nominal_cadence_seconds": nominal_cadence_s,
+        "horizon_steps": horizon_steps,
     }
 
     # Step 7: Independent Capability-Specific Qualification Matrix
-    # Each capability is evaluated strictly against its own independent prerequisites
     param_qual = (
         QualificationStatus.QUALIFIED
         if identifiability.is_identifiable
@@ -1175,7 +1232,7 @@ def run_full_calibration_pipeline(
     artifact = CalibratedThermalModelArtifact(
         schema_version="1.2.0",
         model_version=model_version,
-        dataset_id="tripura_dev",
+        dataset_id=dataset_id,
         asset_id=asset_id,
         created_at_utc=datetime.now(timezone.utc).isoformat(),
         selected_load_driver=selected_driver,
@@ -1196,3 +1253,286 @@ def run_full_calibration_pipeline(
     )
 
     return artifact
+
+
+def fit_and_calibrate_thermal_model(
+    fit_df: pd.DataFrame,
+    cal_df: pd.DataFrame,
+    asset_id: str = "TX_250_MIX",
+    dataset_id: str = "cpri_v3_0_2",
+    model_version: str = "cpri_greybox_v1_0",
+    nominal_cadence_s: float = 1800.0,
+    dataset_hashes: Optional[Dict[str, str]] = None,
+) -> CalibratedThermalModelArtifact:
+    """Fit thermal parameters and calibrate uncertainty strictly using FIT and CAL partitions.
+
+    Zero TEST partition data is accessed, ensuring an immutable freeze before holdout evaluation.
+    """
+    logger.info("Executing Thermal Calibration (FIT + CAL only) for %s on %s...", asset_id, dataset_id)
+
+    # Filter fit eligibility if column present (authoritative offline row-selection mask)
+    fit_clean = fit_df.copy()
+    if "y_fit_eligible" in fit_clean.columns:
+        n_before = len(fit_clean)
+        fit_clean = fit_clean[fit_clean["y_fit_eligible"] == 1].reset_index(drop=True)
+        logger.info("Applied y_fit_eligible == 1 filter on FIT: %d -> %d samples", n_before, len(fit_clean))
+
+    # Step 1: FIT-only load driver selection
+    winner_driver, candidates = select_best_load_driver_on_fit(fit_clean, n_folds=5)
+    selected_driver = winner_driver.driver_type
+    ref_value = winner_driver.reference_value
+    logger.info("FIT Load Driver Selected: %s (ref=%s)", selected_driver, ref_value)
+
+    # Step 2: Fit model parameters on full eligible FIT partition
+    fit_series = prepare_thermal_series(fit_clean, driver_type=selected_driver, reference_value=ref_value)
+    fitted_params, fit_diag = fit_thermal_model_parameters(fit_series)
+    logger.info("FIT Parameters: beta_0=%.4f, beta_1=%.4f, tau=%.4f h", fitted_params.beta_0, fitted_params.beta_1, fitted_params.tau_hours)
+
+    # Step 3: Identifiability diagnostics on FIT
+    identifiability = evaluate_identifiability(fit_series, fitted_params, winner_driver.tau_cv)
+
+    # Step 4: CAL-only conformal uncertainty calibration (4 steps for 30m cadence, 8 for 15m)
+    horizon_steps = max(1, int(round(7200.0 / nominal_cadence_s)))
+    conformal = calibrate_block_conformal_uncertainty(
+        cal_df=cal_df,
+        params=fitted_params,
+        driver_type=selected_driver,
+        reference_value=ref_value,
+        horizon_steps=horizon_steps,
+        min_scale_floor=MIN_CONFORMAL_SCALE_FLOOR_DEGC,
+        nominal_cadence_s=nominal_cadence_s,
+    )
+    logger.info(
+        "CAL Conformal q90=%.4f, half-widths=%s (valid origins=%d)",
+        conformal.block_quantile_90,
+        conformal.horizon_half_widths_degc,
+        conformal.num_calibration_origins,
+    )
+
+    # Step 5: Independent Capability-Specific Qualification Matrix
+    param_qual = (
+        QualificationStatus.QUALIFIED
+        if identifiability.is_identifiable
+        else QualificationStatus.UNVERIFIED
+    )
+    forecast_qual = QualificationStatus.PENDING_VALIDATION
+    scenario_qual = QualificationStatus.PENDING_VALIDATION
+    resid_disp_qual = (
+        QualificationStatus.DESCRIPTIVE_ONLY
+        if (fitted_params.beta_0 >= 0 and fitted_params.beta_1 >= 0 and fitted_params.tau_hours > 0)
+        else QualificationStatus.DISABLED
+    )
+    resid_anom_qual = (
+        QualificationStatus.QUALIFIED
+        if (identifiability.is_identifiable and not identifiability.boundary_hit)
+        else QualificationStatus.NOT_QUALIFIED
+    )
+    cusum_qual = (
+        QualificationStatus.QUALIFIED
+        if (identifiability.is_identifiable and conformal.num_calibration_origins >= 30 and not identifiability.boundary_hit)
+        else QualificationStatus.DISABLED
+    )
+    maint_qual = QualificationStatus.DISABLED
+
+    dimension_reasons = {
+        "parameter_interpretability": (
+            "Parameter identifiability criteria satisfied across FIT partition."
+            if param_qual == QualificationStatus.QUALIFIED
+            else f"Parameter identifiability failure: {'boundary hit on tau' if identifiability.boundary_hit else 'data insufficiency / fold instability'}."
+        ),
+        "forecast_qualification": "Autonomous 2-hour forward forecasting pending independent holdout test evaluation.",
+        "scenario_qualification": "Scenario what-if projection pending independent causal and holdout validation.",
+        "residual_display_qualification": (
+            "First-order grey-box ODE runs continuously on valid telemetry to compute descriptive shadow residuals."
+            if resid_disp_qual == QualificationStatus.DESCRIPTIVE_ONLY
+            else "Thermal model parameters invalid; descriptive residual display disabled."
+        ),
+        "residual_anomaly_qualification": (
+            "Residual excursions qualified against identifiable physical baseline."
+            if resid_anom_qual == QualificationStatus.QUALIFIED
+            else "Thermal residuals are descriptive-only; not qualified as statistical anomaly evidence."
+        ),
+        "cusum_qualification": (
+            "Two-sided CUSUM tracker qualified on identifiable model residuals."
+            if cusum_qual == QualificationStatus.QUALIFIED
+            else "CUSUM drift tracker disabled on unpromoted thermal model."
+        ),
+        "maintenance_inference_qualification": "Model-driven maintenance recommendations disabled until causal degradation models are qualified.",
+    }
+
+    qualification = ThermalModelQualification(
+        parameter_interpretability=param_qual,
+        forecast_qualification=forecast_qual,
+        scenario_qualification=scenario_qual,
+        residual_display_qualification=resid_disp_qual,
+        residual_anomaly_qualification=resid_anom_qual,
+        cusum_qualification=cusum_qual,
+        maintenance_inference_qualification=maint_qual,
+        dimension_reasons=dimension_reasons,
+    )
+
+    hashes = dataset_hashes or {
+        "fit_hash": compute_df_sha256(fit_clean),
+        "cal_hash": compute_df_sha256(cal_df),
+    }
+
+    metadata = {
+        "fit_diagnostics": fit_diag,
+        "load_driver_comparison": {
+            k: {
+                "mean_rolling_mae": v.mean_rolling_mae,
+                "tau_cv": v.tau_cv,
+                "fold_maes": v.fold_maes,
+            }
+            for k, v in candidates.items()
+        },
+        "nominal_cadence_seconds": nominal_cadence_s,
+        "horizon_steps": horizon_steps,
+        "uncertainty_semantics": "Time-series block-conformal calibration on CAL partition; marginal and simultaneous path coverage distinguish pointwise vs trajectory envelope coverage.",
+    }
+
+    candidate_promotion = PromotionDecision(
+        status="CANDIDATE_FROZEN_PENDING_TEST",
+        primary_evaluation_horizon="2_hour_multi_step_trajectory",
+        mae_improvement_pct=0.0,
+        passes_mae_criterion=False,
+        passes_bias_criterion=False,
+        passes_coverage_criterion=False,
+        passes_scenario_criterion=False,
+        passes_identifiability_criterion=identifiability.is_identifiable,
+        all_criteria_met=False,
+        reasons=["Candidate frozen from FIT+CAL partitions; holdout TEST evaluation pending."],
+    )
+
+    artifact = CalibratedThermalModelArtifact(
+        schema_version="1.2.0",
+        model_version=model_version,
+        dataset_id=dataset_id,
+        asset_id=asset_id,
+        created_at_utc=datetime.now(timezone.utc).isoformat(),
+        selected_load_driver=selected_driver,
+        load_driver_reference_value=ref_value,
+        parameters=ThermalModelParamsDict(
+            beta_0=fitted_params.beta_0,
+            beta_1=fitted_params.beta_1,
+            tau_hours=fitted_params.tau_hours,
+        ),
+        identifiability=identifiability,
+        conformal_uncertainty=conformal,
+        baselines={},
+        test_metrics=None,
+        promotion=candidate_promotion,
+        qualification=qualification,
+        dataset_hashes=hashes,
+        metadata=metadata,
+    )
+
+    return artifact
+
+
+def freeze_candidate_artifact(
+    artifact: CalibratedThermalModelArtifact,
+    output_path: Path | str,
+    manifest_path: Optional[Path | str] = None,
+) -> Dict[str, Any]:
+    """Serialize candidate artifact and create an immutable candidate manifest with hashes."""
+    p_out = Path(output_path)
+    artifact.save_json(p_out)
+    artifact_hash = compute_file_sha256(p_out)
+
+    manifest_file = Path(manifest_path) if manifest_path else p_out.with_name(f"candidate_manifest_cpri_{artifact.asset_id.lower()}.json")
+    manifest = {
+        "candidate_artifact_file": p_out.name,
+        "candidate_artifact_sha256": artifact_hash,
+        "asset_id": artifact.asset_id,
+        "dataset_id": artifact.dataset_id,
+        "model_version": artifact.model_version,
+        "frozen_at_utc": datetime.now(timezone.utc).isoformat(),
+        "parameters": artifact.parameters.model_dump() if artifact.parameters else None,
+        "conformal_uncertainty": artifact.conformal_uncertainty.model_dump() if artifact.conformal_uncertainty else None,
+        "identifiability": artifact.identifiability.model_dump() if artifact.identifiability else None,
+        "qualification": artifact.qualification.model_dump() if artifact.qualification else None,
+        "dataset_hashes": artifact.dataset_hashes,
+    }
+    manifest_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(manifest_file, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+
+    logger.info("Frozen candidate artifact written to %s (sha256=%s)", p_out, artifact_hash)
+    logger.info("Candidate manifest written to %s", manifest_file)
+    return manifest
+
+
+def evaluate_frozen_artifact_on_test(
+    artifact_path: Path | str,
+    test_df: pd.DataFrame,
+    fit_df: Optional[pd.DataFrame] = None,
+    output_report_path: Optional[Path | str] = None,
+    nominal_cadence_s: float = 1800.0,
+) -> Dict[str, Any]:
+    """Evaluate an existing frozen candidate artifact against untouched TEST data.
+
+    This function reads the frozen artifact, executes TEST evaluation, and writes
+    a separate evaluation record referencing the frozen artifact's hash.
+    It NEVER mutates the frozen artifact file on disk.
+    """
+    p_art = Path(artifact_path)
+    if not p_art.exists():
+        raise FileNotFoundError(f"Frozen artifact file does not exist: {p_art}")
+
+    artifact_hash = compute_file_sha256(p_art)
+    artifact = CalibratedThermalModelArtifact.load_json(p_art)
+
+    if artifact.parameters is None or artifact.conformal_uncertainty is None:
+        raise ValueError("Cannot evaluate uncalibrated candidate artifact on TEST")
+
+    # Fit baselines if fit_df provided, else persistence only
+    params = ThermalModelParameters(
+        beta_0=artifact.parameters.beta_0,
+        beta_1=artifact.parameters.beta_1,
+        tau_hours=artifact.parameters.tau_hours,
+    )
+    baselines: Dict[str, Any] = {"persistence": PersistenceBaseline()}
+    if fit_df is not None:
+        fit_clean = fit_df[fit_df["y_fit_eligible"] == 1].reset_index(drop=True) if "y_fit_eligible" in fit_df.columns else fit_df
+        fit_series = prepare_thermal_series(
+            fit_clean,
+            driver_type=artifact.selected_load_driver or "apparent_power_kva",
+            reference_value=artifact.load_driver_reference_value,
+        )
+        baselines["ambient_median_rise"] = AmbientMedianRiseBaseline.fit(fit_series)
+        baselines["static_robust_regression"] = StaticRobustRegressionBaseline.fit(fit_series)
+
+    horizon_steps = artifact.conformal_uncertainty.horizon_steps
+    primary_metrics, base_metrics, decision, breakdown, sec_diag = evaluate_on_test_partition(
+        test_df=test_df,
+        params=params,
+        conformal=artifact.conformal_uncertainty,
+        baselines=baselines,
+        driver_type=artifact.selected_load_driver or "apparent_power_kva",
+        reference_value=artifact.load_driver_reference_value or 1.0,
+        horizon_steps=horizon_steps,
+        nominal_cadence_s=nominal_cadence_s,
+    )
+
+    report = {
+        "frozen_artifact_file": p_art.name,
+        "frozen_artifact_sha256": artifact_hash,
+        "asset_id": artifact.asset_id,
+        "dataset_id": artifact.dataset_id,
+        "evaluated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "primary_model_metrics": primary_metrics.model_dump(),
+        "baseline_metrics": {k: v.model_dump() for k, v in base_metrics.items()},
+        "promotion_decision": decision.model_dump(),
+        "horizon_breakdown": [h.model_dump() for h in breakdown],
+        "secondary_1step_diagnostics": sec_diag,
+    }
+
+    if output_report_path:
+        p_rep = Path(output_report_path)
+        p_rep.parent.mkdir(parents=True, exist_ok=True)
+        with open(p_rep, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        logger.info("Saved separate TEST evaluation report to %s", p_rep)
+
+    return report

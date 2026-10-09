@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Sequence
 
 from app.engine.thermal import (
     ThermalModelParameters,

@@ -38,6 +38,19 @@ from app.models.profile import ProfileVerificationStatus, InsulationClass
 from app.models.telemetry import CanonicalEvent
 
 
+def _assert_cpri_artifact_isolated(asset_id: str, artifact) -> None:
+    """A CPRI asset resolves only its own frozen candidate (never promoted), else stays uncalibrated."""
+    own_path = Path(f"data/processed/calibrated_thermal_model_cpri_{asset_id.lower()}.json")
+    assert artifact.asset_id == asset_id
+    assert artifact.dataset_id == "cpri_v3_0_2"
+    if own_path.exists():
+        assert artifact.parameters is not None
+        assert artifact.promotion.status != "PROMOTED"
+    else:
+        assert artifact.parameters is None
+        assert artifact.promotion.status == "UNCALIBRATED"
+
+
 @pytest.fixture
 def project_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
@@ -212,12 +225,8 @@ def test_registry_profiles_and_artifact_isolation() -> None:
         assert profile.insulation_paper_class == InsulationClass.UNKNOWN
         assert profile.profile_status == ProfileVerificationStatus.UNVERIFIED
 
-        # Uncalibrated artifact before explicit model training
         cpri_artifact = resolve_model_artifact(asset_id=asset_id, dataset_id="cpri_v3_0_2")
-        assert cpri_artifact.asset_id == asset_id
-        assert cpri_artifact.dataset_id == "cpri_v3_0_2"
-        # Parameters must be None (uncalibrated) before training
-        assert cpri_artifact.parameters is None
+        _assert_cpri_artifact_isolated(asset_id, cpri_artifact)
 
 
 def test_deterministic_adapter_replay() -> None:
@@ -412,9 +421,8 @@ def test_each_asset_resolves_only_its_own_artifact() -> None:
 
     for asset_id in CPRI_SYNTHETIC_ASSET_RATINGS.keys():
         resolved = resolve_model_artifact(asset_id=asset_id, dataset_id="cpri_v3_0_2")
-        assert resolved.asset_id == asset_id
-        # Must not cross-resolve Tripura DT-01 parameters
-        assert resolved.parameters is None
+        # Must not cross-resolve Tripura DT-01 or another CPRI asset's parameters
+        _assert_cpri_artifact_isolated(asset_id, resolved)
 
 
 def test_oracle_label_mutation_does_not_alter_measurements(clean_fit_df: pd.DataFrame) -> None:
@@ -524,3 +532,65 @@ def test_tripura_frozen_artifacts_byte_identical(project_root: Path) -> None:
         assert file_path.exists(), f"Tripura artifact {filename} missing"
         actual_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
         assert actual_hash == expected_hash, f"Tripura artifact hash mismatch for {filename}: {actual_hash} != {expected_hash}"
+
+
+def test_frozen_cpri_candidate_and_sources_match_recorded_hashes(project_root: Path) -> None:
+    """11. Frozen TX_250_MIX candidate and dataset sources match recorded hashes on any platform/EOL setting."""
+    import hashlib
+
+    processed_dir = project_root / "data" / "processed"
+    manifest = json.loads((processed_dir / "candidate_manifest_cpri_tx_250_mix.json").read_text(encoding="utf-8"))
+    artifact_bytes = (processed_dir / manifest["candidate_artifact_file"]).read_bytes()
+    assert manifest["candidate_artifact_sha256"] == "05d7c29f22fcb34e6bc2e596479d0e4c48ff468a0a7993d6bc2b87015f9e160f"
+    assert hashlib.sha256(artifact_bytes).hexdigest() == manifest["candidate_artifact_sha256"]
+    assert manifest["asset_id"] == "TX_250_MIX" and manifest["dataset_id"] == "cpri_v3_0_2"
+
+    report = json.loads((processed_dir / "test_evaluation_report_cpri_tx_250_mix.json").read_text(encoding="utf-8"))
+    assert report["promotion_decision"]["status"] == "NOT_PROMOTED"
+
+    source_dir = project_root / "temp_dataset"
+    source_manifest = json.loads((source_dir / "DATA3.json").read_text(encoding="utf-8"))
+    doc = source_manifest["methodology_doc"]
+    assert hashlib.sha256((source_dir / doc["file"]).read_bytes()).hexdigest() == doc["sha256"]
+
+
+def test_tx_250_mix_runtime_honours_test_decision(project_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """12. Runtime resolution applies the NOT_PROMOTED TEST decision; residual alarms stay unqualified."""
+    import hashlib
+    from app.engine.scenario_simulator import ScenarioSimulator
+    from app.engine.thermal_fallback import ThermalFallbackGate
+    from app.models.thermal_artifact import QualificationStatus
+
+    monkeypatch.chdir(project_root)
+    artifact_path = project_root / "data" / "processed" / "calibrated_thermal_model_cpri_tx_250_mix.json"
+    before = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+
+    resolved = resolve_model_artifact(asset_id="TX_250_MIX", dataset_id="cpri_v3_0_2")
+    assert resolved.promotion.status == "NOT_PROMOTED"
+    assert resolved.promotion.passes_bias_criterion is False
+    assert resolved.test_metrics.mae_degc == 1.0351 and resolved.test_metrics.bias_degc == 0.2599
+    assert resolved.qualification.residual_anomaly_qualification == QualificationStatus.NOT_QUALIFIED
+    assert resolved.qualification.forecast_qualification != QualificationStatus.QUALIFIED
+    assert resolved.qualification.scenario_qualification != QualificationStatus.QUALIFIED
+
+    assert ThermalFallbackGate.from_artifact(resolved, nominal_cadence_s=1800).is_model_promoted is False
+    sim = ScenarioSimulator.from_artifact(resolved)
+    assert sim.is_model_promoted is False
+    assert sim.qualification.scenario_qualification != QualificationStatus.QUALIFIED
+
+    # Frozen artifact on disk is never modified by resolution
+    assert hashlib.sha256(artifact_path.read_bytes()).hexdigest() == before
+
+
+def test_cpri_artifact_identity_mismatch_does_not_crash(project_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """13. An artifact file bound to another asset is rejected and the asset stays uncalibrated."""
+    src = project_root / "data" / "processed" / "calibrated_thermal_model_cpri_tx_250_mix.json"
+    target = tmp_path / "data" / "processed" / "calibrated_thermal_model_cpri_tx_100_res.json"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(src.read_bytes())
+    monkeypatch.chdir(tmp_path)
+
+    resolved = resolve_model_artifact(asset_id="TX_100_RES", dataset_id="cpri_v3_0_2")
+    assert resolved.asset_id == "TX_100_RES"
+    assert resolved.parameters is None
+    assert resolved.promotion.status == "UNCALIBRATED"

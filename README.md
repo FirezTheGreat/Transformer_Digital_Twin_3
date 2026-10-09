@@ -72,9 +72,17 @@ Access the user interfaces:
 cd backend
 pip install -e ".[dev]"
 
-# Run FastAPI backend server
+# Run FastAPI backend server (default asset: Tripura DT-TRIPURA-001)
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Or serve a CPRI v3.0.2 synthetic asset (replays its CAL partition; TEST is never loaded)
+DEFAULT_ASSET_ID=TX_250_MIX uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+Requires Python 3.11+. On Windows without GTK, PDF reports use the `xhtml2pdf` fallback (installed by the `dev` extras).
+The backend serves one asset per process; the dashboard follows the backend's `default_asset_id`.
+Only `TX_250_MIX` has a fitted thermal model, and it is **NOT_PROMOTED** (failed the locked signed-bias gate on TEST),
+so it runs in shadow/descriptive mode with forecasting and what-if gated. The other seven CPRI assets run uncalibrated.
 
 In a separate terminal for the frontend:
 
@@ -179,17 +187,18 @@ The reporting engine exports deterministic summaries directly from the authorita
 
 Run the full backend test suite covering unit, integration, and end-to-end regression suites:
 
+Run from the **repository root** (several tests resolve `data/` relative to it):
+
 ```bash
-# Run all 376 backend tests
-cd backend
-pytest -v
+# Run all backend tests
+pytest -c backend/pyproject.toml --rootdir backend backend/tests
 
 # Run static fixture regression suite (Phase 10.1)
-pytest -v tests/e2e/test_static_fixtures.py
+pytest -c backend/pyproject.toml --rootdir backend backend/tests/e2e/test_static_fixtures.py
 
 # Run dynamic synthetic injector suite (Phase 10.2)
-pytest -v tests/e2e/test_dynamic_injections.py
+pytest -c backend/pyproject.toml --rootdir backend backend/tests/e2e/test_dynamic_injections.py
 
 # Run demo script regression test (Phase 10.3)
-pytest -v tests/e2e/test_demo_script.py
+pytest -c backend/pyproject.toml --rootdir backend backend/tests/e2e/test_demo_script.py
 ```

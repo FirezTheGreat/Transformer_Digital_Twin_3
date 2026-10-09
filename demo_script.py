@@ -445,7 +445,9 @@ def run_hackathon_demo() -> Dict[str, Any]:
     final_report_data = generate_report_data(final_bundle)
     pdf_bytes, renderer_name = render_report_pdf(final_report_data)
 
-    output_pdf_path = Path(__file__).resolve().parent / "demo_audit_report.pdf"
+    output_pdf_path = Path(
+        os.getenv("DEMO_REPORT_PATH") or Path(__file__).resolve().parent / "demo_audit_report.pdf"
+    )
     with open(output_pdf_path, "wb") as f:
         f.write(pdf_bytes)
 

@@ -9,6 +9,7 @@ import {
   Database,
 } from 'lucide-react';
 import { ReplayStatusResponse } from '../../types/contracts';
+import { getAssetContext } from '../../utils/assetContext';
 
 interface ReplayBarProps {
   selectedDataset: string;
@@ -43,6 +44,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
   onReset,
   isBackendHealthy,
 }) => {
+  const assetContext = getAssetContext(assetId);
   const processed = replayStatus?.processed_events ?? 0;
   const total =
     replayStatus?.total_events && replayStatus.total_events > 0
@@ -84,12 +86,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               onChange={(e) => onDatasetChange(e.target.value)}
               className="input w-auto max-w-[260px] sm:max-w-none py-1 pr-7 cursor-pointer font-medium"
             >
-              <option value="tripura_dev">
-                Tripura Transformer — Development Dataset
-              </option>
-              <option value="synthetic_val" disabled>
-                Synthetic Validation Dataset (Coming soon / Not available yet)
-              </option>
+              <option value={assetContext.datasetId}>{assetContext.datasetLabel}</option>
             </select>
           </div>
 
@@ -97,7 +94,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
           <div className="hidden md:flex items-center gap-2 pl-5 border-l border-line">
             <span className="eyebrow">Transformer</span>
             <span className="font-mono text-[11px] font-medium text-ink">
-              {assetId} · Agartala Substation
+              {assetId} · {assetContext.siteLabel}
             </span>
           </div>
         </div>

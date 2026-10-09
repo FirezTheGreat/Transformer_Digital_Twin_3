@@ -151,6 +151,30 @@ Follow this 8-step chronological demonstration narrative:
 
 ---
 
+## 2b. CPRI Synthetic Asset Demo (TX_250_MIX, live dashboard)
+
+Start the backend with `DEFAULT_ASSET_ID=TX_250_MIX` (from `backend/`), then `npm run dev` in `frontend/` and open http://localhost:3000.
+The dashboard follows the backend's asset. Replay uses the **CAL partition** (2025-01-01 to 2025-07-03 IST, 8,757 events at 30 min);
+the TEST partition is never loaded at runtime. Oracle `y_*` labels are dropped before ingestion.
+
+Seek positions (`POST /v1/replay {"action":"seek","seek_position":N}`) where the twin itself raises CRITICAL conditions:
+
+| Position | Time (UTC) | Twin output |
+|---|---|---|
+| 1628 | 2025-02-03 23:30 | Voltage/PF/frequency CRITICAL |
+| 4482 | 2025-04-04 13:30 | Phase/neutral CRITICAL, P2 `MNT-PHASE-004` |
+| 5413 | 2025-04-23 23:00 | Loading CRITICAL (relative load index on the declared 250 kVA rating) |
+| 5444 | 2025-04-24 14:00 | Thermal + loading CRITICAL, OTHI 0 |
+
+Model status to state plainly: TX_250_MIX was fitted on FIT, uncertainty-calibrated on CAL, frozen, and evaluated once on TEST
+(2-h MAE 1.035 °C vs persistence 1.355 °C, 23.6 % better; 90 % marginal coverage 96.2 %; path coverage 93.1 %),
+but it is **NOT_PROMOTED**: signed bias +0.26 °C failed the locked gate |bias| ≤ |persistence bias| + 0.10 °C.
+It runs in shadow/descriptive mode; forecasting, what-if and residual-anomaly evidence stay gated. Its TEST partition is consumed.
+No maintenance rule exists for overload, and the thermal rule `MNT-THERM-002` requires a qualified model, so these conditions show as
+alerts and health impact without a recommendation.
+
+---
+
 ## 3. What We Deliberately Refuse to Claim (Engineering Integrity)
 
 When judges ask about predictive horizons or AI claims, emphasize these boundaries:

@@ -1,0 +1,4 @@
+# Dataset sources and frozen artifacts are SHA-256 verified byte-for-byte.
+# Never convert line endings, or recorded hashes stop matching on other platforms.
+data/processed/** -text
+temp_dataset/** -text

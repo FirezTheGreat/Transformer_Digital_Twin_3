@@ -12,6 +12,9 @@ Enforces critical architecture constraints:
 
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -22,8 +25,16 @@ from app.models.profile import (
     ProfileVerificationStatus,
 )
 from app.models.thermal_artifact import (
+    BaselineMetricEntry,
     CalibratedThermalModelArtifact,
+    PromotionDecision,
+    QualificationStatus,
 )
+
+logger = logging.getLogger(__name__)
+
+# Repository root, so artifacts resolve regardless of the server working directory.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 CPRI_SYNTHETIC_ASSET_RATINGS: dict[str, float] = {
@@ -99,7 +110,14 @@ def resolve_asset_profile(
                     unit="kVA",
                     source_document="CPRI Synthetic Benchmark v3.0.2 Configuration",
                     status=ProfileVerificationStatus.VERIFIED,
-                )
+                ),
+                # Relative load index basis: the asset's own declared rating, never Tripura's P95 reference
+                "load_reference_kva": ProfileField(
+                    value=rating,
+                    unit="kVA",
+                    source_document="CPRI Synthetic Benchmark v3.0.2 Configuration",
+                    status=ProfileVerificationStatus.VERIFIED,
+                ),
             },
             profile_version="1.0.0",
         )
@@ -118,6 +136,55 @@ def resolve_asset_profile(
         profile_status=profile_status,
         fields={},
         profile_version="1.0.0",
+    )
+
+
+def _apply_cpri_test_decision(
+    artifact: CalibratedThermalModelArtifact,
+    artifact_path: Path,
+) -> CalibratedThermalModelArtifact:
+    """Apply the standalone TEST promotion decision to a frozen CPRI candidate (in memory only).
+
+    The frozen candidate carries provisional pre-TEST qualifications. Its TEST outcome lives in a
+    separate report, bound to the artifact by SHA-256. Runtime must honour that outcome and the
+    locked policy that residual anomaly evidence requires a passed signed-bias criterion.
+    """
+    promotion = artifact.promotion
+    test_metrics = artifact.test_metrics
+    report_path = artifact_path.with_name(f"test_evaluation_report_cpri_{artifact.asset_id.lower()}.json")
+    if report_path.exists():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            artifact_hash = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+            if report.get("frozen_artifact_sha256") == artifact_hash and report.get("asset_id") == artifact.asset_id:
+                promotion = PromotionDecision(**report["promotion_decision"])
+                test_metrics = BaselineMetricEntry(**report["primary_model_metrics"])
+            else:
+                logger.warning("TEST report %s is not bound to artifact %s; ignoring it.", report_path, artifact_path)
+        except Exception as ex:
+            logger.warning("Failed to read TEST report %s: %s", report_path, ex)
+
+    qualification = artifact.qualification
+    if (
+        qualification is not None
+        and promotion.status != "PROMOTED"
+        and not promotion.passes_bias_criterion
+        and qualification.residual_anomaly_qualification == QualificationStatus.QUALIFIED
+    ):
+        qualification = qualification.model_copy(
+            update={
+                "residual_anomaly_qualification": QualificationStatus.NOT_QUALIFIED,
+                "dimension_reasons": {
+                    **qualification.dimension_reasons,
+                    "residual_anomaly_qualification": (
+                        "Residual anomaly evidence requires a passed signed-bias criterion; "
+                        "candidate is not promoted."
+                    ),
+                },
+            }
+        )
+    return artifact.model_copy(
+        update={"promotion": promotion, "qualification": qualification, "test_metrics": test_metrics}
     )
 
 
@@ -146,6 +213,7 @@ def resolve_model_artifact(
         # Load Tripura calibrated artifact if exists on disk
         for candidate_path in [
             Path("data/processed/calibrated_thermal_model.json"),
+            _REPO_ROOT / "data/processed/calibrated_thermal_model.json",
             Path("/app/data/processed/calibrated_thermal_model.json"),
         ]:
             if candidate_path.exists():
@@ -163,6 +231,7 @@ def resolve_model_artifact(
         # Match strictly the target asset's file paths; NEVER borrow another asset's artifact
         candidate_paths = [
             Path(f"data/processed/calibrated_thermal_model_cpri_{clean_asset.lower()}.json"),
+            _REPO_ROOT / f"data/processed/calibrated_thermal_model_cpri_{clean_asset.lower()}.json",
             Path(f"/app/data/processed/calibrated_thermal_model_cpri_{clean_asset.lower()}.json"),
         ]
         for candidate_path in candidate_paths:
@@ -171,7 +240,7 @@ def resolve_model_artifact(
                     loaded = CalibratedThermalModelArtifact.load_json(candidate_path)
                     # Explicit identity validation: artifact asset_id and dataset_id must match
                     if loaded.asset_id == clean_asset and loaded.dataset_id in ("cpri_v3_0_2", "cpri_v3"):
-                        return loaded
+                        return _apply_cpri_test_decision(loaded, candidate_path)
                     logger.warning(
                         "CPRI artifact identity mismatch at %s: asset=%s (expected %s), dataset=%s; rejecting.",
                         candidate_path,

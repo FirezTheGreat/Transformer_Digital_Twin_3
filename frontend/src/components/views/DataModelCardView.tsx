@@ -3,60 +3,29 @@ import { Cpu } from 'lucide-react';
 import { ModelCardData } from '../../services/api';
 import { UIHonestyBadge } from '../common/UIHonestyBadge';
 
+const fmt = (v: number | null | undefined, digits: number): string => (v == null ? '—' : v.toFixed(digits));
+
+
 interface DataModelCardViewProps {
   modelCard: ModelCardData | null;
 }
 
 export const DataModelCardView: React.FC<DataModelCardViewProps> = ({ modelCard }) => {
-  const card = modelCard ?? {
-    schema_version: '1.2.0',
-    model_version: 'greybox_v1_0',
-    asset_id: 'DT-TRIPURA-001',
-    created_at_utc: '2026-10-07T07:55:17Z',
-    selected_load_driver: 'rms_current_a',
-    load_driver_reference_value: 153.8652,
-    parameters: {
-      beta_0: 1.0880,
-      beta_1: 2.8979,
-      tau_hours: 0.50,
-    },
-    identifiability: {
-      is_identifiable: false,
-      fit_samples_count: 10941,
-      fit_span_days: 150.39,
-      load_cv: 0.5331,
-      diagnostic_messages: ['Parameters sit on boundary: tau = 0.50h (lower domain limit). Status: SHADOW_DESCRIPTIVE.'],
-    },
-    conformal_uncertainty: {
-      horizon_steps: 8,
-      block_quantile_90: 5.9891,
-      horizon_half_widths_degc: [2.99, 3.11, 3.37, 4.08, 5.04, 6.29, 8.20, 9.56],
-    },
-    test_metrics: {
-      mae_degc: 1.65,
-      rmse_degc: 2.29,
-      marginal_coverage_90_pct: 97.33,
-    },
-    promotion: {
-      status: 'NOT_PROMOTED',
-      mae_improvement_pct: 18.59,
-      all_criteria_met: false,
-      reasons: ['Boundary hit on tau (0.50h). Model active as shadow descriptive twin only.'],
-    },
-    qualification: {
-      parameter_interpretability: 'UNVERIFIED',
-      forecast_qualification: 'PENDING_VALIDATION',
-      scenario_qualification: 'PENDING_VALIDATION',
-      residual_anomaly_qualification: 'NOT_QUALIFIED',
-    },
-  };
+  if (!modelCard) {
+    return (
+      <div className="card p-6 text-sm text-muted">
+        Model card unavailable: the backend has not returned a model artifact for this asset, so no model metadata is shown.
+      </div>
+    );
+  }
+  const card = modelCard;
 
   const isPromoted = card.promotion.status === 'PROMOTED';
 
   const parameterCells = [
-    { label: 'Time Constant (τ)', value: card.parameters.tau_hours.toFixed(2), unit: 'hours', note: 'Estimated thermal inertia' },
-    { label: 'Ambient Offset (β₀)', value: card.parameters.beta_0.toFixed(4), unit: '°C', note: 'Steady-state no-load temperature rise' },
-    { label: 'Load Coefficient (β₁)', value: card.parameters.beta_1.toFixed(4), unit: '°C', note: 'Full-load squared heating coefficient' },
+    { label: 'Time Constant (τ)', value: fmt(card.parameters?.tau_hours, 2), unit: 'hours', note: 'Estimated thermal inertia' },
+    { label: 'Ambient Offset (β₀)', value: fmt(card.parameters?.beta_0, 4), unit: '°C', note: 'Steady-state no-load temperature rise' },
+    { label: 'Load Coefficient (β₁)', value: fmt(card.parameters?.beta_1, 4), unit: '°C', note: 'Full-load squared heating coefficient' },
   ];
 
   const exports = [
@@ -150,21 +119,21 @@ export const DataModelCardView: React.FC<DataModelCardViewProps> = ({ modelCard 
           <dl className="card px-5 py-1.5">
             <div className="kv">
               <dt>Mean Absolute Error (MAE)</dt>
-              <dd className="font-mono font-semibold text-ink">{card.test_metrics.mae_degc.toFixed(2)} °C</dd>
+              <dd className="font-mono font-semibold text-ink">{fmt(card.test_metrics?.mae_degc, 2)} °C</dd>
             </div>
             <div className="kv">
               <dt>Root Mean Square Error (RMSE)</dt>
-              <dd className="font-mono font-semibold text-ink">{card.test_metrics.rmse_degc.toFixed(2)} °C</dd>
+              <dd className="font-mono font-semibold text-ink">{fmt(card.test_metrics?.rmse_degc, 2)} °C</dd>
             </div>
             <div className="kv">
               <dt title="Empirical marginal interval coverage on test partition; not simultaneous continuous-path coverage">
                 90% Marginal Step Coverage (Test)
               </dt>
-              <dd className="font-mono font-semibold text-ink">{card.test_metrics.marginal_coverage_90_pct.toFixed(1)}%</dd>
+              <dd className="font-mono font-semibold text-ink">{fmt(card.test_metrics?.marginal_coverage_90_pct, 1)}%</dd>
             </div>
             <div className="kv">
               <dt>Training Samples</dt>
-              <dd className="font-mono text-ink-2 text-right">{card.identifiability.fit_samples_count.toLocaleString()} frames ({card.identifiability.fit_span_days.toFixed(0)} days)</dd>
+              <dd className="font-mono text-ink-2 text-right">{(card.identifiability?.fit_samples_count?.toLocaleString() ?? '—')} frames ({fmt(card.identifiability?.fit_span_days, 0)} days)</dd>
             </div>
           </dl>
         </div>
@@ -174,15 +143,15 @@ export const DataModelCardView: React.FC<DataModelCardViewProps> = ({ modelCard 
           <dl className="card px-5 py-1.5">
             <div className="kv">
               <dt>Parameter Interpretability</dt>
-              <dd className="font-mono text-ink-2">{card.qualification.parameter_interpretability}</dd>
+              <dd className="font-mono text-ink-2">{card.qualification?.parameter_interpretability}</dd>
             </div>
             <div className="kv">
               <dt>Forecast Qualification</dt>
-              <dd className="font-mono text-ink-2">{card.qualification.forecast_qualification}</dd>
+              <dd className="font-mono text-ink-2">{card.qualification?.forecast_qualification}</dd>
             </div>
             <div className="kv">
               <dt>Scenario Projection</dt>
-              <dd className="font-mono text-ink-2">{card.qualification.scenario_qualification}</dd>
+              <dd className="font-mono text-ink-2">{card.qualification?.scenario_qualification}</dd>
             </div>
             <div className="kv">
               <dt>Promotion Status</dt>

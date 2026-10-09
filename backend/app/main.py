@@ -101,27 +101,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     if app_state is None:
         storage = StorageEngine(db_path=settings.db_path)
+        feedback_ledger = OperatorFeedbackLedger()
+        from app.api.deps import build_runtime_reducer
+        from app.core.registry import resolve_asset_profile
+        profile = resolve_asset_profile(asset_id=settings.default_asset_id)
         capability_evaluator = CapabilityEvaluator(
-            expected_cadence_s=settings.expected_cadence_s,
+            expected_cadence_s=profile.expected_cadence_s,
             evaluation_window_s=settings.evaluation_window_s,
         )
-        feedback_ledger = OperatorFeedbackLedger()
-        from app.core.registry import resolve_asset_profile, resolve_model_artifact
-        from app.engine.thermal_fallback import ThermalFallbackGate
-        from app.engine.review import ReviewFlagEngine
-        profile = resolve_asset_profile(asset_id=settings.default_asset_id)
-        artifact = resolve_model_artifact(asset_id=settings.default_asset_id)
-        thermal_gate = ThermalFallbackGate.from_artifact(
-            artifact,
-            nominal_cadence_s=profile.expected_cadence_s,
-        )
-        review_engine = ReviewFlagEngine(asset_id=settings.default_asset_id)
-        reducer = TwinReducer(
-            profile=profile,
-            load_reference_kva=settings.load_reference_kva,
-            thermal_gate=thermal_gate,
-            review_engine=review_engine,
-        )
+
+        def reducer_factory() -> TwinReducer:
+            return build_runtime_reducer(settings, feedback_ledger)
+
+        reducer = reducer_factory()
         replay_engine = ReplayEngine(storage=storage, asset_id=settings.default_asset_id)
 
         app_state = AppState(
@@ -131,6 +123,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             capability_evaluator=capability_evaluator,
             feedback_ledger=feedback_ledger,
             replay_engine=replay_engine,
+            reducer_factory=reducer_factory,
         )
         app.state.app_state = app_state
 

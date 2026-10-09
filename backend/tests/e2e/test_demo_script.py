@@ -18,8 +18,10 @@ if str(project_root) not in sys.path:
 from demo_script import run_hackathon_demo
 
 
-def test_hackathon_demo_end_to_end() -> None:
+def test_hackathon_demo_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify that the one-command hackathon demonstration runs cleanly end-to-end."""
+    # Write the PDF to a temp dir so the tracked demo_audit_report.pdf is never overwritten by tests
+    monkeypatch.setenv("DEMO_REPORT_PATH", str(tmp_path / "demo_audit_report.pdf"))
     results = run_hackathon_demo()
 
     # Verify Stage 1: Baseline

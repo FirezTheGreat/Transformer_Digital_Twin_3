@@ -178,7 +178,7 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
               </div>
               <h3 className="card-title">Two-Sided Robust CUSUM Accumulator (Thermal Residual)</h3>
               <p className="text-xs text-muted mt-1">
-                Thermal residual anomaly detection is not qualified for the current Tripura model artifact.
+                Thermal residual anomaly detection is not qualified for the current model artifact.
               </p>
             </div>
           </div>

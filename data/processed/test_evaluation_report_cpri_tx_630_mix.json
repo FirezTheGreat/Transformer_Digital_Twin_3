@@ -1,0 +1,116 @@
+{
+  "frozen_artifact_file": "calibrated_thermal_model_cpri_tx_630_mix.json",
+  "frozen_artifact_sha256": "0653bbaf90b26035c5c996ad3e5a99988e63de8e02e0b13b4bd55dac3743fda3",
+  "asset_id": "TX_630_MIX",
+  "dataset_id": "cpri_v3_0_2",
+  "evaluated_at_utc": "2026-10-09T19:10:48.734653+00:00",
+  "primary_model_metrics": {
+    "model_name": "greybox_ode_2h_trajectory",
+    "mae_degc": 1.0456,
+    "rmse_degc": 1.4273,
+    "bias_degc": 0.1972,
+    "marginal_coverage_90_pct": 96.72,
+    "simultaneous_path_coverage_90_pct": 93.35,
+    "mean_width_degc": 5.8138
+  },
+  "baseline_metrics": {
+    "persistence": {
+      "model_name": "persistence_2h_trajectory",
+      "mae_degc": 1.4246,
+      "rmse_degc": 1.8628,
+      "bias_degc": -0.0028,
+      "marginal_coverage_90_pct": null,
+      "simultaneous_path_coverage_90_pct": null,
+      "mean_width_degc": null
+    },
+    "ambient_median_rise": {
+      "model_name": "ambient_median_rise_2h_trajectory",
+      "mae_degc": 3.2264,
+      "rmse_degc": 4.5979,
+      "bias_degc": 0.0,
+      "marginal_coverage_90_pct": null,
+      "simultaneous_path_coverage_90_pct": null,
+      "mean_width_degc": null
+    },
+    "static_robust_regression": {
+      "model_name": "static_robust_regression_2h_trajectory",
+      "mae_degc": 2.1006,
+      "rmse_degc": 3.0404,
+      "bias_degc": 0.0,
+      "marginal_coverage_90_pct": null,
+      "simultaneous_path_coverage_90_pct": null,
+      "mean_width_degc": null
+    }
+  },
+  "promotion_decision": {
+    "status": "NOT_PROMOTED",
+    "primary_evaluation_horizon": "2_hour_multi_step_trajectory",
+    "mae_improvement_pct": 26.61,
+    "passes_mae_criterion": true,
+    "passes_bias_criterion": false,
+    "passes_coverage_criterion": true,
+    "passes_scenario_criterion": true,
+    "passes_identifiability_criterion": true,
+    "secondary_1step_closed_loop_mae_improvement_pct": 27.49,
+    "all_criteria_met": false,
+    "reasons": [
+      "2-Hour trajectory MAE improvement (26.61%) exceeds the 5.0% threshold vs multi-step persistence.",
+      "2-Hour trajectory signed bias (+0.20 degC) exceeds multi-step persistence bias (-0.00 degC).",
+      "Test empirical 90% trajectory coverage (96.7%) is within expected [80%, 98%] band.",
+      "Secondary 1-step closed-loop diagnostic: MAE=0.4736 degC vs persistence=0.6531 degC (improvement: +27.49%)."
+    ]
+  },
+  "horizon_breakdown": [
+    {
+      "horizon_step": 1,
+      "horizon_minutes": 30,
+      "model_mae_degc": 0.5137,
+      "persistence_mae_degc": 0.6528,
+      "mae_improvement_pct": 21.31,
+      "model_rmse_degc": 0.6595,
+      "model_bias_degc": 0.0945,
+      "conformal_coverage_pct": 99.41
+    },
+    {
+      "horizon_step": 2,
+      "horizon_minutes": 60,
+      "model_mae_degc": 0.8251,
+      "persistence_mae_degc": 1.1643,
+      "mae_improvement_pct": 29.14,
+      "model_rmse_degc": 1.0578,
+      "model_bias_degc": 0.1718,
+      "conformal_coverage_pct": 95.7
+    },
+    {
+      "horizon_step": 3,
+      "horizon_minutes": 90,
+      "model_mae_degc": 1.2092,
+      "persistence_mae_degc": 1.6845,
+      "mae_improvement_pct": 28.21,
+      "model_rmse_degc": 1.5326,
+      "model_bias_degc": 0.2352,
+      "conformal_coverage_pct": 95.85
+    },
+    {
+      "horizon_step": 4,
+      "horizon_minutes": 120,
+      "model_mae_degc": 1.6343,
+      "persistence_mae_degc": 2.1968,
+      "mae_improvement_pct": 25.61,
+      "model_rmse_degc": 2.0607,
+      "model_bias_degc": 0.2871,
+      "conformal_coverage_pct": 95.92
+    }
+  ],
+  "secondary_1step_diagnostics": {
+    "evaluation_name": "1_step_closed_loop_diagnostic",
+    "sample_count": 8712,
+    "greybox_mae_degc": 0.4736,
+    "greybox_rmse_degc": 0.616,
+    "greybox_bias_degc": 0.0946,
+    "persistence_mae_degc": 0.6531,
+    "persistence_rmse_degc": 0.8297,
+    "persistence_bias_degc": -0.0016,
+    "mae_improvement_pct": 27.49
+  }
+}

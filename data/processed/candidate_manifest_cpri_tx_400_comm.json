@@ -1,0 +1,66 @@
+{
+  "candidate_artifact_file": "calibrated_thermal_model_cpri_tx_400_comm.json",
+  "candidate_artifact_sha256": "2dee9b7c7f42ae16010cbee10ca1fc9957b9f1ee3a5920392fc609d6ed1de093",
+  "asset_id": "TX_400_COMM",
+  "dataset_id": "cpri_v3_0_2",
+  "model_version": "cpri_greybox_v1_0",
+  "frozen_at_utc": "2026-10-09T19:09:57.626917+00:00",
+  "parameters": {
+    "beta_0": 8.029,
+    "beta_1": 32.5724,
+    "tau_hours": 3.6222
+  },
+  "conformal_uncertainty": {
+    "horizon_steps": 4,
+    "horizon_scales_degc": [
+      0.5,
+      0.5725,
+      0.8515,
+      1.1657
+    ],
+    "block_quantile_90": 5.0821,
+    "horizon_half_widths_degc": [
+      2.541,
+      2.9096,
+      4.3272,
+      5.9243
+    ],
+    "calibration_residual_median": 0.1102,
+    "calibration_residual_mad": 1.1127,
+    "num_calibration_origins": 8737
+  },
+  "identifiability": {
+    "is_identifiable": true,
+    "fit_samples_count": 16318,
+    "fit_span_days": 365.98,
+    "load_cv": 0.5144,
+    "load_range": 454.76,
+    "tau_cv_across_folds": 0.0052,
+    "boundary_hit": false,
+    "diagnostic_messages": [
+      "All parameter identifiability and data sufficiency criteria satisfied."
+    ]
+  },
+  "qualification": {
+    "parameter_interpretability": "QUALIFIED",
+    "forecast_qualification": "PENDING_VALIDATION",
+    "scenario_qualification": "PENDING_VALIDATION",
+    "residual_display_qualification": "DESCRIPTIVE_ONLY",
+    "residual_anomaly_qualification": "QUALIFIED",
+    "cusum_qualification": "QUALIFIED",
+    "maintenance_inference_qualification": "DISABLED",
+    "dimension_reasons": {
+      "parameter_interpretability": "Parameter identifiability criteria satisfied across FIT partition.",
+      "forecast_qualification": "Autonomous 2-hour forward forecasting pending independent holdout test evaluation.",
+      "scenario_qualification": "Scenario what-if projection pending independent causal and holdout validation.",
+      "residual_display_qualification": "First-order grey-box ODE runs continuously on valid telemetry to compute descriptive shadow residuals.",
+      "residual_anomaly_qualification": "Residual excursions qualified against identifiable physical baseline.",
+      "cusum_qualification": "Two-sided CUSUM tracker qualified on identifiable model residuals.",
+      "maintenance_inference_qualification": "Model-driven maintenance recommendations disabled until causal degradation models are qualified."
+    }
+  },
+  "dataset_hashes": {
+    "cpri_v3_fit_sha256": "8e258d78587069636457a505bd03a166098fa503846d98d47c4a433b815190f4",
+    "cpri_v3_calibration_sha256": "48d44e9e0e1746d29216741d7d73bb27e293494ab601c435858f067ead699371"
+  }
+}

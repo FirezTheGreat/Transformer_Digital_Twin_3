@@ -103,11 +103,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         storage = StorageEngine(db_path=settings.db_path)
         feedback_ledger = OperatorFeedbackLedger()
         from app.api.deps import build_runtime_reducer
-        from app.core.registry import resolve_asset_profile
+        from app.core.registry import resolve_asset_profile, resolve_model_artifact
         profile = resolve_asset_profile(asset_id=settings.default_asset_id)
+        artifact = resolve_model_artifact(asset_id=settings.default_asset_id)
+        is_promoted = artifact.parameters is not None and artifact.promotion.status == "PROMOTED"
         capability_evaluator = CapabilityEvaluator(
             expected_cadence_s=profile.expected_cadence_s,
             evaluation_window_s=settings.evaluation_window_s,
+            # C3 forecasting follows the asset's locked qualification matrix; unpromoted assets stay gated
+            is_model_promoted=is_promoted,
+            qualification=artifact.qualification if is_promoted else None,
+            model_version=artifact.model_version if is_promoted else "uncalibrated",
         )
 
         def reducer_factory() -> TwinReducer:

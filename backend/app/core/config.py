@@ -32,7 +32,7 @@ class Settings(BaseModel):
         description="Execution environment",
     )
     default_asset_id: str = Field(
-        default_factory=lambda: os.getenv("DEFAULT_ASSET_ID", "DT-TRIPURA-001"),
+        default_factory=lambda: os.getenv("DEFAULT_ASSET_ID", "TX_1000_COMM"),
         description="Default transformer asset identifier",
     )
     cors_origins: list[str] = Field(

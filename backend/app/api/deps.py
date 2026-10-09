@@ -126,6 +126,7 @@ def build_runtime_reducer(
     profile = resolve_asset_profile(asset_id=asset_id)
     artifact = resolve_model_artifact(asset_id=asset_id)
     thermal_gate = ThermalFallbackGate.from_artifact(artifact, nominal_cadence_s=profile.expected_cadence_s)
+    qual = artifact.qualification if thermal_gate.is_model_promoted else None
     return TwinReducer(
         profile=profile,
         load_reference_kva=settings.load_reference_kva,
@@ -136,7 +137,14 @@ def build_runtime_reducer(
         othi_engine=OTHIEngine(expected_cadence_seconds=profile.expected_cadence_s),
         exposure_engine=ThermalExposureEngine(asset_id=asset_id),
         maintenance_engine=MaintenanceEngine(
-            feedback_ledger=feedback_ledger, is_model_promoted=thermal_gate.is_model_promoted
+            feedback_ledger=feedback_ledger,
+            is_model_promoted=thermal_gate.is_model_promoted,
+            # Model-driven rules (e.g. MNT-THERM-002) only when the locked matrix qualifies them
+            is_thermal_qualified=qual is not None
+            and qual.maintenance_inference_qualification == QualificationStatus.QUALIFIED,
+            cusum_qualification="ENABLED"
+            if qual is not None and qual.cusum_qualification == QualificationStatus.QUALIFIED
+            else "DISABLED",
         ),
         thermal_gate=thermal_gate,
         review_engine=ReviewFlagEngine(asset_id=asset_id),

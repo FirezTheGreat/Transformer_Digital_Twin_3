@@ -20,9 +20,10 @@ Complete this exact checklist before taking the presentation stage:
   curl -s http://localhost:8000/healthz | grep '"status":"ok"'
   ```
   *Expected Output:* `{"status":"ok", "is_ready": true, ...}`
-- [ ] **4. Verify Project Data Availability in Container:**
+- [ ] **4. Verify CPRI Data and Model Records in Container:**
   ```bash
-  docker compose exec backend ls -la /app/data/processed/tripura_test.parquet
+  docker compose exec backend ls -la /app/data/processed/cpri_v3_calibration.parquet
+  curl -s http://localhost:8000/v1/models/cpri-evaluation   # per-asset qualification matrix
   ```
 - [ ] **5. Run Demo Verification in Container:**
   ```bash
@@ -31,7 +32,7 @@ Complete this exact checklist before taking the presentation stage:
   *Ensure all 7 stages output green `PASS`.*
 - [ ] **6. Verify PDF Generation Endpoint:**
   ```bash
-  curl -s -o test_report.pdf http://localhost:8000/v1/reports/summary.pdf?asset_id=DT-TRIPURA-001
+  curl -s -o test_report.pdf http://localhost:8000/v1/reports/summary.pdf?asset_id=TX_250_MIX
   file test_report.pdf  # Or open in viewer to verify WeasyPrint rendering
   ```
 - [ ] **7. Browser Dashboard Setup:**
@@ -41,9 +42,10 @@ Complete this exact checklist before taking the presentation stage:
 
 ---
 
-## 2. Presentation Sequence & Narrative (8–10 Minutes)
+## 2. Scripted Synthetic-Injection Demo (`demo_script.py`, optional)
 
-Follow this 8-step chronological demonstration narrative:
+The primary live demo is the CPRI dashboard in §2b. This scripted sequence runs injected synthetic events through the same
+engines (it labels its synthetic asset `DT-TRIPURA-001`; no Tripura data is used):
 
 ```
 [1. Baseline] → [2. Sensor Spike] → [3. Sustained Overload] → [4. Multi-Domain Corroboration]
@@ -151,27 +153,64 @@ Follow this 8-step chronological demonstration narrative:
 
 ---
 
-## 2b. CPRI Synthetic Asset Demo (TX_250_MIX, live dashboard)
+## 2b. Primary Live Demo — CPRI Synthetic Benchmark v3.0.2 (dashboard)
 
-Start the backend with `DEFAULT_ASSET_ID=TX_250_MIX` (from `backend/`), then `npm run dev` in `frontend/` and open http://localhost:3000.
-The dashboard follows the backend's asset. Replay uses the **CAL partition** (2025-01-01 to 2025-07-03 IST, 8,757 events at 30 min);
-the TEST partition is never loaded at runtime. Oracle `y_*` labels are dropped before ingestion.
+### Setup (once)
+```bash
+python -m venv .venv            # Python 3.11+
+.venv/Scripts/pip install -e "backend[dev]"     # Linux/macOS: .venv/bin/pip
+cd frontend && npm ci && cd ..
+```
 
-Seek positions (`POST /v1/replay {"action":"seek","seek_position":N}`) where the twin itself raises CRITICAL conditions:
+### Launch (two terminals, from the repo root)
+```bash
+# Terminal 1 - backend serves ONE asset per process (default TX_1000_COMM)
+cd backend && ../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+#   fallback/unqualified-model demo:  DEFAULT_ASSET_ID=TX_250_MIX ../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+# Terminal 2
+cd frontend && npm run dev        # open http://localhost:3000
+```
+Replay uses each asset's **CAL partition** (2025-01-01 to 2025-07-03 IST, 30-min cadence). TEST partitions are never loaded at
+runtime; `y_*` oracle labels are dropped before ingestion. Docker: `docker compose up --build` (defaults to TX_1000_COMM).
 
-| Position | Time (UTC) | Twin output |
+### Model qualification (one-shot TEST, frozen before evaluation)
+Live matrix: **Data & Model Card** tab, or `GET /v1/models/cpri-evaluation`. Gates: 2-h MAE ≥ 5 % better than persistence;
+|bias| ≤ |persistence bias| + 0.10 °C (residual = observed − predicted); 90 % marginal coverage in [80, 98] %; identifiable.
+
+| Asset | Status | 2-h MAE model / persistence (°C) | Signed bias (°C) | Coverage marginal / path | Failed gates |
+|---|---|---|---|---|---|
+| TX_100_RES | NOT_PROMOTED | 0.907 / 1.327 (+31.7 %) | +0.156 | 98.2 / 96.0 % | bias, coverage |
+| TX_160_RURAL | NOT_PROMOTED | 0.986 / 1.079 (+8.6 %) | +0.203 | 97.0 / 94.5 % | bias |
+| TX_250_MIX | NOT_PROMOTED (historical, evaluated 2026-10-09) | 1.035 / 1.355 (+23.6 %) | +0.260 | 96.2 / 93.1 % | bias |
+| TX_315_RES | NOT_PROMOTED | 1.003 / 1.537 (+34.7 %) | +0.133 | 97.3 / 94.2 % | bias |
+| TX_400_COMM | NOT_PROMOTED | 1.118 / 2.655 (+57.9 %) | +0.121 | 97.6 / 94.9 % | bias |
+| TX_500_RURAL | NOT_PROMOTED | 1.076 / 1.187 (+9.3 %) | +0.283 | 94.9 / 91.0 % | bias |
+| TX_630_MIX | NOT_PROMOTED | 1.046 / 1.425 (+26.6 %) | +0.197 | 96.7 / 93.3 % | bias |
+| **TX_1000_COMM** | **PROMOTED** | 1.202 / 2.998 (+59.9 %) | +0.097 (limit 0.107) | 96.9 / 93.6 % | none |
+
+All eight models under-predict on average (positive residual bias), a shared structural limitation of the first-order model.
+TX_1000_COMM passes the bias gate by only 0.010 °C. All TEST partitions are now consumed: any further tuning needs a fresh holdout.
+
+### Demo sequence (TX_1000_COMM, ~6 min)
+Seek with the replay bar or `POST /v1/replay {"action":"seek","seek_position":N}`:
+
+| Seek | Time (UTC) | What the twin shows |
 |---|---|---|
-| 1628 | 2025-02-03 23:30 | Voltage/PF/frequency CRITICAL |
-| 4482 | 2025-04-04 13:30 | Phase/neutral CRITICAL, P2 `MNT-PHASE-004` |
-| 5413 | 2025-04-23 23:00 | Loading CRITICAL (relative load index on the declared 250 kVA rating) |
-| 5444 | 2025-04-24 14:00 | Thermal + loading CRITICAL, OTHI 0 |
+| 781 | 2025-01-17 04:30 | Loading CRITICAL (load ≥ 1.25 × 1000 kVA rating) — OTHI drops |
+| 6777 | 2025-05-22 10:00 | Thermal limit CRITICAL + `MNT-THERM-002` (enabled because this model is qualified) |
+| 7899 | 2025-06-14 19:00 | Phase/neutral CRITICAL + P2 `MNT-PHASE-004` |
 
-Model status to state plainly: TX_250_MIX was fitted on FIT, uncertainty-calibrated on CAL, frozen, and evaluated once on TEST
-(2-h MAE 1.035 °C vs persistence 1.355 °C, 23.6 % better; 90 % marginal coverage 96.2 %; path coverage 93.1 %),
-but it is **NOT_PROMOTED**: signed bias +0.26 °C failed the locked gate |bias| ≤ |persistence bias| + 0.10 °C.
-It runs in shadow/descriptive mode; forecasting, what-if and residual-anomaly evidence stay gated. Its TEST partition is consumed.
-No maintenance rule exists for overload, and the thermal rule `MNT-THERM-002` requires a qualified model, so these conditions show as
-alerts and health impact without a recommendation.
+1. **Telemetry** tab: measured voltage, phase currents, kVA, oil and ambient temperature.
+2. **Overview**: OTHI and the domain that drives it; open the evidence list for detector, threshold and observed value.
+3. **Maintenance Advisories**: deterministic rule, priority and action window; acknowledge one (feedback ledger).
+4. **Thermal & What-If**: qualified 2-hour projection in four 30-min steps with the asset's own 90 % CAL envelope.
+5. **Data & Model Card**: parameters, TEST metrics and the eight-asset qualification matrix.
+
+### Fallback demo (no qualified model): restart with `DEFAULT_ASSET_ID=TX_250_MIX`
+Same monitoring, OTHI, alerts and advisories; thermal model runs in **SHADOW_DESCRIPTIVE** mode, C3 forecasting and what-if are
+refused with the reason shown, and the model card explains the failed bias gate. Alert seeks: 1628 (voltage/PF/frequency),
+4482 (phase/neutral + `MNT-PHASE-004`), 5413 (loading), 5444 (thermal + loading, OTHI 0). No overload maintenance rule exists, and
+`MNT-THERM-002` needs a qualified model, so these show as alerts and health impact without a thermal recommendation.
 
 ---
 

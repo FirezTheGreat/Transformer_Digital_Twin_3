@@ -170,7 +170,8 @@ async def execute_what_if_scenario(
         from app.core.registry import resolve_model_artifact
         artifact = resolve_model_artifact(dataset_id=dataset_id, asset_id=asset_id)
         simulator = ScenarioSimulator.from_artifact(artifact)
-    state = app_state.current_state
+    # Only this asset's own telemetry may seed its projection
+    state = app_state.current_state if (app_state.current_state and app_state.current_state.asset_id == asset_id) else None
 
     # Extract origin values from active state if available
     now = datetime.now(timezone.utc)
@@ -188,16 +189,19 @@ async def execute_what_if_scenario(
             elif "ambient" in k_clean or k_clean == "ati":
                 origin_ambient = float(m.value) if m.value is not None else None
 
-        if state.derived_electrical is not None:
-            origin_load_u = state.derived_electrical.relative_load_index
+        # Load in the units of the model's own fitted driver (normalised by the simulator's reference),
+        # never the rating-based relative load index, which uses a different basis.
+        obs = {k: m.value for k, m in state.current_observations.items() if isinstance(m.value, (int, float))}
+        if simulator.load_driver_type == "apparent_power_kva":
+            origin_load_u = obs.get("apparent_power_total") or (
+                state.derived_electrical.apparent_power_derived_kva if state.derived_electrical else None
+            )
+        else:
+            phases = [obs.get(k) for k in ("current_i1", "current_i2", "current_i3")]
+            if all(v is not None for v in phases):
+                origin_load_u = (sum(float(v) ** 2 for v in phases) / 3.0) ** 0.5
 
-    # Default fallback values for testing if uninitialized
-    if origin_top_oil is None:
-        origin_top_oil = 65.0
-    if origin_ambient is None:
-        origin_ambient = 30.0
-    if origin_load_u is None:
-        origin_load_u = 0.80
+    # No fabricated origin: missing telemetry leaves the projection disabled with an explicit reason.
 
     # Determine trust state
     trust_state = ThermalTrustState.MODEL_HEALTHY
@@ -217,5 +221,5 @@ async def execute_what_if_scenario(
         origin_load_value=origin_load_u,
         trust_state=trust_state,
         scenario_request=request,
-        is_load_value_already_index_u=True,
+        is_load_value_already_index_u=False,
     )

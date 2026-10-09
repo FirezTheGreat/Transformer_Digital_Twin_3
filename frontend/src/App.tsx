@@ -23,6 +23,7 @@ import {
 } from './types/contracts';
 import { api, ModelCardData } from './services/api';
 import { getAssetContext } from './utils/assetContext';
+import { ModelEvaluationMatrix } from './components/views/ModelEvaluationMatrix';
 
 export default function App(): React.ReactElement {
   // The backend serves one configured asset (DEFAULT_ASSET_ID); the UI follows it rather than hardcoding one.
@@ -593,7 +594,10 @@ export default function App(): React.ReactElement {
 
         {/* View 7: Data & Model Card */}
         {activeTab === 'model-card' && (
-          <DataModelCardView modelCard={modelCard} />
+          <>
+            <DataModelCardView modelCard={modelCard} />
+            <ModelEvaluationMatrix currentAssetId={assetId} />
+          </>
         )}
 
         {/* View 7: 3D Twin Workspace */}

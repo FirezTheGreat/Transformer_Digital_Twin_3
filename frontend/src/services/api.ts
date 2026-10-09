@@ -116,6 +116,40 @@ export interface ModelCardData {
   qualification: Record<string, string>;
 }
 
+export interface CpriCapability {
+  available: boolean;
+  status?: string;
+  reason: string;
+}
+
+export interface CpriModelEvaluationRow {
+  asset_id: string;
+  rated_kva: number;
+  fit_status: 'FROZEN_CANDIDATE' | 'NOT_FITTED';
+  artifact_sha256: string | null;
+  promotion_status: string;
+  promotion_reasons: string[];
+  test_partition: string;
+  test_evaluated_at_utc: string | null;
+  gates: Record<string, boolean | null> | null;
+  metrics: {
+    mae_2h_degc: number;
+    persistence_mae_2h_degc: number;
+    mae_improvement_pct: number;
+    signed_bias_degc: number;
+    persistence_signed_bias_degc: number;
+    marginal_coverage_90_pct: number | null;
+    path_coverage_90_pct: number | null;
+  } | null;
+  capabilities: Record<string, CpriCapability>;
+}
+
+export interface CpriModelEvaluation {
+  dataset_id: string;
+  promotion_policy: Record<string, string>;
+  assets: CpriModelEvaluationRow[];
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let errorDetail = res.statusText;
@@ -205,6 +239,11 @@ export const api = {
   },
 
   // Model Card
+  async getCpriModelEvaluation(): Promise<CpriModelEvaluation> {
+    const res = await fetch(`${API_BASE}/v1/models/cpri-evaluation`);
+    return handleResponse<CpriModelEvaluation>(res);
+  },
+
   async getAssetModelCard(assetId: string): Promise<ModelCardData> {
     const res = await fetch(`${API_BASE}/v1/assets/${encodeURIComponent(assetId)}/model-card`);
     return handleResponse<ModelCardData>(res);

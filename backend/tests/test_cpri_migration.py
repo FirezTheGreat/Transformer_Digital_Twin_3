@@ -44,8 +44,16 @@ def _assert_cpri_artifact_isolated(asset_id: str, artifact) -> None:
     assert artifact.asset_id == asset_id
     assert artifact.dataset_id == "cpri_v3_0_2"
     if own_path.exists():
+        import hashlib
+
         assert artifact.parameters is not None
-        assert artifact.promotion.status != "PROMOTED"
+        report_path = own_path.with_name(f"test_evaluation_report_cpri_{asset_id.lower()}.json")
+        report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else None
+        if report and report["frozen_artifact_sha256"] == hashlib.sha256(own_path.read_bytes()).hexdigest():
+            # Runtime status is exactly the one-shot TEST decision bound to this artifact
+            assert artifact.promotion.status == report["promotion_decision"]["status"]
+        else:
+            assert artifact.promotion.status != "PROMOTED"
     else:
         assert artifact.parameters is None
         assert artifact.promotion.status == "UNCALIBRATED"
@@ -336,7 +344,7 @@ def test_fit_filtering_excludes_ineligible_without_bridging_gaps(clean_fit_df: p
             assert t_hat[i] == filtered.top_oil_degc[i]
 
 
-def test_test_access_rejected_before_frozen_candidate_exists(project_root: Path) -> None:
+def test_test_access_rejected_before_frozen_candidate_exists(project_root: Path, tmp_path: Path) -> None:
     """2. TEST access is rejected before an immutable frozen-candidate manifest exists."""
     import subprocess
     import sys
@@ -350,7 +358,8 @@ def test_test_access_rejected_before_frozen_candidate_exists(project_root: Path)
 
     # CLI evaluation must fail closed
     res = subprocess.run(
-        [sys.executable, str(project_root / "backend" / "scripts" / "run_calibration_cpri.py"), "--asset", "TX_100_RES", "--evaluate-test"],
+        [sys.executable, str(project_root / "backend" / "scripts" / "run_calibration_cpri.py"), "--asset", "TX_100_RES", "--evaluate-test",
+         "--processed-dir", str(tmp_path)],
         capture_output=True,
         text=True,
         cwd=str(project_root),
@@ -404,9 +413,17 @@ def test_test_evaluation_cannot_mutate_frozen_artifact(tmp_path: Path, clean_fit
     assert rep_path.exists()
 
 
-def test_cpri_artifact_identity_mismatches_fail_closed(tmp_path: Path) -> None:
+def test_cpri_artifact_identity_mismatches_fail_closed(project_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """4. CPRI artifact identity mismatches fail closed."""
+    import app.core.registry as registry
     from app.core.registry import resolve_model_artifact
+
+    # Isolated store holding only TX_250_MIX's artifact
+    (tmp_path / "data" / "processed").mkdir(parents=True)
+    src = project_root / "data" / "processed" / "calibrated_thermal_model_cpri_tx_250_mix.json"
+    (tmp_path / "data" / "processed" / src.name).write_bytes(src.read_bytes())
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(registry, "_REPO_ROOT", tmp_path)
 
     # Requesting TX_100_RES when only TX_250_MIX exists must NOT load TX_250_MIX
     resolved = resolve_model_artifact(asset_id="TX_100_RES", dataset_id="cpri_v3_0_2")
@@ -589,6 +606,9 @@ def test_cpri_artifact_identity_mismatch_does_not_crash(project_root: Path, tmp_
     target.parent.mkdir(parents=True)
     target.write_bytes(src.read_bytes())
     monkeypatch.chdir(tmp_path)
+    import app.core.registry as registry
+
+    monkeypatch.setattr(registry, "_REPO_ROOT", tmp_path)
 
     resolved = resolve_model_artifact(asset_id="TX_100_RES", dataset_id="cpri_v3_0_2")
     assert resolved.asset_id == "TX_100_RES"

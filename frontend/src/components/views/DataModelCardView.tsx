@@ -60,7 +60,7 @@ export const DataModelCardView: React.FC<DataModelCardViewProps> = ({ modelCard 
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <span className="eyebrow">Model Card & Audit Specification</span>
             <span className={`chip font-mono ${isPromoted ? 'chip-ok' : 'chip-warn'}`}>
-              {card.promotion.status} · Descriptive Shadow Mode
+              {card.promotion.status} · {isPromoted ? 'Qualified model' : 'Descriptive Shadow Mode'}
             </span>
           </div>
           <h1 className="page-title">Grey-Box Thermal Model Card</h1>
@@ -93,7 +93,7 @@ export const DataModelCardView: React.FC<DataModelCardViewProps> = ({ modelCard 
               </div>
             </div>
             <p className="text-[11px] text-on-inverse/65 mt-6 leading-relaxed">
-              Where <span className="font-mono text-on-inverse">θ_o</span> is top-oil temperature, <span className="font-mono text-on-inverse">u = I_rms / I_ref</span> is relative load, <span className="font-mono text-on-inverse">τ</span> is the thermal time constant, <span className="font-mono text-on-inverse">β₀</span> is the ambient baseline offset, and <span className="font-mono text-on-inverse">β₁</span> is the load heating coefficient.
+              Where <span className="font-mono text-on-inverse">θ_o</span> is top-oil temperature, <span className="font-mono text-on-inverse">u = {card.selected_load_driver === 'apparent_power_kva' ? 'S / S_ref' : 'I_rms / I_ref'}</span> is relative load, <span className="font-mono text-on-inverse">τ</span> is the thermal time constant, <span className="font-mono text-on-inverse">β₀</span> is the ambient baseline offset, and <span className="font-mono text-on-inverse">β₁</span> is the load heating coefficient.
             </p>
           </div>
 

@@ -72,17 +72,19 @@ Access the user interfaces:
 cd backend
 pip install -e ".[dev]"
 
-# Run FastAPI backend server (default asset: Tripura DT-TRIPURA-001)
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# Run FastAPI backend server (default asset: CPRI TX_1000_COMM; replays its CAL partition, TEST is never loaded)
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-# Or serve a CPRI v3.0.2 synthetic asset (replays its CAL partition; TEST is never loaded)
+# Serve another CPRI asset, e.g. one without a qualified model
 DEFAULT_ASSET_ID=TX_250_MIX uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Requires Python 3.11+. On Windows without GTK, PDF reports use the `xhtml2pdf` fallback (installed by the `dev` extras).
 The backend serves one asset per process; the dashboard follows the backend's `default_asset_id`.
-Only `TX_250_MIX` has a fitted thermal model, and it is **NOT_PROMOTED** (failed the locked signed-bias gate on TEST),
-so it runs in shadow/descriptive mode with forecasting and what-if gated. The other seven CPRI assets run uncalibrated.
+All eight CPRI assets have a frozen grey-box model evaluated once on TEST. Only **TX_1000_COMM is PROMOTED** (forecasting and
+what-if enabled); the other seven are NOT_PROMOTED (signed-bias gate) and run in shadow/descriptive mode with forecasting gated.
+See `GET /v1/models/cpri-evaluation` and `docs/HACKATHON_RUNBOOK.md` §2b. The legacy Tripura asset remains available via
+`DEFAULT_ASSET_ID=DT-TRIPURA-001`.
 
 In a separate terminal for the frontend:
 

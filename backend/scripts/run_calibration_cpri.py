@@ -71,14 +71,29 @@ def main() -> None:
         action="store_true",
         help="Evaluate an existing frozen candidate artifact against TEST partition. Writes separate evaluation report.",
     )
+    parser.add_argument(
+        "--processed-dir",
+        default=None,
+        help="Override data/processed location (used by tests to isolate artifacts)",
+    )
     args = parser.parse_args()
 
     workspace_root = backend_dir.parent
-    processed_dir = workspace_root / "data" / "processed"
+    processed_dir = Path(args.processed_dir) if args.processed_dir else workspace_root / "data" / "processed"
 
     fit_path = processed_dir / "cpri_v3_fit.parquet"
     cal_path = processed_dir / "cpri_v3_calibration.parquet"
     test_path = processed_dir / "cpri_v3_test.parquet"
+
+    # One-shot discipline: never overwrite a frozen candidate or re-consume a TEST partition.
+    frozen_path = processed_dir / f"calibrated_thermal_model_cpri_{args.asset.lower()}.json"
+    report_existing = processed_dir / f"test_evaluation_report_cpri_{args.asset.lower()}.json"
+    if args.fit_and_freeze and frozen_path.exists():
+        logger.error("Frozen candidate already exists for %s (%s); refusing to refit or overwrite it.", args.asset, frozen_path)
+        sys.exit(1)
+    if args.evaluate_test and report_existing.exists():
+        logger.error("TEST for %s is already consumed (%s); refusing to re-evaluate.", args.asset, report_existing)
+        sys.exit(1)
 
     if args.evaluate_test:
         # TEST evaluation mode: requires frozen candidate artifact to exist

@@ -151,6 +151,7 @@ def _apply_cpri_test_decision(
     """
     promotion = artifact.promotion
     test_metrics = artifact.test_metrics
+    test_bound = False
     report_path = artifact_path.with_name(f"test_evaluation_report_cpri_{artifact.asset_id.lower()}.json")
     if report_path.exists():
         try:
@@ -159,13 +160,21 @@ def _apply_cpri_test_decision(
             if report.get("frozen_artifact_sha256") == artifact_hash and report.get("asset_id") == artifact.asset_id:
                 promotion = PromotionDecision(**report["promotion_decision"])
                 test_metrics = BaselineMetricEntry(**report["primary_model_metrics"])
+                test_bound = True
             else:
                 logger.warning("TEST report %s is not bound to artifact %s; ignoring it.", report_path, artifact_path)
         except Exception as ex:
             logger.warning("Failed to read TEST report %s: %s", report_path, ex)
 
     qualification = artifact.qualification
-    if (
+    if test_bound and artifact.parameters and artifact.identifiability and artifact.conformal_uncertainty:
+        # Post-TEST: the same locked matrix the full pipeline applies (calibration.derive_qualification_matrix)
+        from app.engine.calibration import derive_qualification_matrix
+
+        qualification = derive_qualification_matrix(
+            artifact.identifiability, promotion, artifact.conformal_uncertainty, artifact.parameters
+        )
+    elif (
         qualification is not None
         and promotion.status != "PROMOTED"
         and not promotion.passes_bias_criterion

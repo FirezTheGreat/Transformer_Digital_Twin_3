@@ -434,6 +434,15 @@ def test_get_model_card(client: TestClient) -> None:
 def test_post_scenario_successful_projection(client: TestClient, test_app_state: AppState) -> None:
     """Scenario simulation generates 8-step 2-hour projection with empirical conformal bounds."""
     state = _make_sample_state(asset_id="DT-TRIPURA-001", top_oil=65.0, ambient=30.0, current_a=120.0)
+    # Canonical phase currents: the endpoint derives load in the model's own driver units (no default load)
+    phase_currents = {
+        f"current_i{n}": Measurement(
+            signal_id=f"current_i{n}", value=120.0, value_type="float", unit_ucum="A",
+            original_name=f"IL{n}", original_value="120.0", original_unit="A",
+        )
+        for n in (1, 2, 3)
+    }
+    state = state.model_copy(update={"current_observations": {**state.current_observations, **phase_currents}})
     test_app_state.update_state(state)
 
     payload = {

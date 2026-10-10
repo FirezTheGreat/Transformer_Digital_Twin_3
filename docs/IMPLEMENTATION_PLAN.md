@@ -1,5 +1,14 @@
 # Implementation Plan: Digital Twin for Distribution Transformer Health Monitoring
 
+> [!NOTE]
+> **HISTORICAL / SUPERSEDED DOCUMENTATION**  
+> This document is the original hackathon implementation plan (Phases 1–10 baseline).  
+> For the current authoritative execution roadmap, candidate dataset scope, audit logs, and technical references, consult:
+> - [`GRIDPULSE_MASTER_EXECUTION_PLAN.md`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/GRIDPULSE_MASTER_EXECUTION_PLAN.md) — Primary Authoritative Execution Roadmap
+> - [`GRIDPULSE_DATASET_SYN_ADAPTATION_AND_EXTRA_DOMAIN_SCOPE.md`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/GRIDPULSE_DATASET_SYN_ADAPTATION_AND_EXTRA_DOMAIN_SCOPE.md) — Candidate Adaptation & Extra Domains
+> - [`docs/execution/GRIDPULSE_EXECUTION_LOG.md`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/docs/execution/GRIDPULSE_EXECUTION_LOG.md) — Verification & Audit Evidence
+> - [`docs/references/TECHNICAL_REFERENCES_AND_CITATIONS.md`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/docs/references/TECHNICAL_REFERENCES_AND_CITATIONS.md) — Standards Citations & Bibliography
+
 **Project:** POWERNext-AI Hackathon 2026 — Track 2: Digital Twin for Intelligent Health Monitoring and Predictive Maintenance of Distribution Transformers  
 **Team:** SKY HIGH  
 **Canonical Architecture Reference:** [`docs/FINAL_ARCHITECTURE_DECISIONS.md`](file:///c:/1st%20year%20learning%20programs/CPRI/Transformer_Digital_Twin/docs/FINAL_ARCHITECTURE_DECISIONS.md)  

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Gauge, Zap, Activity } from 'lucide-react';
+import { Gauge, Zap, Activity, Droplets } from 'lucide-react';
 import { TwinState, CapabilityManifest, CanonicalEvent } from '../types/contracts';
 import { getAssetContext } from '../utils/assetContext';
 
@@ -53,8 +53,8 @@ const ReadingRow: React.FC<{ tag: string; label: string; value: string; unit?: s
       <span className="truncate">{label}</span>
     </span>
     <span className="flex items-baseline gap-1.5 flex-shrink-0">
-      <span className={`metric-compact text-[23px] ${value === '—' ? 'text-faint font-normal' : tone}`}>{value}</span>
-      <span className="metric-unit text-[11.5px] w-9 text-left">{value === '—' ? '' : (unit ?? '')}</span>
+      <span className={`metric-compact text-[20px] ${value === '—' || value.startsWith('Unsupp') || value === 'Missing' ? 'text-faint font-normal text-[12px]' : tone}`}>{value}</span>
+      <span className="metric-unit text-[11.5px] w-9 text-left">{value === '—' || value.startsWith('Unsupp') || value === 'Missing' ? '' : (unit ?? '')}</span>
     </span>
   </div>
 );
@@ -87,6 +87,29 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
   const q_tot = extractSignal(obs, ['reactive_power_total', 'reactive_power', 'KVAR'], meas);
   const freq = extractSignal(obs, ['frequency', 'FRQ'], meas);
   const pf = derived?.power_factor_derived ?? extractSignal(obs, ['power_factor_total', 'power_factor_avg', 'Avg_PF'], meas);
+
+  // Multi-Domain Telemetry: Oil, Pressure, Protection
+  const oilLvl = extractSignal(obs, ['oil_level_pct', 'oil_level'], meas);
+  const oilCorrected = extractSignal(obs, ['oil_level_corrected_pct'], meas);
+  const tankPress = extractSignal(obs, ['tank_pressure_kpa_g', 'tank_pressure', 'pressure'], meas);
+  const prdOperated = extractSignal(obs, ['pressure_relief_operated', 'prd_operated'], meas);
+  const lvBreaker = extractSignal(obs, ['lv_breaker_closed'], meas);
+  const otiAlarm = extractSignal(obs, ['oti_alarm_contact', 'oti_alarm'], meas);
+
+  // Formatting construction-aware values
+  let oilDisplay = '—';
+  if (assetCtx.hasOilGauge) {
+    oilDisplay = oilLvl !== null ? fmt(oilLvl, 1) : 'Missing';
+  } else {
+    oilDisplay = 'Unsupported (Sealed Tank)';
+  }
+
+  let pressDisplay = '—';
+  if (assetCtx.hasPressureSensor) {
+    pressDisplay = tankPress !== null ? fmt(tankPress, 2) : 'Missing';
+  } else {
+    pressDisplay = 'Unsupported (Conservator)';
+  }
 
   const panelHeader = (title: string, icon: React.ReactNode) => (
     <div className="flex items-center justify-between pb-3 border-b border-line">
@@ -175,13 +198,97 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
         </div>
       </div>
 
+      {/* Tank Construction & Asset-Specific Sensor Telemetry Panel */}
+      <div className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-line mb-4">
+          <div className="flex items-center gap-2">
+            <Droplets className="w-4 h-4 text-accent" strokeWidth={1.75} />
+            <h3 className="card-title">Tank Construction & Physical Domain Telemetry</h3>
+          </div>
+          <span className="chip chip-neutral text-[11px] font-mono">
+            {assetCtx.tankType === 'SEALED_CORRUGATED' ? 'Sealed Corrugated Tank' : 'Conservator Tank Design'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-3 bg-surface-2 rounded-lg border border-line">
+            <div className="text-[11px] font-medium text-muted mb-1">Magnetic Oil Level Gauge</div>
+            <div className="text-[20px] font-mono font-bold text-ink">
+              {oilDisplay}
+              {oilDisplay !== '—' && !oilDisplay.startsWith('Unsupp') && !oilDisplay.startsWith('Miss') && (
+                <span className="text-[12px] font-normal text-muted ml-1">%</span>
+              )}
+            </div>
+            <div className="text-[10px] text-muted mt-1">
+              {assetCtx.hasOilGauge
+                ? (oilCorrected !== null ? `T-corrected: ${oilCorrected.toFixed(1)}%` : 'Gauge fitted (30°C baseline)')
+                : 'Conservator gauge absent on sealed tank'}
+            </div>
+          </div>
+
+          <div className="p-3 bg-surface-2 rounded-lg border border-line">
+            <div className="text-[11px] font-medium text-muted mb-1">Tank Pressure Transducer</div>
+            <div className="text-[20px] font-mono font-bold text-ink">
+              {pressDisplay}
+              {pressDisplay !== '—' && !pressDisplay.startsWith('Unsupp') && !pressDisplay.startsWith('Miss') && (
+                <span className="text-[12px] font-normal text-muted ml-1">kPa(g)</span>
+              )}
+            </div>
+            <div className="text-[10px] text-muted mt-1">
+              {assetCtx.hasPressureSensor
+                ? 'Gauge pressure transducer fitted'
+                : 'Free-breathing conservator; pressure transducer unsupported'}
+            </div>
+          </div>
+
+          <div className="p-3 bg-surface-2 rounded-lg border border-line">
+            <div className="text-[11px] font-medium text-muted mb-1">Protection Contact Telemetry</div>
+            <div className="text-[16px] font-mono font-semibold text-ink">
+              {assetCtx.isCandidate ? (
+                lvBreaker === 1 ? (
+                  <span className="text-ok">LV Closed · Nominal</span>
+                ) : lvBreaker === 0 ? (
+                  <span className="text-crit">LV Breaker Open / Trip</span>
+                ) : (
+                  'Contacts Active'
+                )
+              ) : (
+                <span className="text-faint text-[12px]">Unsupported in CPRI benchmark</span>
+              )}
+            </div>
+            <div className="text-[10px] text-muted mt-1">
+              {assetCtx.isCandidate
+                ? (prdOperated === 1 ? 'PRD Operated · Alarm' : otiAlarm === 1 ? 'OTI Contact Alarm' : 'Breaker & fuse monitoring active')
+                : 'Protection contacts not present in CPRI benchmark data'}
+            </div>
+          </div>
+
+          <div className="p-3 bg-surface-2 rounded-lg border border-line">
+            <div className="text-[11px] font-medium text-muted mb-1">Prospective Short-Circuit Stress</div>
+            <div className="text-[18px] font-mono font-semibold text-ink">
+              {assetCtx.ratedKva ? (
+                <>
+                  {(assetCtx.ratedKva / (Math.sqrt(3) * 0.433 * 0.045 * 1000)).toFixed(2)}{' '}
+                  <span className="text-[12px] font-normal text-muted">kA rms</span>
+                </>
+              ) : (
+                '—'
+              )}
+            </div>
+            <div className="text-[10px] text-muted mt-1">
+              Derived Reference Calculation (4.5% nameplate Z, IEC 60076 reference assumption; not measured waveform)
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Dynamic Capability Manifest (Tiers C0-C4) */}
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
           <div>
             <h2 className="section-title">Dynamic Capability Tier Manifest (C0–C4)</h2>
             <p className="text-xs text-muted mt-1">
-              Operational capability gates dynamically enable analytics based on verified input freshness.
+              Operational capability gates dynamically enable analytics based on verified input freshness and promotion status.
             </p>
           </div>
           <span className="chip chip-neutral font-mono">Active Tier: {capabilities?.highest_tier ?? 'C2'}</span>
@@ -195,7 +302,11 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
             { tier: 'C3', name: 'Predictive What-If', desc: 'Forward scenario projection (Gated)' },
             { tier: 'C4', name: 'Insulation Ageing', desc: 'Arrhenius thermal loss-of-life (Gated)' },
           ].map((t) => {
-            const isEnabled = t.tier === 'C0' || t.tier === 'C1' || t.tier === 'C2';
+            const capItem = capabilities?.capabilities?.[t.tier];
+            // Follow actual backend capability manifest strictly
+            const isEnabled = capItem ? capItem.enabled : (t.tier === 'C0' || t.tier === 'C1' || t.tier === 'C2');
+            const disabledReasons = capItem?.disabled_reason_codes ?? [];
+
             return (
               <div
                 key={t.tier}
@@ -211,6 +322,11 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
                 </div>
                 <div className={`text-[13px] font-medium ${isEnabled ? 'text-ink' : 'text-muted'}`}>{t.name}</div>
                 <div className="text-[11px] text-muted mt-1 leading-snug">{t.desc}</div>
+                {!isEnabled && disabledReasons.length > 0 && (
+                  <div className="mt-2 text-[10px] font-mono text-warn leading-tight" title={disabledReasons.join(', ')}>
+                    {disabledReasons[0]}
+                  </div>
+                )}
               </div>
             );
           })}

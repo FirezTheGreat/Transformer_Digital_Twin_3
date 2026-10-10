@@ -87,9 +87,10 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
               id="replay-dataset-select"
               value={selectedDataset}
               onChange={(e) => onDatasetChange(e.target.value)}
-              className="input w-auto max-w-[260px] sm:max-w-none py-1 pr-7 cursor-pointer font-medium"
+              className="input w-auto max-w-[280px] sm:max-w-none py-1 pr-7 cursor-pointer font-medium text-[12px]"
             >
-              <option value={assetContext.datasetId}>{assetContext.datasetLabel}</option>
+              <option value="cpri_v3_0_2">CPRI Synthetic Benchmark v3.0.2 (Baseline)</option>
+              <option value="gridpulse_synthetic_v1">GridPulse Synthetic v1.0.0 (Candidate)</option>
             </select>
           </div>
 
@@ -107,17 +108,41 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
                 className="input w-auto py-1 pr-7 cursor-pointer font-mono text-[12px] font-semibold text-ink"
                 title="Select transformer asset"
               >
-                {ALL_CPRI_ASSETS.map((id) => (
-                  <option key={id} value={id}>
-                    {id} ({CPRI_ASSET_RATINGS[id]} kVA)
-                  </option>
-                ))}
+                {selectedDataset === 'gridpulse_synthetic_v1' ? (
+                  <>
+                    <option value="DT-01">DT-01 (250 kVA · Conservator) · Promoted Candidate</option>
+                    <option value="DT-02">DT-02 (500 kVA · Conservator) · Unpromoted Candidate</option>
+                    <option value="DT-03">DT-03 (250 kVA · Sealed Corr.) · Unpromoted Candidate</option>
+                    <option value="DT-04">DT-04 (160 kVA · Conservator) · Unpromoted Candidate</option>
+                  </>
+                ) : (
+                  ALL_CPRI_ASSETS.map((id) => (
+                    <option key={id} value={id}>
+                      {id} ({CPRI_ASSET_RATINGS[id]} kVA){id === 'TX_1000_COMM' ? ' · Promoted Baseline' : ' · Unpromoted'}
+                    </option>
+                  ))
+                )}
               </select>
             ) : (
               <span className="font-mono text-[11px] font-medium text-ink">
                 {assetId} · {assetContext.siteLabel}
               </span>
             )}
+
+            <span
+              className={`chip ${
+                assetContext.promotionStatus === 'PROMOTED' ? 'chip-ok' : 'chip-neutral'
+              } text-[11px] font-medium hidden sm:inline-flex`}
+            >
+              {assetContext.promotionStatus === 'PROMOTED' ? (
+                <>
+                  <span className="dot bg-ok" />
+                  <span>{assetContext.isCandidate ? 'Promoted Candidate' : 'Promoted Baseline'}</span>
+                </>
+              ) : (
+                <span>Unpromoted Candidate</span>
+              )}
+            </span>
           </div>
         </div>
 

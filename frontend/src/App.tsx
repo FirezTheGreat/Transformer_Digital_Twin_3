@@ -436,6 +436,17 @@ export default function App(): React.ReactElement {
     }
   };
 
+  const handleDatasetChange = async (newDatasetId: string) => {
+    if (newDatasetId === selectedDataset) return;
+    const targetAsset = newDatasetId === 'gridpulse_synthetic_v1' ? 'DT-01' : 'TX_1000_COMM';
+    await handleAssetChange(targetAsset);
+    const label =
+      newDatasetId === 'gridpulse_synthetic_v1'
+        ? 'GridPulse Synthetic v1.0.0 (Candidate)'
+        : 'CPRI Synthetic Benchmark v3.0.2 (Baseline)';
+    showToast(`Switched dataset to ${label}`);
+  };
+
   // 8. Seed Trip Fault Fixture (for discrete protection trip demo)
   const handleSeedTripData = async () => {
     setIsSeeding(true);
@@ -639,7 +650,7 @@ export default function App(): React.ReactElement {
         {/* Simplified Digital Twin Workflow & Replay Bar */}
         <ReplayBar
           selectedDataset={selectedDataset}
-          onDatasetChange={() => undefined}
+          onDatasetChange={handleDatasetChange}
           assetId={assetId}
           onAssetChange={handleAssetChange}
           isTwinStarted={isTwinStarted}

@@ -81,19 +81,61 @@ const Row: React.FC<{ row: CpriModelEvaluationRow; isCurrent: boolean }> = ({ ro
 };
 
 export const ModelEvaluationMatrix: React.FC<ModelEvaluationMatrixProps> = ({ currentAssetId }) => {
+  const isCandidateAsset = currentAssetId.startsWith('DT-');
+  const [selectedDataset, setSelectedDataset] = useState<'cpri_v3_0_2' | 'gridpulse_synthetic_v1'>(
+    isCandidateAsset ? 'gridpulse_synthetic_v1' : 'cpri_v3_0_2'
+  );
   const [data, setData] = useState<CpriModelEvaluation | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .getCpriModelEvaluation()
+    if (isCandidateAsset) {
+      setSelectedDataset('gridpulse_synthetic_v1');
+    } else {
+      setSelectedDataset('cpri_v3_0_2');
+    }
+  }, [currentAssetId, isCandidateAsset]);
+
+  useEffect(() => {
+    setError(null);
+    setData(null);
+    const fetcher =
+      selectedDataset === 'gridpulse_synthetic_v1'
+        ? api.getCandidateModelEvaluation()
+        : api.getCpriModelEvaluation();
+
+    fetcher
       .then(setData)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Request failed'));
-  }, []);
+  }, [selectedDataset]);
 
   return (
     <section className="card p-6 mt-8 text-xs">
-      <span className="eyebrow block mb-2">CPRI v3.0.2 · Per-asset thermal model evaluation</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+        <span className="eyebrow block">
+          {selectedDataset === 'gridpulse_synthetic_v1'
+            ? 'GridPulse Synthetic v1.0.0 · Candidate evaluation matrix'
+            : 'CPRI v3.0.2 · Baseline thermal model evaluation'}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSelectedDataset('cpri_v3_0_2')}
+            className={`btn text-xs py-1 px-3 ${
+              selectedDataset === 'cpri_v3_0_2' ? 'btn-primary' : 'btn-ghost'
+            }`}
+          >
+            CPRI Benchmark (8 Assets)
+          </button>
+          <button
+            onClick={() => setSelectedDataset('gridpulse_synthetic_v1')}
+            className={`btn text-xs py-1 px-3 ${
+              selectedDataset === 'gridpulse_synthetic_v1' ? 'btn-primary' : 'btn-ghost'
+            }`}
+          >
+            GridPulse Candidates (4 Assets)
+          </button>
+        </div>
+      </div>
       <h2 className="section-title">Model Qualification &amp; Capability Matrix</h2>
       <p className="text-muted mt-2 max-w-3xl leading-relaxed">
         Each asset is fitted independently on FIT, uncertainty-calibrated on CAL, frozen and hashed, then evaluated once on its

@@ -252,7 +252,10 @@ def generate_report_data(
     resolved_ds = (
         dataset_id
         or state.versions.get("dataset_id")
-        or ("tripura_dev" if fact_bundle.asset_id in ("DT-TRIPURA-001", "tripura_dt_01") else "unspecified_dataset")
+        or ("gridpulse_synthetic_v1" if fact_bundle.asset_id in ("DT-01", "DT-02", "DT-03", "DT-04")
+            else "cpri_v3_0_2" if fact_bundle.asset_id.startswith("TX_")
+            else "tripura_dev" if fact_bundle.asset_id in ("DT-TRIPURA-001", "tripura_dt_01")
+            else "unspecified_dataset")
     )
 
     return ReportData(

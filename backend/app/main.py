@@ -108,6 +108,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         artifact = resolve_model_artifact(asset_id=settings.default_asset_id)
         is_promoted = artifact.parameters is not None and artifact.promotion.status == "PROMOTED"
         capability_evaluator = CapabilityEvaluator(
+            profile=profile,
             expected_cadence_s=profile.expected_cadence_s,
             evaluation_window_s=settings.evaluation_window_s,
             # C3 forecasting follows the asset's locked qualification matrix; unpromoted assets stay gated
@@ -126,6 +127,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app_state = AppState(
             settings=settings,
             storage=storage,
+            profile=profile,
+            model_artifact=artifact,
             reducer=reducer,
             capability_evaluator=capability_evaluator,
             feedback_ledger=feedback_ledger,

@@ -78,6 +78,36 @@ def ensure_dataset_loaded(
                 for i, r in enumerate(df.to_dict("records"))
             ]
             storage.insert_canonical_events(events)
+    elif not events_in_storage and (asset_id in ("DT-01", "DT-02", "DT-03", "DT-04") or "gridpulse" in str(asset_id).lower()):
+        # Candidate synthetic assets replay their CAL partition only; the TEST partition is reserved
+        # for one-shot evaluation. Ingests via GridPulseSyntheticAdapter into immutable CanonicalEvents.
+        candidate_csv = _find_data_file("data/candidates/gridpulse_synthetic_v1/gridpulse_synthetic_30min.csv")
+        if not candidate_csv:
+            candidate_csv = _find_data_file("data/gridpulse_synthetic_30min.csv")
+        if candidate_csv:
+            import pandas as pd
+            from app.adapters.gridpulse_synthetic import GridPulseSyntheticAdapter
+            df_full = pd.read_csv(candidate_csv, low_memory=False)
+            df_asset = df_full[(df_full["asset_id"] == asset_id) & (df_full["partition"] == "CAL")].copy()
+            if df_asset.empty:
+                raise ReplayException(f"No CAL partition records found for candidate asset {asset_id} in {candidate_csv}")
+            df_asset = df_asset.sort_values("timestamp_utc").reset_index(drop=True)
+            adapter = GridPulseSyntheticAdapter()
+            events = [
+                adapter.transform_record(
+                    r,
+                    asset_id=asset_id,
+                    source_uri=str(candidate_csv),
+                    source_record_id=f"cal_{asset_id}_{i}",
+                )
+                for i, r in enumerate(df_asset.to_dict("records"))
+            ]
+            storage.insert_canonical_events(events)
+        else:
+            raise ReplayException(
+                f"Candidate dataset gridpulse_synthetic_30min.csv not found for asset {asset_id}. "
+                "Explicit failure prevents silent fallback to CPRI baseline."
+            )
     elif not events_in_storage:
         canon_events_file = _find_data_file("data/processed/canonical_events.parquet")
         canon_meas_file = _find_data_file("data/processed/canonical_measurements.parquet")
@@ -215,8 +245,10 @@ async def control_replay(
             asset_id=target_asset,
             storage=storage,
         )
-        reducer = app_state.reducer
+        app_state.profile = profile
+        app_state.model_artifact = artifact
         app_state.capability_evaluator = CapabilityEvaluator(
+            profile=profile,
             expected_cadence_s=profile.expected_cadence_s,
             evaluation_window_s=app_state.settings.evaluation_window_s,
             is_model_promoted=is_promoted,

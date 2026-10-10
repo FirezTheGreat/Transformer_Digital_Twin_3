@@ -38,17 +38,44 @@ CANONICAL_DOMAINS: List[Literal["thermal", "loading", "phase_neutral", "voltage_
 
 # Signals associated with each domain for freshness checking
 DOMAIN_SIGNAL_MAPPING: Dict[str, Set[str]] = {
-    "thermal": {"top_oil_temperature", "top_oil_temp_degc", "top_oil_temp", "ambient_temperature", "ambient_temp", "winding_temperature_indicator"},
-    "loading": {"apparent_power_total", "active_power_total", "current_l1", "current_l2", "current_l3"},
-
-    "phase_neutral": {"current_l1", "current_l2", "current_l3", "neutral_current"},
+    "thermal": {
+        "top_oil_temperature",
+        "top_oil_temp_degc",
+        "top_oil_temp",
+        "ambient_temperature",
+        "ambient_temp",
+        "winding_temperature_indicator",
+    },
+    "loading": {
+        "apparent_power_total",
+        "active_power_total",
+        "current_l1",
+        "current_l2",
+        "current_l3",
+        "current_i1",
+        "current_i2",
+        "current_i3",
+    },
+    "phase_neutral": {
+        "current_l1",
+        "current_l2",
+        "current_l3",
+        "current_i1",
+        "current_i2",
+        "current_i3",
+        "neutral_current",
+    },
     "voltage_pf_freq": {
         "voltage_l1_n",
         "voltage_l2_n",
         "voltage_l3_n",
+        "voltage_v1",
+        "voltage_v2",
+        "voltage_v3",
         "voltage_l1_l2",
         "voltage_l2_l3",
         "voltage_l3_l1",
+        "voltage_ll_v",
         "power_factor_total",
         "frequency",
     },
@@ -58,6 +85,7 @@ DOMAIN_SIGNAL_MAPPING: Dict[str, Set[str]] = {
         "breaker_trip",
         "magnetic_oil_gauge_alarm",
         "oil_level_percent",
+        "oil_level_pct",
         "oil_level_status",
     },
 }
@@ -195,6 +223,20 @@ class OTHIEngine:
         self.last_valid_othi_score: Optional[int] = None
         self.last_valid_status: Optional[HealthStatus] = None
         self.last_valid_timestamp_utc: Optional[datetime] = None
+        self.feedback_ledger: Optional[Any] = None
+
+    def reset_protection_trip(self) -> None:
+        """Unlatch direct protection trip after authorized resolution."""
+        self.latched_protection_trip = False
+
+    def reset(self) -> None:
+        """Reset internal stateful memory and trip latch."""
+        self.last_valid_time_by_domain.clear()
+        self.last_valid_severity_by_domain.clear()
+        self.latched_protection_trip = False
+        self.last_valid_othi_score = None
+        self.last_valid_status = None
+        self.last_valid_timestamp_utc = None
 
     def _resolve_evidence_family(self, ev: EvidenceItem) -> Tuple[Optional[str], str]:
         """Determine domain and condition_family for an EvidenceItem."""
@@ -243,6 +285,7 @@ class OTHIEngine:
         evidence_items: Optional[Sequence[EvidenceItem]] = None,
         open_episodes: Optional[Sequence[AnomalyEpisode]] = None,
         previous_bundle: Optional[OTHIBundle] = None,
+        feedback_ledger: Optional[Any] = None,
     ) -> OTHIBundle:
         """Evaluate multi-domain severities, evidence gating, anti-uplift, and OTHI score.
 
@@ -252,6 +295,7 @@ class OTHIEngine:
             evidence_items: Current active EvidenceItem records emitted by detectors.
             open_episodes: Current active and recovering AnomalyEpisode incidents.
             previous_bundle: Previous OTHIBundle for continuity and anti-uplift checks.
+            feedback_ledger: Optional OperatorFeedbackLedger instance.
 
         Returns:
             OTHIBundle: Immutable complete condition assessment.
@@ -266,12 +310,42 @@ class OTHIEngine:
             if m.quality.severity != QualitySeverity.BAD:
                 present_signals.add(m.signal_id)
 
-        # 2. Check for latched protection trip
+        # 2. Check for latched protection trip and lifecycle
+        current_trip_active = False
+        trip_signals_present = False
         for m in event.measurements:
             if m.signal_id in ("top_oil_temp_trip", "breaker_trip") and m.quality.severity != QualitySeverity.BAD:
+                trip_signals_present = True
                 val = m.value
                 if val is True or val == 1 or str(val).lower() in ("true", "1", "trip", "tripped"):
+                    current_trip_active = True
                     self.latched_protection_trip = True
+
+        # Unlatch condition:
+        # Trip was previously latched, current frame explicitly does NOT have an active trip,
+        # AND an authorized resolution / reset feedback event is present in the feedback ledger.
+        if self.latched_protection_trip and not current_trip_active:
+            ledger = feedback_ledger or self.feedback_ledger
+            if ledger is not None:
+                history = ledger.get_history(asset_id=event.asset_id)
+                has_authorized_resolution = any(
+                    (r.action.value if hasattr(r.action, "value") else str(r.action)) in ("RESOLVE", "DISMISS")
+                    and (
+                        getattr(r, "reason_code", None) in (
+                            "SITE_CLEARANCE_VERIFIED",
+                            "SAFETY_PROCEDURE_COMPLETED",
+                            "TRIP_RESOLVED_AND_RESET",
+                            "DOCUMENTED_RESOLUTION",
+                            "FIELD_INSPECTION_CLEARED",
+                        )
+                        or "PROT" in (getattr(r, "recommendation_id", "") or "")
+                        or "TRIP" in (getattr(r, "reason_code", "") or "").upper()
+                        or "TRIP" in (getattr(r, "merge_key", "") or "").upper()
+                    )
+                    for r in history
+                )
+                if has_authorized_resolution:
+                    self.latched_protection_trip = False
 
         # 3. Group active evidence by domain and condition family
         evidence_list = list(evidence_items or [])

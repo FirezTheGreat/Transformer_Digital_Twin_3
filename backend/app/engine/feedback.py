@@ -157,6 +157,8 @@ class OperatorFeedbackLedger:
         keys: List[str] = []
         if ev.recommendation_id:
             keys.append(ev.recommendation_id)
+            if ev.recommendation_id.startswith("MNT-"):
+                keys.append(ev.recommendation_id)
             # Match rule ID substring e.g. "REC-DT-001-MNT-PROT-001-1772366400" -> "MNT-PROT-001"
             parts = ev.recommendation_id.split("-")
             for i in range(len(parts) - 2):
@@ -179,15 +181,26 @@ class OperatorFeedbackLedger:
         return acks
 
     def get_active_dismissals(self, asset_id: str) -> Dict[str, OperatorFeedbackEvent]:
-        """Get latest active dismissal event mapped by target ID (recommendation_id, rule_id, merge_key)."""
+        """Get latest active dismissal or resolution event mapped by target ID (recommendation_id, rule_id, merge_key)."""
         history = self.get_history(asset_id=asset_id)
         dismissals: Dict[str, OperatorFeedbackEvent] = {}
         for ev in history:
             act_val = ev.action.value if hasattr(ev.action, "value") else str(ev.action)
-            if act_val == "DISMISS":
+            if act_val in ("DISMISS", "RESOLVE"):
                 for k in self._extract_keys(ev):
                     dismissals[k] = ev
         return dismissals
+
+    def get_active_resolutions(self, asset_id: str) -> Dict[str, OperatorFeedbackEvent]:
+        """Get latest active resolution event mapped by target ID (recommendation_id, rule_id, merge_key)."""
+        history = self.get_history(asset_id=asset_id)
+        resolutions: Dict[str, OperatorFeedbackEvent] = {}
+        for ev in history:
+            act_val = ev.action.value if hasattr(ev.action, "value") else str(ev.action)
+            if act_val == "RESOLVE":
+                for k in self._extract_keys(ev):
+                    resolutions[k] = ev
+        return resolutions
 
     def get_active_overrides(
         self, asset_id: str, current_time: datetime

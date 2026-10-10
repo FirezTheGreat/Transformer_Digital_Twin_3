@@ -12,7 +12,7 @@ Complete this exact checklist before taking the presentation stage:
 - [ ] **1. Docker Daemon Running:** Ensure Docker Desktop / Docker daemon is active on the presentation machine.
 - [ ] **2. Single-Command Build & Up:**
   ```bash
-  docker compose down -v
+  docker compose down
   docker compose up --build -d
   ```
 - [ ] **3. Backend Health Check Verification:**
@@ -20,10 +20,12 @@ Complete this exact checklist before taking the presentation stage:
   curl -s http://localhost:8000/healthz | grep '"status":"ok"'
   ```
   *Expected Output:* `{"status":"ok", "is_ready": true, ...}`
-- [ ] **4. Verify CPRI Data and Model Records in Container:**
+- [ ] **4. Verify Datasets, Assets, and Model Records in Container:**
   ```bash
   docker compose exec backend ls -la /app/data/processed/cpri_v3_calibration.parquet
-  curl -s http://localhost:8000/v1/models/cpri-evaluation   # per-asset qualification matrix
+  curl -s http://localhost:8000/v1/assets                   # multi-dataset inventory catalog
+  curl -s http://localhost:8000/v1/models/cpri-evaluation   # CPRI benchmark qualification matrix
+  curl -s http://localhost:8000/v1/models/candidate-evaluation # GridPulse candidate qualification matrix
   ```
 - [ ] **5. Run Demo Verification in Container:**
   ```bash

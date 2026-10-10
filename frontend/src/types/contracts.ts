@@ -402,6 +402,7 @@ export interface ReplayControlRequest {
   end_time_utc?: string | null;
   seek_position?: number | null;
   asset_id?: string | null;
+  dataset_id?: string | null;
 }
 
 export interface ReplayStatusResponse {

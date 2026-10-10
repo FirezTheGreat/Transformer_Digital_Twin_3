@@ -44,6 +44,13 @@ class AssetProfile(BaseModel):
     rated_kva: float | None = Field(default=None, description="Verified rated apparent power in kVA")
     rated_voltage_hv_v: float | None = Field(default=None, description="Rated primary/HV line voltage in V")
     rated_voltage_lv_v: float | None = Field(default=None, description="Rated secondary/LV line-neutral voltage in V")
+    rated_lv_v_ll: float | None = Field(default=None, description="Rated secondary line-to-line voltage in V")
+    impedance_pct: float | None = Field(default=None, description="Percent impedance (%Z)")
+    tank_type: Literal["CONSERVATOR", "SEALED_CORRUGATED", "UNKNOWN"] = Field(
+        default="CONSERVATOR", description="Transformer tank construction"
+    )
+    has_oil_level_gauge: bool = Field(default=True, description="Whether oil level gauge is fitted")
+    has_pressure_sensor: bool = Field(default=False, description="Whether tank pressure sensor is fitted")
     cooling_class: str = Field(default="ONAN", description="Cooling class (e.g. ONAN, ONAF)")
     insulation_paper_class: InsulationClass = Field(default=InsulationClass.UNKNOWN, description="Insulation paper class")
     expected_cadence_s: int = Field(default=900, description="Expected nominal telemetry cadence in seconds (e.g. 900 for 15-min)")

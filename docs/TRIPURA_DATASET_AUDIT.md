@@ -1,11 +1,16 @@
 # Tripura Distribution Transformer Dataset — Schema & Physical Integrity Audit
 
-**Audit Status:** Completed and Locked (Phase 1, Substep 1.1)
-**Audited Directory:** `C:\1st year learning programs\CPRI\Transformer_Digital_Twin\data\tripura_raw`
-**Audit Generated (UTC):** `2026-10-04T10:24:23.785287+00:00`
-**Total Raw Files:** 5 CSVs (6.60 MB)
-**Common Timestamps Across All Files:** 18,324
-**Total Union Timestamps:** 20,024
+> [!NOTE]
+> **HISTORICAL DEVELOPMENT DATASET AUDIT**  
+> This document records the initial schema audit of the legacy empirical Tripura dataset (`tripura_dt_01`) from early Phase 1 prototype development.  
+> As established in the Master Execution Plan (§1.1), Tripura is superseded by the active `cpri_v3_0_2` baseline and `gridpulse_synthetic_v1` candidate datasets.
+
+**Audit Status:** Completed and Locked (Phase 1, Substep 1.1)  
+**Audited Directory:** `data/tripura_raw`  
+**Audit Generated (UTC):** `2026-10-04T10:24:23.785287+00:00`  
+**Total Raw Files:** 5 CSVs (6.60 MB)  
+**Common Timestamps Across All Files:** 18,324  
+**Total Union Timestamps:** 20,024  
 
 ---
 

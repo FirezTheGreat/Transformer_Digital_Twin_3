@@ -190,35 +190,45 @@ class MaintenanceEngine:
             )
 
         # --- Rule 2: MNT-THERM-002 (P1 URGENT_INSPECTION / WITHIN_24H) ---
-        # Gating check: Suppressed on Tripura where cusum_qualification = DISABLED
-        if (
-            self.cusum_qualification != "DISABLED"
-            and self.is_thermal_qualified
-            and "top_oil_temperature" not in bad_signals
-            and "MNT-THERM-002" in self.rules
-        ):
-            therm_evs = [
+        if "top_oil_temperature" not in bad_signals and "MNT-THERM-002" in self.rules:
+            # Physical limit exceedances trigger unconditionally across all assets (even unpromoted)
+            limit_evs = [
                 ev
                 for ev in evidence_list
-                if ev.category in (AnomalyCategory.THERMAL_DEVIATION, AnomalyCategory.THERMAL_LIMIT)
-                or ev.condition_family in ("THERMAL_DEVIATION_UNEXPECTED", "THERMAL_LIMIT_EXCEEDANCE")
+                if ev.category == AnomalyCategory.THERMAL_LIMIT
+                or ev.condition_family == "THERMAL_LIMIT_EXCEEDANCE"
+                or getattr(ev, "detector_id", "") in ("DET_THERMAL_LIMIT_ABSOLUTE", "DET_THERMAL_LIMIT_WARNING")
             ]
+            # Model-derived deviations are strictly gated by thermal qualification
+            model_evs = []
+            if self.cusum_qualification != "DISABLED" and self.is_thermal_qualified:
+                model_evs = [
+                    ev
+                    for ev in evidence_list
+                    if ev.category == AnomalyCategory.THERMAL_DEVIATION
+                    or ev.condition_family == "THERMAL_DEVIATION_UNEXPECTED"
+                    or getattr(ev, "detector_id", "") in ("DET_THERMAL_CUSUM_DRIFT", "DET_THERMAL_RESIDUAL_BIAS")
+                ]
+            therm_evs = limit_evs + model_evs
             if therm_evs:
                 r_cfg = self.rules["MNT-THERM-002"]
                 rec_id = f"REC-{event.asset_id}-MNT-THERM-002"
+                is_direct_limit = bool(limit_evs)
+                title = "Direct Top-Oil Thermal Limit Exceedance" if is_direct_limit else r_cfg.get("title", "Thermal Model Deviation Inspection")
+                rationale = "Direct physical top-oil temperature limit exceeded." if is_direct_limit else r_cfg.get("rationale", "Thermal model deviation detected on qualified asset.")
                 fired_recommendations.append(
                     MaintenanceRecommendation(
                         recommendation_id=rec_id,
                         rule_id="MNT-THERM-002",
                         rule_version=r_cfg.get("version", "1.0.0"),
-                        title=r_cfg.get("title", "Thermal Model Deviation Inspection"),
+                        title=title,
                         priority=MaintenancePriority.P1_URGENT_INSPECTION,
                         priority_label="P1 URGENT_INSPECTION",
                         action_window=ActionWindow.WITHIN_24H,
                         window_provenance_type=ActionWindowProvenanceType.OPERATOR_POLICY,
                         window_source_reference=r_cfg.get("window_source_reference", "Utility CBM Manual Sec 4.2"),
                         advisory_wording=r_cfg.get("advisory_wording", "Arrange prompt inspection of cooling operation."),
-                        rationale=r_cfg.get("rationale", "Thermal model deviation detected on qualified asset."),
+                        rationale=rationale,
                         evidence_ids=[ev.evidence_id for ev in therm_evs],
                         source_reference="Condition-Based Maintenance Manual Sec 4.2",
                         merge_key=r_cfg.get("merge_key", "THERMAL_COOLING_STRESS"),
@@ -430,6 +440,87 @@ class MaintenanceEngine:
                 )
             )
 
+        # --- Rule 8: MNT-OIL-008 (P2 / NEXT_AUTHORIZED_MAINTENANCE_WINDOW) ---
+        oil_evs = [
+            ev
+            for ev in evidence_list
+            if getattr(ev, "detector_id", "") in (
+                "DET_OIL_LEVEL_DECLINING_TREND",
+                "DET_OIL_LEVEL_INDICATOR",
+                "DET_OIL_LEVEL_GAUGE_STUCK",
+                "DET_PROT_MOG_ALARM",
+            )
+            or ev.condition_family in ("OIL_LEVEL_DECLINING_TREND", "OIL_LEVEL_LOW")
+        ]
+        if oil_evs and "MNT-OIL-008" in self.rules:
+            r_cfg = self.rules["MNT-OIL-008"]
+            rec_id = f"REC-{event.asset_id}-MNT-OIL-008"
+            fired_recommendations.append(
+                MaintenanceRecommendation(
+                    recommendation_id=rec_id,
+                    rule_id="MNT-OIL-008",
+                    rule_version=r_cfg.get("version", "1.0.0"),
+                    title=r_cfg.get("title", "Oil Level Trend / Suspected Loss Inspection"),
+                    priority=MaintenancePriority.P2_PLANNED_ACTION,
+                    priority_label="P2 PLANNED_ACTION",
+                    action_window=ActionWindow.NEXT_AUTHORIZED_MAINTENANCE_WINDOW,
+                    window_provenance_type=ActionWindowProvenanceType.OPERATOR_POLICY,
+                    window_source_reference=r_cfg.get("window_source_reference", "Utility CBM Standard"),
+                    advisory_wording=r_cfg.get("advisory_wording", "Inspect conservator/tank seals and level gauge."),
+                    rationale=r_cfg.get("rationale", "Persistent decline in oil level indicates suspected loss requiring inspection."),
+                    evidence_ids=[ev.evidence_id for ev in oil_evs],
+                    source_reference="Distribution Transformer Maintenance Standard Sec 5.1",
+                    merge_key=r_cfg.get("merge_key", "OIL_LEVEL_LOSS_TREND"),
+                    supporting_rule_ids=["MNT-OIL-008"],
+                    consequence_class=r_cfg.get("consequence_class", "INSULATION_OIL_LOSS"),
+                    binding_vs_advisory="ADVISORY",
+                    approved_by=r_cfg.get("approved_by", "Substation Maintenance Superintendent"),
+                    source_version=r_cfg.get("source_version", "2026.1"),
+                    created_at_utc=current_time,
+                )
+            )
+
+        # --- Rule 9: MNT-PRESS-009 (P1 / WITHIN_24H) ---
+        press_evs = [
+            ev
+            for ev in evidence_list
+            if getattr(ev, "detector_id", "") in (
+                "DET_PRESSURE_HIGH_ALARM",
+                "DET_PRESSURE_ALARM_CONTACT",
+                "DET_PRESSURE_LOW_ALARM",
+                "DET_PRESSURE_RELIEF_OPERATED",
+            )
+            or ev.condition_family in ("SEALED_TANK_PRESSURE",)
+        ]
+        if press_evs and "MNT-PRESS-009" in self.rules:
+
+            r_cfg = self.rules["MNT-PRESS-009"]
+            rec_id = f"REC-{event.asset_id}-MNT-PRESS-009"
+            fired_recommendations.append(
+                MaintenanceRecommendation(
+                    recommendation_id=rec_id,
+                    rule_id="MNT-PRESS-009",
+                    rule_version=r_cfg.get("version", "1.0.0"),
+                    title=r_cfg.get("title", "Sealed Tank Pressure Anomaly Review"),
+                    priority=MaintenancePriority.P1_URGENT_INSPECTION,
+                    priority_label="P1 URGENT_INSPECTION",
+                    action_window=ActionWindow.WITHIN_24H,
+                    window_provenance_type=ActionWindowProvenanceType.OPERATOR_POLICY,
+                    window_source_reference=r_cfg.get("window_source_reference", "Sealed Transformer Manual"),
+                    advisory_wording=r_cfg.get("advisory_wording", "Inspect corrugated tank fin expansion and pressure gauge."),
+                    rationale=r_cfg.get("rationale", "Sealed tank gauge pressure exceeds safe operational band."),
+                    evidence_ids=[ev.evidence_id for ev in press_evs],
+                    source_reference="Sealed Distribution Transformer Operating Manual Sec 3.4",
+                    merge_key=r_cfg.get("merge_key", "SEALED_TANK_PRESSURE"),
+                    supporting_rule_ids=["MNT-PRESS-009"],
+                    consequence_class=r_cfg.get("consequence_class", "TANK_OVERPRESSURE_RISK"),
+                    binding_vs_advisory="ADVISORY",
+                    approved_by=r_cfg.get("approved_by", "Substation Maintenance Superintendent"),
+                    source_version=r_cfg.get("source_version", "2026.1"),
+                    created_at_utc=current_time,
+                )
+            )
+
         # Retain previously active recommendations that did not refire, or preserve metadata
         active_dismissals = self.feedback_ledger.get_active_dismissals(asset_id=event.asset_id)
         current_rule_ids = {r.rule_id for r in fired_recommendations}
@@ -519,8 +610,8 @@ class MaintenanceEngine:
                 ]
                 latest_ev_ts = max(ev_timestamps) if ev_timestamps else current_time
 
-                if latest_ev_ts <= d_ts and current_time <= d_ts:
-                    # Specific instance is dismissed; suppress from active display
+                if latest_ev_ts <= d_ts:
+                    # Specific instance is dismissed/resolved; suppress from active display
                     continue
                 # If latest_ev_ts > d_ts or condition recurred after dismissal:
                 # Retain recommendation as a newly generated active instance

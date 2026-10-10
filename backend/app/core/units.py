@@ -135,6 +135,20 @@ UCUM_CANONICAL_MAP: dict[str, str] = {
     "m/s2": "m/s**2",
     "m/s^2": "m/s**2",
     "m/s**2": "m/s**2",
+    # Pressure
+    "kpa": "kPa",
+    "kpa_g": "kPa",
+    "kpa(g)": "kPa",
+    "kpa/day": "kPa/day",
+    "kpa_per_day": "kPa/day",
+    # Rate of change
+    "%/day": "percent/day",
+    "pct/day": "percent/day",
+    "percent/day": "percent/day",
+    # Binary / discrete flags
+    "binary": "1",
+    "boolean": "1",
+    "bool": "1",
 }
 
 

@@ -18,4 +18,5 @@ class DerivedFeatures(BaseModel):
     pqs_inconsistency: float | None = Field(default=None, ge=0.0, description="P-Q-S inconsistency metric")
     relative_load_index: float | None = Field(default=None, ge=0.0, description="Relative load index u = S / S_ref")
     thermal_residual_degc: float | None = Field(default=None, description="Free-running top-oil residual (T_observed - T_expected) in Cel")
+    prospective_short_circuit_ka: float | None = Field(default=None, ge=0.0, description="Prospective symmetrical short-circuit current reference in kA")
     transform_version: str = Field(default="1.0.0", description="Version of feature transform equations")

@@ -207,6 +207,35 @@ def calculate_relative_load_index(
     return round(max(0.0, s_kva / basis), 4)
 
 
+def calculate_prospective_short_circuit_ka(
+    rated_kva: float | None,
+    rated_lv_v_ll: float | None,
+    impedance_pct: float | None,
+) -> float | None:
+    """Calculate prospective symmetrical short-circuit current reference in kA.
+
+    Formula (symmetrical fault at transformer terminals):
+        I_rated_lv_a = (S_rated_kva * 1000) / (sqrt(3) * V_ll_v)
+        I_sc_sym_ka  = (I_rated_lv_a / (impedance_pct / 100)) / 1000.0
+
+    Assumptions & Scope:
+        - Stated as prospective steady-state reference under bolted 3-phase symmetrical fault.
+        - Does NOT represent dynamic sub-cycle transient waveforms, asymmetric DC offset,
+          protection coordination, interrupting capacity, or mechanical withstand.
+    """
+    if rated_kva is None or rated_lv_v_ll is None or impedance_pct is None:
+        return None
+    if not (math.isfinite(rated_kva) and math.isfinite(rated_lv_v_ll) and math.isfinite(impedance_pct)):
+        return None
+    if rated_kva <= 0 or rated_lv_v_ll <= 0 or impedance_pct <= 0:
+        return None
+    z_pu = impedance_pct / 100.0
+    i_rated_a = (rated_kva * 1000.0) / (math.sqrt(3.0) * rated_lv_v_ll)
+    i_sc_ka = (i_rated_a / z_pu) / 1000.0
+    return round(i_sc_ka, 3)
+
+
+
 def extract_electrical_features(
     event: CanonicalEvent,
     profile: AssetProfile | None = None,
@@ -350,6 +379,16 @@ def extract_electrical_features(
     )
     u_load = calculate_relative_load_index(s_drive, rated_kva=rated_k, reference_kva=ref_k)
 
+    # Prospective short-circuit calculation (Extra C)
+    r_kva_for_sc = rated_k or (profile.rated_kva if profile else None) or meas_by_sig.get("rated_kva")
+    v_ll_for_sc = (
+        (profile.rated_lv_v_ll if profile else None)
+        or (meas_by_sig.get("rated_lv_v_ll"))
+        or ((profile.rated_voltage_lv_v * math.sqrt(3.0)) if profile and profile.rated_voltage_lv_v else None)
+    )
+    z_pct_for_sc = (profile.impedance_pct if profile else None) or meas_by_sig.get("impedance_pct")
+    isc_ka = calculate_prospective_short_circuit_ka(r_kva_for_sc, v_ll_for_sc, z_pct_for_sc)
+
     return DerivedFeatures(
         timestamp_utc=event.event_time_utc,
         apparent_power_derived_kva=s_derived,
@@ -360,6 +399,7 @@ def extract_electrical_features(
         neutral_current_ratio=in_ratio,
         pqs_inconsistency=pqs_err,
         relative_load_index=u_load,
-        thermal_residual_degc=None,  # Populated in Phase 4 by Thermal Model
+        thermal_residual_degc=None,  # Populated by Thermal Gate
+        prospective_short_circuit_ka=isc_ka,
         transform_version="1.0.0",
     )

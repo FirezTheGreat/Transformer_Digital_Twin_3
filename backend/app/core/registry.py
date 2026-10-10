@@ -18,6 +18,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from app.adapters.gridpulse_synthetic import SYNTHETIC_ASSET_PROFILES
 from app.models.profile import (
     AssetProfile,
     InsulationClass,
@@ -48,6 +49,8 @@ CPRI_SYNTHETIC_ASSET_RATINGS: dict[str, float] = {
     "TX_1000_COMM": 1000.0,
 }
 
+GRIDPULSE_CANDIDATE_ASSETS: tuple[str, ...] = ("DT-01", "DT-02", "DT-03", "DT-04")
+
 
 def resolve_asset_profile(
     dataset_id: Optional[str] = None,
@@ -63,8 +66,17 @@ def resolve_asset_profile(
         clean_ds = "tripura_dev"
     elif clean_asset in CPRI_SYNTHETIC_ASSET_RATINGS:
         clean_ds = "cpri_v3_0_2"
+    elif clean_asset in SYNTHETIC_ASSET_PROFILES or clean_asset in GRIDPULSE_CANDIDATE_ASSETS:
+        clean_ds = "gridpulse_synthetic_v1"
     else:
         clean_ds = "unspecified_dataset"
+
+    # GridPulse Synthetic Benchmark candidate assets (DT-01 .. DT-04)
+    if clean_asset in SYNTHETIC_ASSET_PROFILES:
+        return SYNTHETIC_ASSET_PROFILES[clean_asset]
+    if clean_ds.lower() in ("gridpulse_synthetic_v1", "gridpulse_synthetic", "gridpulse") and clean_asset in GRIDPULSE_CANDIDATE_ASSETS:
+        if clean_asset in SYNTHETIC_ASSET_PROFILES:
+            return SYNTHETIC_ASSET_PROFILES[clean_asset]
 
     is_tripura = (clean_asset in ("DT-TRIPURA-001", "tripura_dt_01", "TRIPURA_DTR_01")) and (
         clean_ds.lower() in ("tripura", "tripura_dev", "tripura_csv")
@@ -197,6 +209,72 @@ def _apply_cpri_test_decision(
     )
 
 
+def _apply_candidate_test_decision(
+    artifact: CalibratedThermalModelArtifact,
+    artifact_path: Path,
+) -> CalibratedThermalModelArtifact:
+    """Apply the standalone candidate TEST promotion decision to a frozen candidate (in memory only).
+
+    Binds the artifact to its test_evaluation_report_candidate_{asset_id.lower()}.json by SHA-256 hash.
+    Applies qualification matrix: DT-01 qualifies for forecasting & residual anomaly;
+    DT-02..DT-04 stay gated (NOT_QUALIFIED) per Phase 6 gates.
+    """
+    promotion = artifact.promotion
+    test_metrics = artifact.test_metrics
+    test_bound = False
+    clean_id = artifact.asset_id.lower()
+
+    report_candidates = [
+        artifact_path.with_name(f"test_evaluation_report_candidate_{clean_id}.json"),
+        _REPO_ROOT / "data" / "candidates" / "gridpulse_synthetic_v1" / "artifacts" / f"test_evaluation_report_candidate_{clean_id}.json",
+        Path("data/candidates/gridpulse_synthetic_v1/artifacts") / f"test_evaluation_report_candidate_{clean_id}.json",
+        Path("/app/data/candidates/gridpulse_synthetic_v1/artifacts") / f"test_evaluation_report_candidate_{clean_id}.json",
+    ]
+    for report_path in report_candidates:
+        if report_path.exists():
+            try:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                artifact_hash = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+                if report.get("frozen_artifact_sha256") == artifact_hash and report.get("asset_id") == artifact.asset_id:
+                    promotion = PromotionDecision(**report["promotion_decision"])
+                    test_metrics = BaselineMetricEntry(**report["primary_model_metrics"])
+                    test_bound = True
+                    break
+                else:
+                    logger.warning(
+                        "Candidate TEST report %s is not bound to candidate artifact %s; ignoring it.",
+                        report_path,
+                        artifact_path,
+                    )
+            except Exception as ex:
+                logger.warning("Failed to read candidate TEST report %s: %s", report_path, ex)
+
+    qualification = artifact.qualification
+    if test_bound and artifact.parameters and artifact.identifiability and artifact.conformal_uncertainty:
+        from app.engine.calibration import derive_qualification_matrix
+
+        qualification = derive_qualification_matrix(
+            artifact.identifiability, promotion, artifact.conformal_uncertainty, artifact.parameters
+        )
+    elif (
+        qualification is not None
+        and promotion.status != "PROMOTED"
+        and qualification.residual_anomaly_qualification == QualificationStatus.QUALIFIED
+    ):
+        qualification = qualification.model_copy(
+            update={
+                "residual_anomaly_qualification": QualificationStatus.NOT_QUALIFIED,
+                "dimension_reasons": {
+                    **qualification.dimension_reasons,
+                    "residual_anomaly_qualification": "Candidate model is not promoted.",
+                },
+            }
+        )
+    return artifact.model_copy(
+        update={"promotion": promotion, "qualification": qualification, "test_metrics": test_metrics}
+    )
+
+
 def resolve_model_artifact(
     dataset_id: Optional[str] = None,
     asset_id: str = "DT-TRIPURA-001",
@@ -212,8 +290,56 @@ def resolve_model_artifact(
         clean_ds = "tripura_dev"
     elif clean_asset in CPRI_SYNTHETIC_ASSET_RATINGS:
         clean_ds = "cpri_v3_0_2"
+    elif clean_asset in GRIDPULSE_CANDIDATE_ASSETS or clean_asset in SYNTHETIC_ASSET_PROFILES:
+        clean_ds = "gridpulse_synthetic_v1"
     else:
         clean_ds = "unspecified_dataset"
+
+    # GridPulse Synthetic Candidate asset artifact resolution
+    is_candidate_asset = clean_asset in GRIDPULSE_CANDIDATE_ASSETS or clean_asset in SYNTHETIC_ASSET_PROFILES
+    is_candidate_dataset = clean_ds.lower() in ("gridpulse_synthetic_v1", "gridpulse_synthetic", "gridpulse")
+
+    if is_candidate_asset or is_candidate_dataset:
+        clean_id = clean_asset.lower()
+        candidate_paths = [
+            Path(f"data/candidates/gridpulse_synthetic_v1/artifacts/calibrated_thermal_model_candidate_{clean_id}.json"),
+            _REPO_ROOT / f"data/candidates/gridpulse_synthetic_v1/artifacts/calibrated_thermal_model_candidate_{clean_id}.json",
+            Path(f"/app/data/candidates/gridpulse_synthetic_v1/artifacts/calibrated_thermal_model_candidate_{clean_id}.json"),
+            Path(f"data/processed/calibrated_thermal_model_candidate_{clean_id}.json"),
+            _REPO_ROOT / f"data/processed/calibrated_thermal_model_candidate_{clean_id}.json",
+            Path(f"/app/data/processed/calibrated_thermal_model_candidate_{clean_id}.json"),
+        ]
+        for candidate_path in candidate_paths:
+            if candidate_path.exists():
+                try:
+                    loaded = CalibratedThermalModelArtifact.load_json(candidate_path)
+                    if loaded.asset_id == clean_asset and loaded.dataset_id in (
+                        "gridpulse_synthetic_v1",
+                        "gridpulse_synthetic",
+                    ):
+                        return _apply_candidate_test_decision(loaded, candidate_path)
+                    logger.warning(
+                        "Candidate artifact identity mismatch at %s: asset=%s (expected %s), dataset=%s; rejecting.",
+                        candidate_path,
+                        loaded.asset_id,
+                        clean_asset,
+                        loaded.dataset_id,
+                    )
+                except Exception as ex:
+                    logger.warning("Failed to load candidate artifact at %s: %s", candidate_path, ex)
+                    break
+
+        # Explicit error prevention: do NOT silently fallback to CPRI or Tripura
+        logger.error(
+            "Candidate artifact for asset %s in dataset %s could not be loaded from %s. Returning uncalibrated candidate artifact.",
+            clean_asset,
+            clean_ds,
+            candidate_paths[0],
+        )
+        return CalibratedThermalModelArtifact.create_uncalibrated(
+            dataset_id="gridpulse_synthetic_v1",
+            asset_id=clean_asset,
+        )
 
     is_tripura_asset = clean_asset in ("DT-TRIPURA-001", "tripura_dt_01", "TRIPURA_DTR_01")
     is_tripura_dataset = clean_ds.lower() in ("tripura", "tripura_dev", "tripura_csv")

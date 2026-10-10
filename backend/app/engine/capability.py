@@ -434,14 +434,65 @@ class CapabilityEvaluator:
             model_status="NOT_APPLICABLE",
         )
 
-        # Oil Level
-        m_oil_lvl = _find_measurement(obs, {"oil_level", "oil_level_pct"})
-        capabilities["oil_level_monitoring"] = CapabilityItem(
-            enabled=c0_enabled and (m_oil_lvl is not None),
-            evidence_grade="A" if (m_oil_lvl is not None and m_oil_lvl.quality.severity == QualitySeverity.GOOD) else ("B" if m_oil_lvl is not None else "U"),
-            required_inputs=["oil_level_pct"],
-            missing_inputs=[] if m_oil_lvl is not None else ["oil_level_pct"],
-            disabled_reason_codes=[] if m_oil_lvl is not None else ["MISSING_OIL_LEVEL"],
+        # Oil Level (Construction-Aware)
+        has_oil_gauge = (self.profile.has_oil_level_gauge if self.profile else True)
+        if not has_oil_gauge:
+            capabilities["oil_level_monitoring"] = CapabilityItem(
+                enabled=False,
+                evidence_grade="U",
+                required_inputs=["oil_level_pct", "oil_gauge_hardware"],
+                missing_inputs=["oil_gauge_hardware"],
+                disabled_reason_codes=["NO_OIL_GAUGE_FITTED", "SEALED_TANK_CONSTRUCTION"],
+                model_status="NOT_APPLICABLE",
+            )
+        else:
+            m_oil_lvl = _find_measurement(obs, {"oil_level", "oil_level_pct"})
+            capabilities["oil_level_monitoring"] = CapabilityItem(
+                enabled=c0_enabled and (m_oil_lvl is not None),
+                evidence_grade="A" if (m_oil_lvl is not None and m_oil_lvl.quality.severity == QualitySeverity.GOOD) else ("B" if m_oil_lvl is not None else "U"),
+                required_inputs=["oil_level_pct"],
+                missing_inputs=[] if m_oil_lvl is not None else ["oil_level_pct"],
+                disabled_reason_codes=[] if m_oil_lvl is not None else ["MISSING_OIL_LEVEL"],
+                model_status="NOT_APPLICABLE",
+            )
+
+        # Sealed-Tank Pressure Monitoring (Construction-Aware)
+        has_pressure_sensor = (
+            (self.profile.has_pressure_sensor or self.profile.tank_type == "SEALED_CORRUGATED")
+            if self.profile
+            else False
+        )
+        m_press = _find_measurement(obs, {"tank_pressure_kpa_g", "tank_pressure", "pressure"})
+        if not has_pressure_sensor:
+            capabilities["tank_pressure_monitoring"] = CapabilityItem(
+                enabled=False,
+                evidence_grade="U",
+                required_inputs=["tank_pressure_kpa_g", "sealed_tank_pressure_sensor"],
+                missing_inputs=["sealed_tank_pressure_sensor"],
+                disabled_reason_codes=["NO_PRESSURE_SENSOR_FITTED", "CONSERVATOR_TANK_DESIGN"],
+                model_status="NOT_APPLICABLE",
+            )
+        else:
+            capabilities["tank_pressure_monitoring"] = CapabilityItem(
+                enabled=c0_enabled and (m_press is not None),
+                evidence_grade="A" if (m_press is not None and m_press.quality.severity == QualitySeverity.GOOD) else ("B" if m_press is not None else "U"),
+                required_inputs=["tank_pressure_kpa_g"],
+                missing_inputs=[] if m_press is not None else ["tank_pressure_kpa_g"],
+                disabled_reason_codes=[] if m_press is not None else ["MISSING_PRESSURE_TELEMETRY"],
+                model_status="NOT_APPLICABLE",
+            )
+
+        # Short-Circuit Stress / Impedance Reference
+        has_z = (self.profile.impedance_pct is not None) if self.profile else ("impedance_pct" in obs)
+        has_r_kva = (self.profile.rated_kva is not None) if self.profile else ("rated_kva" in obs)
+        has_v_ll = (self.profile.rated_lv_v_ll is not None or self.profile.rated_voltage_lv_v is not None) if self.profile else ("rated_lv_v_ll" in obs)
+        sc_inputs_ok = bool(has_z and has_r_kva and has_v_ll)
+        capabilities["short_circuit_stress"] = CapabilityItem(
+            enabled=c0_enabled and sc_inputs_ok,
+            evidence_grade="A" if sc_inputs_ok else "U",
+            required_inputs=["impedance_pct", "rated_kva", "rated_lv_voltage"],
+            missing_inputs=[] if sc_inputs_ok else ["verified_transformer_impedance_and_ratings"],
+            disabled_reason_codes=[] if sc_inputs_ok else ["UNVERIFIED_OR_MISSING_IMPEDANCE_RATINGS"],
             model_status="NOT_APPLICABLE",
         )
 

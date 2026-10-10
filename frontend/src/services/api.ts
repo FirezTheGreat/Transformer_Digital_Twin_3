@@ -238,9 +238,20 @@ export const api = {
     return handleResponse<CapabilityManifest>(res);
   },
 
+  // Asset Inventory Catalog
+  async getAvailableAssets(): Promise<any> {
+    const res = await fetch(`${API_BASE}/v1/assets`);
+    return handleResponse<any>(res);
+  },
+
   // Model Card
   async getCpriModelEvaluation(): Promise<CpriModelEvaluation> {
     const res = await fetch(`${API_BASE}/v1/models/cpri-evaluation`);
+    return handleResponse<CpriModelEvaluation>(res);
+  },
+
+  async getCandidateModelEvaluation(): Promise<CpriModelEvaluation> {
+    const res = await fetch(`${API_BASE}/v1/models/candidate-evaluation`);
     return handleResponse<CpriModelEvaluation>(res);
   },
 

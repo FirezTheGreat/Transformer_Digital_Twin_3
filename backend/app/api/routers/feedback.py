@@ -116,7 +116,7 @@ async def submit_operator_feedback(
             app_state.current_state = app_state.current_state.model_copy(
                 update={"active_recommendations": updated_recs}
             )
-        elif action_enum == FeedbackAction.DISMISS:
+        elif action_enum in (FeedbackAction.DISMISS, FeedbackAction.RESOLVE):
             updated_recs = [
                 r for r in current_recs
                 if not (
@@ -147,7 +147,7 @@ async def submit_operator_feedback(
             app_state.latest_fact_bundle = app_state.latest_fact_bundle.model_copy(
                 update={"active_recommendations": updated_bundle_recs}
             )
-        elif action_enum == FeedbackAction.DISMISS:
+        elif action_enum in (FeedbackAction.DISMISS, FeedbackAction.RESOLVE):
             updated_bundle_recs = [
                 r for r in bundle_recs
                 if not (
@@ -158,6 +158,26 @@ async def submit_operator_feedback(
             app_state.latest_fact_bundle = app_state.latest_fact_bundle.model_copy(
                 update={"active_recommendations": updated_bundle_recs}
             )
+
+    # 5.5 If resolving a protection trip advisory, unlatch trip in othi_engine
+    if action_enum in (FeedbackAction.DISMISS, FeedbackAction.RESOLVE):
+        if app_state.reducer and app_state.reducer.othi_engine:
+            reason = str(request.reason_code or "").upper()
+            rec_id = str(request.recommendation_id or "").upper()
+            merge_key = str(request.merge_key or "").upper()
+            if (
+                reason in (
+                    "SITE_CLEARANCE_VERIFIED",
+                    "SAFETY_PROCEDURE_COMPLETED",
+                    "TRIP_RESOLVED_AND_RESET",
+                    "DOCUMENTED_RESOLUTION",
+                    "FIELD_INSPECTION_CLEARED",
+                )
+                or "PROT" in rec_id
+                or "TRIP" in reason
+                or "TRIP" in merge_key
+            ):
+                app_state.reducer.othi_engine.reset_protection_trip()
 
     # 6. Synchronize active state ReviewFlag workflow metadata if review_id is specified
     if request.review_id and app_state.current_state is not None:

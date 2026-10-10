@@ -58,21 +58,36 @@ class AnomalyDetectorThresholds(BaseModel):
     voltage_imbalance_critical_pct: float = Field(default=3.0, description="NEMA voltage imbalance critical threshold %")
     pf_warning: float = Field(default=0.85, description="Power factor warning threshold (lower is worse)")
     pf_critical: float = Field(default=0.70, description="Power factor critical threshold (lower is worse)")
-    v_nominal_v: float = Field(default=230.0, description="Nominal phase-to-neutral voltage in Volts")
+    v_nominal_v: float = Field(default=240.0, description="Nominal phase-to-neutral voltage in Volts")
     undervoltage_ratio: float = Field(default=0.90, description="Undervoltage threshold ratio (0.90 * V_nominal)")
     overvoltage_ratio: float = Field(default=1.10, description="Overvoltage threshold ratio (1.10 * V_nominal)")
 
     # Protection & Oil Status Thresholds
     oil_level_warning_pct: float = Field(default=25.0, description="Oil level percentage warning threshold %")
     oil_level_critical_pct: float = Field(default=10.0, description="Oil level percentage critical threshold %")
+    oil_leak_trend_threshold_pct_per_day: float = Field(
+        default=-0.10, description="Rate of decline threshold in %/day indicating suspected oil loss"
+    )
+    tank_pressure_warning_kpa_g: float = Field(
+        default=25.0, description="Sealed tank gauge pressure warning threshold in kPa(g)"
+    )
+    tank_pressure_low_kpa_g: float = Field(
+        default=-10.0, description="Sealed tank gauge pressure minimum threshold in kPa(g)"
+    )
 
     # Data Quality & Plausibility Thresholds
     pqs_inconsistency_threshold: float = Field(default=0.10, description="P-Q-S inconsistency error threshold")
     oti_max_rate_degc_per_min: float = Field(
         default=1.0, description="Max plausible top-oil temperature rate of change (degC/min)"
     )
+    oti_max_step_degc: float = Field(
+        default=10.0, description="Max plausible single-step top-oil temperature change in degC"
+    )
     stuck_consecutive_steps: int = Field(
         default=4, description="Consecutive identical readings required to flag flatline/stuck sensor"
+    )
+    temp_flatline_min_steps: int = Field(
+        default=4, description="Consecutive identical readings required for temperature sensor flatline"
     )
     threshold_provenance: str = Field(
         default="CONFIGURED_ENGINEERING_DEFAULT",
@@ -199,8 +214,10 @@ def detect_sensor_plausibility(
         if m.signal_id in ("oti_degc", "top_oil_temperature") and hist:
             last_t, last_val = hist[-1]
             dt_minutes = max(0.1, (event.event_time_utc - last_t).total_seconds() / 60.0)
-            roc = abs(val - last_val) / dt_minutes
-            if roc > thresholds.oti_max_rate_degc_per_min:
+            step_change = abs(val - last_val)
+            roc = step_change / dt_minutes
+            max_step = getattr(thresholds, "oti_max_step_degc", 10.0)
+            if roc > thresholds.oti_max_rate_degc_per_min or step_change > max_step:
                 ev_id = f"ev_{event.asset_id}_plaus_roc_{key}_{t_str}"
                 evidence.append(
                     EvidenceItem(
@@ -223,9 +240,12 @@ def detect_sensor_plausibility(
                 )
 
         # 2. Frozen / Flatline Sensor
-        if len(hist) >= thresholds.stuck_consecutive_steps - 1:
-            recent_vals = [h[1] for h in hist[-(thresholds.stuck_consecutive_steps - 1):]] + [val]
-            if len(recent_vals) >= thresholds.stuck_consecutive_steps and len(set(recent_vals)) == 1 and val != 0.0:
+        req_steps = thresholds.stuck_consecutive_steps
+        if m.signal_id in ("oti_degc", "top_oil_temperature", "ambient_temperature"):
+            req_steps = max(thresholds.stuck_consecutive_steps, getattr(thresholds, "temp_flatline_min_steps", 4))
+        if len(hist) >= req_steps - 1:
+            recent_vals = [h[1] for h in hist[-(req_steps - 1):]] + [val]
+            if len(recent_vals) >= req_steps and len(set(recent_vals)) == 1 and val != 0.0:
                 ev_id = f"ev_{event.asset_id}_plaus_stuck_{key}_{t_str}"
                 evidence.append(
                     EvidenceItem(
@@ -237,7 +257,7 @@ def detect_sensor_plausibility(
                         observed_value=val,
                         expected_value="Varying",
                         unit=m.unit_ucum,
-                        threshold_or_band=f"{thresholds.stuck_consecutive_steps} identical readings",
+                        threshold_or_band=f"{req_steps} identical readings",
                         direction="FLATLINE",
                         severity=0.60,
                         confidence=0.85,
@@ -590,6 +610,7 @@ def detect_phase_neutral(
 def detect_voltage_pf_frequency(
     event: CanonicalEvent,
     derived: Optional[DerivedFeatures] = None,
+    profile: Optional[AssetProfile] = None,
     thresholds: AnomalyDetectorThresholds = DEFAULT_DETECTOR_THRESHOLDS,
 ) -> List[EvidenceItem]:
     """Detect voltage imbalance (% VUB), low power factor, undervoltage, and overvoltage."""
@@ -685,8 +706,19 @@ def detect_voltage_pf_frequency(
             )
 
     # 3. Direct Phase Undervoltage / Overvoltage
-    v_min_thresh = thresholds.v_nominal_v * thresholds.undervoltage_ratio
-    v_max_thresh = thresholds.v_nominal_v * thresholds.overvoltage_ratio
+    v_nom = thresholds.v_nominal_v
+    if profile is not None:
+        if getattr(profile, "rated_voltage_lv_v", None) is not None:
+            v_nom = float(profile.rated_voltage_lv_v)
+        elif hasattr(profile, "fields") and "nominal_voltage_v" in profile.fields:
+            v_nom = float(profile.fields["nominal_voltage_v"].value)
+        elif hasattr(profile, "fields") and "rated_voltage_lv_v" in profile.fields:
+            v_nom = float(profile.fields["rated_voltage_lv_v"].value)
+        elif getattr(profile, "nominal_voltage_v", None) is not None:
+            v_nom = float(profile.nominal_voltage_v)
+
+    v_min_thresh = v_nom * thresholds.undervoltage_ratio
+    v_max_thresh = v_nom * thresholds.overvoltage_ratio
 
     for m in event.measurements:
         if m.signal_id in ("voltage_v1", "voltage_v2", "voltage_v3", "voltage_l1_n", "voltage_l2_n", "voltage_l3_n"):
@@ -738,11 +770,22 @@ def detect_voltage_pf_frequency(
 
 def detect_protection_oil_status(
     event: CanonicalEvent,
+    profile: Optional[AssetProfile] = None,
+    history_buffer: Optional[Dict[str, List[Tuple[datetime, float]]]] = None,
     thresholds: AnomalyDetectorThresholds = DEFAULT_DETECTOR_THRESHOLDS,
 ) -> List[EvidenceItem]:
-    """Detect discrete protection alarm/trip binary contacts and low oil level."""
+    """Detect discrete protection contacts, breaker/fuse operations, oil level trends, and tank pressure."""
     evidence: List[EvidenceItem] = []
     t_str = event.event_time_utc.strftime("%Y%m%d%H%M%S")
+
+    # Asset applicability flags (conservator assets lack pressure sensors; sealed assets lack oil gauges)
+    has_oil_gauge = (profile.has_oil_level_gauge and profile.tank_type != "SEALED_CORRUGATED") if profile else True
+    has_pressure = (
+        bool(profile.has_pressure_sensor or profile.tank_type == "SEALED_CORRUGATED")
+        if profile
+        else False
+    )
+
 
     for m in event.measurements:
         s_id = m.signal_id.lower()
@@ -772,7 +815,7 @@ def detect_protection_oil_status(
                 )
 
         # 2. Top-Oil Temperature Alarm / Trip (OTI_A, OTI_T)
-        elif s_id in ("oti_t", "oil_temp_trip_flag"):
+        elif s_id in ("oti_t", "oil_temp_trip_flag", "oti_trip", "oti_trip_contact"):
             if val in (1, 1.0, "1", True):
                 evidence.append(
                     EvidenceItem(
@@ -793,7 +836,7 @@ def detect_protection_oil_status(
                         hypothesis_codes=["TOP_OIL_CRITICAL_OVERHEAT_TRIP"],
                     )
                 )
-        elif s_id in ("oti_a", "oil_temp_alarm_flag"):
+        elif s_id in ("oti_a", "oil_temp_alarm_flag", "oti_alarm", "oti_alarm_contact"):
             if val in (1, 1.0, "1", True):
                 evidence.append(
                     EvidenceItem(
@@ -815,8 +858,52 @@ def detect_protection_oil_status(
                     )
                 )
 
-        # 3. Magnetic Oil Gauge Alarm (MOG_A)
-        elif s_id in ("mog_a", "magnetic_oil_gauge_alarm_flag", "mog_alarm"):
+        # 3. Breaker / Fuse Protection Trips (Extra C)
+        elif s_id in ("lv_breaker_trip", "lv_breaker_trip_contact"):
+            if val in (1, 1.0, "1", True):
+                evidence.append(
+                    EvidenceItem(
+                        evidence_id=f"ev_{event.asset_id}_prot_lv_trip_{t_str}",
+                        asset_id=event.asset_id,
+                        event_time_utc=event.event_time_utc,
+                        category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                        detector_id="DET_PROT_LV_BREAKER_TRIP",
+                        observed_value=1,
+                        expected_value=0,
+                        unit="binary",
+                        threshold_or_band="1 (Trip)",
+                        direction="CONTACT_CLOSED",
+                        severity=1.0,
+                        confidence=1.0,
+                        input_lineage=[m.signal_id],
+                        reason_codes=["LV_CIRCUIT_BREAKER_TRIPPED"],
+                        hypothesis_codes=["THROUGH_FAULT_INTERRUPTED", "DOWNSTREAM_SHORT_CIRCUIT"],
+                    )
+                )
+        elif s_id in ("hv_fuse_operated", "hv_fuse_trip"):
+            if val in (1, 1.0, "1", True):
+                evidence.append(
+                    EvidenceItem(
+                        evidence_id=f"ev_{event.asset_id}_prot_hv_fuse_{t_str}",
+                        asset_id=event.asset_id,
+                        event_time_utc=event.event_time_utc,
+                        category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                        detector_id="DET_PROT_HV_FUSE_OPERATED",
+                        observed_value=1,
+                        expected_value=0,
+                        unit="binary",
+                        threshold_or_band="1 (Operated)",
+                        direction="CONTACT_CLOSED",
+                        severity=1.0,
+                        confidence=1.0,
+                        input_lineage=[m.signal_id],
+                        reason_codes=["HV_EXPULSION_FUSE_OPERATED"],
+                        hypothesis_codes=["TRANSFORMER_INTERNAL_OR_FEEDER_FAULT", "BACKUP_CLEARING"],
+                    )
+                )
+
+        # 4. Magnetic Oil Gauge / Low Oil Alarm Contact
+        elif s_id in ("mog_a", "magnetic_oil_gauge_alarm_flag", "mog_alarm", "oil_level_low_alarm"):
             if val in (1, 1.0, "1", True):
                 evidence.append(
                     EvidenceItem(
@@ -833,13 +920,13 @@ def detect_protection_oil_status(
                         severity=0.85,
                         confidence=1.0,
                         input_lineage=[m.signal_id],
-                        reason_codes=["MAGNETIC_OIL_GAUGE_LOW_LEVEL_ALARM"],
+                        reason_codes=["LOW_OIL_LEVEL_ALARM_CONTACT_CLOSED"],
                         hypothesis_codes=["INSULATING_OIL_LEAKAGE", "CONSERVATOR_TANK_EMPTY"],
                     )
                 )
 
-        # 4. Continuous Oil Level Percentage (OLI)
-        elif s_id in ("oli", "oil_level_pct", "oil_level"):
+        # 5. Oil Level Indicator & Trend Monitoring (Extra A)
+        elif s_id in ("oli", "oil_level_pct", "oil_level") and has_oil_gauge:
             if isinstance(val, (int, float)) and not isinstance(val, bool):
                 oli_val = float(val)
                 if oli_val <= thresholds.oil_level_critical_pct:
@@ -883,7 +970,163 @@ def detect_protection_oil_status(
                         )
                     )
 
+        elif s_id in ("oil_level_trend_pct_per_day",) and has_oil_gauge:
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                trend_val = float(val)
+                if trend_val <= thresholds.oil_leak_trend_threshold_pct_per_day:
+                    evidence.append(
+                        EvidenceItem(
+                            evidence_id=f"ev_{event.asset_id}_prot_oil_trend_{t_str}",
+                            asset_id=event.asset_id,
+                            event_time_utc=event.event_time_utc,
+                            category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                            detector_id="DET_OIL_LEVEL_DECLINING_TREND",
+                            observed_value=round(trend_val, 3),
+                            expected_value=f"> {thresholds.oil_leak_trend_threshold_pct_per_day} %/day",
+                            unit="percent/day",
+                            threshold_or_band=f"<= {thresholds.oil_leak_trend_threshold_pct_per_day} %/day",
+                            direction="LOW",
+                            severity=0.75,
+                            confidence=0.85,
+                            input_lineage=[m.signal_id],
+                            reason_codes=["SUSPECTED_OIL_LOSS_TREND", "INSPECTION_REQUIRED"],
+                            hypothesis_codes=["SUSPECTED_SLOW_OIL_LEAK", "VALVE_SEEPAGE"],
+                        )
+                    )
+
+        # 6. Sealed-Tank Pressure Monitoring (Extra B)
+        elif s_id in ("prd_operated", "pressure_relief_operated") and has_pressure:
+            if val in (1, 1.0, "1", True):
+                evidence.append(
+                    EvidenceItem(
+                        evidence_id=f"ev_{event.asset_id}_prot_prd_{t_str}",
+                        asset_id=event.asset_id,
+                        event_time_utc=event.event_time_utc,
+                        category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                        detector_id="DET_PRESSURE_RELIEF_OPERATED",
+                        observed_value=1,
+                        expected_value=0,
+                        unit="binary",
+                        threshold_or_band="1 (Operated)",
+                        direction="CONTACT_CLOSED",
+                        severity=1.0,
+                        confidence=1.0,
+                        input_lineage=[m.signal_id],
+                        reason_codes=["PRESSURE_RELIEF_DEVICE_OPERATED"],
+                        hypothesis_codes=["EXCESS_INTERNAL_PRESSURE", "TANK_PRESSURE_RELIEF_DISCHARGE"],
+                    )
+                )
+
+        elif s_id in ("pressure_alarm", "tank_pressure_alarm") and has_pressure:
+            if val in (1, 1.0, "1", True):
+                evidence.append(
+                    EvidenceItem(
+                        evidence_id=f"ev_{event.asset_id}_prot_pressure_alarm_{t_str}",
+                        asset_id=event.asset_id,
+                        event_time_utc=event.event_time_utc,
+                        category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                        detector_id="DET_PRESSURE_ALARM_CONTACT",
+                        observed_value=1,
+                        expected_value=0,
+                        unit="binary",
+                        threshold_or_band="1 (Alarm)",
+                        direction="CONTACT_CLOSED",
+                        severity=0.85,
+                        confidence=1.0,
+                        input_lineage=[m.signal_id],
+                        reason_codes=["TANK_PRESSURE_ALARM_CONTACT_CLOSED"],
+                        hypothesis_codes=["HIGH_INTERNAL_TANK_PRESSURE"],
+                    )
+                )
+
+        elif s_id in ("tank_pressure_kpa_g", "tank_pressure") and has_pressure:
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                p_kpa = float(val)
+                if not math.isfinite(p_kpa):
+                    continue
+                if p_kpa >= thresholds.tank_pressure_warning_kpa_g:
+                    evidence.append(
+                        EvidenceItem(
+                            evidence_id=f"ev_{event.asset_id}_prot_p_high_{t_str}",
+                            asset_id=event.asset_id,
+                            event_time_utc=event.event_time_utc,
+                            category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                            detector_id="DET_PRESSURE_HIGH_ALARM",
+                            observed_value=round(p_kpa, 1),
+                            expected_value=f"< {thresholds.tank_pressure_warning_kpa_g} kPa(g)",
+                            unit="kPa",
+                            threshold_or_band=f">= {thresholds.tank_pressure_warning_kpa_g} kPa(g)",
+                            direction="HIGH",
+                            severity=0.85,
+                            confidence=0.95,
+                            input_lineage=[m.signal_id],
+                            reason_codes=["SEALED_TANK_HIGH_PRESSURE"],
+                            hypothesis_codes=["HEAVY_THERMAL_EXPANSION", "INTERNAL_GAS_ACCUMULATION"],
+                        )
+                    )
+                elif p_kpa <= thresholds.tank_pressure_low_kpa_g:
+                    evidence.append(
+                        EvidenceItem(
+                            evidence_id=f"ev_{event.asset_id}_prot_p_low_{t_str}",
+                            asset_id=event.asset_id,
+                            event_time_utc=event.event_time_utc,
+                            category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                            detector_id="DET_PRESSURE_LOW_ALARM",
+                            observed_value=round(p_kpa, 1),
+                            expected_value=f"> {thresholds.tank_pressure_low_kpa_g} kPa(g)",
+                            unit="kPa",
+                            threshold_or_band=f"<= {thresholds.tank_pressure_low_kpa_g} kPa(g)",
+                            direction="LOW",
+                            severity=0.70,
+                            confidence=0.90,
+                            input_lineage=[m.signal_id],
+                            reason_codes=["SEALED_TANK_DEPRESSURIZATION_OR_WEEP"],
+                            hypothesis_codes=["CORRUGATED_TANK_BREACH", "SEAL_WEEP_INVENTORY_LOSS"],
+                        )
+                    )
+
+    # 7. Stuck Oil Level Gauge Check (Extra A)
+    if has_oil_gauge and history_buffer is not None:
+        oil_meas = next((m for m in event.measurements if m.signal_id in ("oil_level", "oil_level_pct") and isinstance(m.value, (int, float)) and not isinstance(m.value, bool)), None)
+        if oil_meas is not None:
+            oil_val = float(oil_meas.value)
+            oil_history = history_buffer.get("oil_level_pct") or history_buffer.get("oil_level") or []
+            if len(oil_history) >= 3 and math.isfinite(oil_val):
+                recent_levels = [x[1] for x in oil_history[-3:]] + [oil_val]
+                if all(math.isfinite(lvl) for lvl in recent_levels) and len(set(recent_levels)) == 1:  # Gauge frozen completely
+                    temp_meas = next((m for m in event.measurements if m.signal_id in ("top_oil_temperature", "top_oil_temp", "oti", "oil_temperature") and isinstance(m.value, (int, float)) and not isinstance(m.value, bool)), None)
+                    temp_val = float(temp_meas.value) if temp_meas else None
+                    temp_hist = history_buffer.get("top_oil_temperature") or history_buffer.get("top_oil_temp") or history_buffer.get("oti") or []
+                    if len(temp_hist) >= 3 and temp_val is not None and math.isfinite(temp_val):
+                        t_vals = [x[1] for x in temp_hist[-3:]] + [temp_val]
+                        # Verify chronological monotonic ordering and reasonable step gap (max 2h per step)
+                        ts_levels = [x[0] for x in oil_history[-3:]] + [event.event_time_utc]
+                        is_monotonic = all(t2 > t1 for t1, t2 in zip(ts_levels[:-1], ts_levels[1:]))
+                        max_gap_s = max((t2 - t1).total_seconds() for t1, t2 in zip(ts_levels[:-1], ts_levels[1:])) if is_monotonic else 999999
+                        if is_monotonic and max_gap_s <= 7200 and all(math.isfinite(t) for t in t_vals):
+                            if (max(t_vals) - min(t_vals)) >= 5.0:  # Temp varied while level stuck
+                                evidence.append(
+                                    EvidenceItem(
+                                        evidence_id=f"ev_{event.asset_id}_prot_oil_stuck_{t_str}",
+                                        asset_id=event.asset_id,
+                                        event_time_utc=event.event_time_utc,
+                                        category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                                        detector_id="DET_OIL_LEVEL_GAUGE_STUCK",
+                                        observed_value=round(recent_levels[-1], 1),
+                                        expected_value="LEVEL_FOLLOWS_TEMPERATURE",
+                                        unit="%",
+                                        threshold_or_band="FROZEN_LEVEL_WITH_DELTA_T_GE_5C",
+                                        direction="FLATLINE",
+                                        severity=0.60,
+                                        confidence=0.90,
+                                        input_lineage=["oil_level_pct", "top_oil_temperature"],
+                                        reason_codes=["OIL_LEVEL_GAUGE_STUCK"],
+                                        hypothesis_codes=["MECHANICAL_FLOAT_JAMMED", "LEVEL_TRANSMITTER_FAULT"],
+                                    )
+                                )
+
     return evidence
+
 
 
 # ---------------------------------------------------------------------------
@@ -988,12 +1231,22 @@ class MultiDomainAnomalyEngine:
 
         # 7. VOLTAGE_PF_FREQUENCY
         all_evidence.extend(
-            detect_voltage_pf_frequency(event=event, derived=derived, thresholds=self.thresholds)
+            detect_voltage_pf_frequency(
+                event=event,
+                derived=derived,
+                profile=self.profile,
+                thresholds=self.thresholds,
+            )
         )
 
         # 8. PROTECTION_OR_OIL_STATUS
         all_evidence.extend(
-            detect_protection_oil_status(event=event, thresholds=self.thresholds)
+            detect_protection_oil_status(
+                event=event,
+                profile=self.profile,
+                history_buffer=self._history_buffer,
+                thresholds=self.thresholds,
+            )
         )
 
         # Update history buffer with current numeric readings

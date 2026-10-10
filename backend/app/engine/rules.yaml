@@ -177,3 +177,49 @@ rules:
     advisory_wording: "Review calibration and input mapping; continue direct engineering checks while predictive capability is downgraded."
     rationale: "Thermal model residual median drift or empirical conformal coverage degradation detected against validation standards."
     suppress_if_bad_data: true
+
+  - rule_id: "MNT-OIL-008"
+    version: "1.0.0"
+    title: "Oil Level Trend / Suspected Loss Inspection"
+    scope: "OIL_SUBSYSTEM"
+    priority: "P2"
+    priority_label: "P2 PLANNED_ACTION"
+    action_window: "NEXT_AUTHORIZED_MAINTENANCE_WINDOW"
+    window_provenance_type: "OPERATOR_POLICY"
+    window_source_reference: "Utility Distribution Transformer Maintenance Standard Sec 5.1"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "Substation Maintenance Superintendent"
+    source_version: "2026.1"
+    consequence_class: "INSULATION_OIL_LOSS"
+    merge_key: "OIL_LEVEL_LOSS_TREND"
+    condition_families:
+      - "OIL_LEVEL_DECLINING_TREND"
+      - "OIL_LEVEL_LOW"
+    trigger_signals:
+      - "oil_level_pct"
+      - "oil_level_trend_pct_per_day"
+    advisory_wording: "Inspect conservator/tank seals, valves, and level gauge; arrange top-up and leakage containment."
+    rationale: "Persistent decline in corrected oil level or low level alarm indicates suspected oil loss requiring inspection."
+    suppress_if_bad_data: true
+
+  - rule_id: "MNT-PRESS-009"
+    version: "1.0.0"
+    title: "Sealed Tank Pressure Anomaly Review"
+    scope: "TANK_PRESSURE"
+    priority: "P1"
+    priority_label: "P1 URGENT_INSPECTION"
+    action_window: "WITHIN_24H"
+    window_provenance_type: "OPERATOR_POLICY"
+    window_source_reference: "Utility Sealed Distribution Transformer Operating Manual Sec 3.4"
+    binding_vs_advisory: "ADVISORY"
+    approved_by: "Substation Maintenance Superintendent"
+    source_version: "2026.1"
+    consequence_class: "TANK_OVERPRESSURE_RISK"
+    merge_key: "SEALED_TANK_PRESSURE"
+    condition_families:
+      - "SEALED_TANK_PRESSURE"
+    trigger_signals:
+      - "tank_pressure_kpa_g"
+    advisory_wording: "Inspect corrugated tank fin expansion, pressure gauge, and pressure relief device."
+    rationale: "Sealed tank gauge pressure exceeds safe operational band under current thermal loading."
+    suppress_if_bad_data: true

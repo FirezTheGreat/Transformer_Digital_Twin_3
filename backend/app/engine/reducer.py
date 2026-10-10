@@ -102,12 +102,18 @@ class TwinReducer:
         self.review_engine = review_engine
         self.latest_emitted_evidence: list[EvidenceItem] = []
 
+        if self.othi_engine is not None and self.maintenance_engine is not None:
+            if hasattr(self.maintenance_engine, "feedback_ledger"):
+                self.othi_engine.feedback_ledger = self.maintenance_engine.feedback_ledger
+
     def reset(self) -> None:
-        """Reset internal stateful sub-engines (episode engine, thermal gate)."""
+        """Reset internal stateful sub-engines (episode engine, thermal gate, othi engine)."""
         if self.episode_engine is not None and hasattr(self.episode_engine, "reset"):
             self.episode_engine.reset()
         if self.thermal_gate is not None and hasattr(self.thermal_gate, "reset"):
             self.thermal_gate.reset()
+        if self.othi_engine is not None and hasattr(self.othi_engine, "reset"):
+            self.othi_engine.reset()
         self.latest_emitted_evidence = []
 
     def reduce(
@@ -177,6 +183,7 @@ class TwinReducer:
         }
 
         # 6. Preserve or initialize downstream sub-states
+        thermal_output: Any | None = None
         if self.thermal_gate is not None:
             t_oil_m = observations.get("top_oil_temperature")
             t_amb_m = observations.get("ambient_temperature")
@@ -235,9 +242,14 @@ class TwinReducer:
             open_episodes = list(current_state.open_episodes) if current_state is not None else []
 
         if self.anomaly_engine is not None:
-            self.latest_emitted_evidence = self.anomaly_engine.evaluate_event(
-                event=event, derived=derived_electrical
-            )
+            try:
+                self.latest_emitted_evidence = self.anomaly_engine.evaluate_event(
+                    event=event, derived=derived_electrical, thermal_output=thermal_output
+                )
+            except TypeError:
+                self.latest_emitted_evidence = self.anomaly_engine.evaluate_event(
+                    event=event, derived=derived_electrical
+                )
         else:
             self.latest_emitted_evidence = []
 
@@ -374,6 +386,23 @@ class TwinReducer:
                     or (feedback.merge_key and r.merge_key == feedback.merge_key)
                 )
             ]
+            if self.othi_engine is not None and hasattr(self.othi_engine, "reset_protection_trip"):
+                reason = str(getattr(feedback, "reason_code", "") or "").upper()
+                rec_id = str(getattr(feedback, "recommendation_id", "") or "").upper()
+                merge_key = str(getattr(feedback, "merge_key", "") or "").upper()
+                if (
+                    reason in (
+                        "SITE_CLEARANCE_VERIFIED",
+                        "SAFETY_PROCEDURE_COMPLETED",
+                        "TRIP_RESOLVED_AND_RESET",
+                        "DOCUMENTED_RESOLUTION",
+                        "FIELD_INSPECTION_CLEARED",
+                    )
+                    or "PROT" in rec_id
+                    or "TRIP" in reason
+                    or "TRIP" in merge_key
+                ):
+                    self.othi_engine.reset_protection_trip()
 
         # Construct new immutable state and recompute deterministic hash
         temp_state = current_state.model_copy(

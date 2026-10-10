@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   AlertTriangle,
   ShieldAlert,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  RefreshCw,
+  Layers,
+  AlertCircle,
+  FileQuestion,
 } from 'lucide-react';
 
 import { AnomalyEpisode, TwinState } from '../../types/contracts';
+import { api } from '../../services/api';
 
 interface AnomalyTimelineViewProps {
+  assetId?: string;
   episodes: AnomalyEpisode[];
   twinState: TwinState | null;
   onSeedTripData: () => void;
@@ -17,16 +23,113 @@ interface AnomalyTimelineViewProps {
 }
 
 export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
-  episodes,
+  assetId: propAssetId,
+  episodes: propEpisodes,
   twinState,
   onSeedTripData,
   isSeeding,
 }) => {
+  const assetId = propAssetId || twinState?.asset_id || '';
   const [showDetectorMath, setShowDetectorMath] = useState<boolean>(false);
   const isCusumQualified = twinState?.asset_id === 'TX_1000_COMM';
 
-  const critCount = episodes.filter((e) => e.state === 'CRITICAL').length;
-  const warnCount = episodes.filter((e) => e.state === 'WARNING').length;
+  // API and fetch lifecycle states
+  const [remoteEpisodes, setRemoteEpisodes] = useState<AnomalyEpisode[] | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isMalformed, setIsMalformed] = useState<boolean>(false);
+
+  // Filter state
+  const [stateFilter, setStateFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+
+  const fetchEpisodes = useCallback(async () => {
+    if (!assetId) return;
+    setIsLoading(true);
+    setFetchError(null);
+    setIsMalformed(false);
+    try {
+      const res = await api.getAssetEpisodes(assetId);
+      if (!Array.isArray(res)) {
+        setIsMalformed(true);
+        setRemoteEpisodes([]);
+      } else {
+        setRemoteEpisodes(res);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Network error fetching episodes';
+      setFetchError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [assetId]);
+
+  useEffect(() => {
+    fetchEpisodes();
+  }, [fetchEpisodes, twinState?.state_sequence, twinState?.last_processed_event_id]);
+
+  // Merge episodes from twinState/FactBundle prop with remote API episodes (deduplicate by episode_id)
+  const allEpisodes = useMemo(() => {
+    const map = new Map<string, AnomalyEpisode>();
+    // Add remote first
+    if (remoteEpisodes && Array.isArray(remoteEpisodes)) {
+      for (const ep of remoteEpisodes) {
+        if (ep && ep.episode_id) map.set(ep.episode_id, ep);
+      }
+    }
+    // Add props (authoritative point-in-time FactBundle)
+    if (propEpisodes && Array.isArray(propEpisodes)) {
+      for (const ep of propEpisodes) {
+        if (ep && ep.episode_id) map.set(ep.episode_id, ep);
+      }
+    }
+    const list = Array.from(map.values());
+    // Chronological sort: most recent last_seen or start_time first
+    return list.sort((a, b) => {
+      const timeA = new Date(a.last_seen_time_utc || a.start_time_utc || 0).getTime();
+      const timeB = new Date(b.last_seen_time_utc || b.start_time_utc || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [remoteEpisodes, propEpisodes]);
+
+  // Derived counts across all episodes
+  const critCount = allEpisodes.filter((e) => String(e.state).toUpperCase() === 'CRITICAL').length;
+  const warnCount = allEpisodes.filter((e) => String(e.state).toUpperCase() === 'WARNING').length;
+  const watchCount = allEpisodes.filter((e) => String(e.state).toUpperCase() === 'WATCH').length;
+  const closedCount = allEpisodes.filter((e) => String(e.state).toUpperCase() === 'CLOSED').length;
+
+  // Available categories for filtering
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const ep of allEpisodes) {
+      if (ep.category) set.add(ep.category);
+    }
+    return Array.from(set);
+  }, [allEpisodes]);
+
+  // Filtered display list
+  const filteredEpisodes = useMemo(() => {
+    return allEpisodes.filter((ep) => {
+      const epState = String(ep.state).toUpperCase();
+      if (stateFilter !== 'ALL') {
+        if (stateFilter === 'ACTIVE' && epState === 'CLOSED') return false;
+        if (stateFilter !== 'ACTIVE' && epState !== stateFilter) return false;
+      }
+      if (categoryFilter !== 'ALL' && ep.category !== categoryFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [allEpisodes, stateFilter, categoryFilter]);
+
+  const formatUtcTime = (isoString?: string) => {
+    if (!isoString) return '—';
+    try {
+      return new Date(isoString).toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    } catch {
+      return isoString;
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -44,59 +147,160 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onSeedTripData}
-          disabled={isSeeding}
-          className="btn btn-danger self-start lg:self-auto"
-        >
-          <ShieldAlert className="w-3.5 h-3.5" />
-          <span>{isSeeding ? 'Injecting...' : 'Inject Protection Trip Fixture'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={fetchEpisodes}
+            disabled={isLoading}
+            className="btn btn-ghost"
+            title="Refresh anomaly episodes from backend"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-accent' : ''}`} />
+            <span>Refresh</span>
+          </button>
+          <button
+            onClick={onSeedTripData}
+            disabled={isSeeding}
+            className="btn btn-danger self-start lg:self-auto"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>{isSeeding ? 'Injecting...' : 'Inject Protection Trip Fixture'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Episode Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-line border border-line rounded-card overflow-hidden">
+      {/* Episode Summary Counters */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-line border border-line rounded-card overflow-hidden">
         {[
-          { label: 'Tracked Episodes', value: episodes.length, dot: 'bg-faint' },
-          { label: 'Critical', value: critCount, dot: critCount > 0 ? 'bg-crit' : 'bg-line-strong' },
-          { label: 'Warning', value: warnCount, dot: warnCount > 0 ? 'bg-warn' : 'bg-line-strong' },
+          { label: 'Total Tracked', value: allEpisodes.length, dot: 'bg-faint', sub: 'Historical & active' },
+          { label: 'Critical Incidents', value: critCount, dot: critCount > 0 ? 'bg-crit animate-pulse' : 'bg-line-strong', sub: 'P0 escalation' },
+          { label: 'Warning Level', value: warnCount, dot: warnCount > 0 ? 'bg-warn' : 'bg-line-strong', sub: 'Requires inspection' },
+          { label: 'Watch / Closed', value: `${watchCount} / ${closedCount}`, dot: 'bg-line-strong', sub: 'Normalizing / resolved' },
         ].map((s) => (
           <div key={s.label} className="bg-surface p-5">
             <div className="flex items-center justify-between pb-3 border-b border-line">
-              <span className="eyebrow">{s.label}</span>
+              <span className="eyebrow text-[11px]">{s.label}</span>
               <span className={`dot w-2 h-2 ${s.dot}`} />
             </div>
-            <div className="metric-value text-[38px] mt-4">{s.value}</div>
+            <div className="metric-value text-[32px] sm:text-[38px] mt-3 font-mono">{s.value}</div>
+            <span className="text-[11px] text-muted mt-1 block">{s.sub}</span>
           </div>
         ))}
       </div>
 
       {/* Active & Tracked Episodes Event Ledger */}
       <div>
-        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-          <h2 className="section-title">Active Anomaly Episodes ({episodes.length})</h2>
-          <span className="text-[11px] text-muted font-mono">
-            FSM: OPEN → CORROBORATED → RESOLVED / CLOSED
-          </span>
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3 mb-4">
+          <div>
+            <h2 className="section-title">
+              Anomaly Episodes Log ({filteredEpisodes.length} of {allEpisodes.length})
+            </h2>
+            <span className="text-[11px] text-muted font-mono block mt-0.5">
+              Finite State Machine: OPEN → CORROBORATED → RESOLVED / CLOSED
+            </span>
+          </div>
+
+          {/* Filtering Controls */}
+          {allEpisodes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="segmented text-[11px]">
+                {['ALL', 'ACTIVE', 'CRITICAL', 'WARNING', 'CLOSED'].map((sf) => (
+                  <button
+                    key={sf}
+                    onClick={() => setStateFilter(sf)}
+                    data-active={stateFilter === sf}
+                    className="py-1 px-2.5 font-medium"
+                  >
+                    {sf === 'ALL' ? 'All States' : sf}
+                  </button>
+                ))}
+              </div>
+
+              {availableCategories.length > 1 && (
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="input text-xs py-1 px-2 font-medium"
+                >
+                  <option value="ALL">All Categories</option>
+                  {availableCategories.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
         </div>
 
-        {episodes.length === 0 ? (
-          <div className="card-muted p-10 text-center">
-            <span className="chip chip-ok mb-3">
-              <CheckCircle2 className="w-3 h-3" /> Nominal
-            </span>
-            <p className="card-title">No active anomaly episodes</p>
-            <p className="text-xs text-muted mt-1">
-              All multi-domain detectors are operating within nominal thresholds.
+        {/* State 1: Loading in progress */}
+        {isLoading && allEpisodes.length === 0 && (
+          <div className="card p-12 text-center text-xs text-muted">
+            <RefreshCw className="w-6 h-6 mx-auto animate-spin text-accent mb-3" />
+            <p className="card-title">Querying anomaly episodes...</p>
+            <p className="text-[11px] text-muted mt-1">
+              Checking diagnostic episode store for asset <span className="font-mono text-ink">{assetId}</span>.
             </p>
           </div>
-        ) : (
+        )}
+
+        {/* State 2: Network / API Failure */}
+        {fetchError && allEpisodes.length === 0 && (
+          <div className="card p-8 border-crit/30 bg-crit/5 text-center">
+            <AlertCircle className="w-7 h-7 mx-auto text-crit mb-3" />
+            <p className="text-sm font-semibold text-crit">Failed to Retrieve Anomaly Episodes</p>
+            <p className="text-xs text-muted max-w-md mx-auto mt-1 mb-4">{fetchError}</p>
+            <button onClick={fetchEpisodes} className="btn btn-secondary text-xs py-1.5 px-3 mx-auto">
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry Request</span>
+            </button>
+          </div>
+        )}
+
+        {/* State 3: Malformed Response Data */}
+        {isMalformed && allEpisodes.length === 0 && (
+          <div className="card p-8 border-warn/30 bg-warn/5 text-center">
+            <FileQuestion className="w-7 h-7 mx-auto text-warn mb-3" />
+            <p className="text-sm font-semibold text-warn">Malformed Episode Response Structure</p>
+            <p className="text-xs text-muted max-w-md mx-auto mt-1">
+              The backend returned an unexpected response schema from <code className="text-ink font-mono">/v1/assets/{assetId}/episodes</code>.
+            </p>
+          </div>
+        )}
+
+        {/* State 4: Genuine Empty Response (0 episodes, Nominal) */}
+        {!isLoading && !fetchError && !isMalformed && allEpisodes.length === 0 && (
+          <div className="card-muted p-10 text-center">
+            <span className="chip chip-ok mb-3">
+              <CheckCircle2 className="w-3 h-3 text-ok" /> Nominal
+            </span>
+            <p className="card-title">No anomaly episodes recorded</p>
+            <p className="text-xs text-muted max-w-md mx-auto mt-1">
+              Zero active or historical anomaly episodes detected for asset <strong className="font-mono text-ink">{assetId}</strong>.
+              All multi-domain statistical and physics detectors are operating within nominal thresholds.
+            </p>
+          </div>
+        )}
+
+        {/* State 5: Filtered empty */}
+        {allEpisodes.length > 0 && filteredEpisodes.length === 0 && (
+          <div className="card-muted p-8 text-center text-xs text-muted">
+            <p className="font-medium text-ink">No episodes match active filter ({stateFilter !== 'ALL' ? stateFilter : ''} {categoryFilter !== 'ALL' ? categoryFilter : ''})</p>
+            <button
+              onClick={() => { setStateFilter('ALL'); setCategoryFilter('ALL'); }}
+              className="link mt-2 text-xs"
+            >
+              Clear filters to view all {allEpisodes.length} episodes
+            </button>
+          </div>
+        )}
+
+        {/* State 6: Episodes Loaded and Rendered */}
+        {filteredEpisodes.length > 0 && (
           <div className="card divide-y divide-line overflow-hidden">
-            {episodes.map((ep) => {
-              const state = ep.state;
-              const isCrit = state === 'CRITICAL';
-              const isWarn = state === 'WARNING';
-              const tone = isCrit ? 'crit' : isWarn ? 'warn' : 'accent';
+            {filteredEpisodes.map((ep) => {
+              const stateUpper = String(ep.state).toUpperCase();
+              const isCrit = stateUpper === 'CRITICAL';
+              const isWarn = stateUpper === 'WARNING';
+              const isClosed = stateUpper === 'CLOSED';
 
               return (
                 <div
@@ -105,55 +309,90 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
                 >
                   <span
                     className={`absolute left-0 top-0 bottom-0 w-[3px] ${
-                      tone === 'crit' ? 'bg-crit' : tone === 'warn' ? 'bg-warn' : 'bg-accent'
+                      isCrit ? 'bg-crit' : isWarn ? 'bg-warn' : isClosed ? 'bg-line-strong' : 'bg-accent'
                     }`}
                   />
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
                       <AlertTriangle
                         className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-                          tone === 'crit' ? 'text-crit' : tone === 'warn' ? 'text-warn' : 'text-accent'
+                          isCrit ? 'text-crit' : isWarn ? 'text-warn' : isClosed ? 'text-muted' : 'text-accent'
                         }`}
                         strokeWidth={1.75}
                       />
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span
                             className={`chip ${
-                              tone === 'crit' ? 'chip-crit' : tone === 'warn' ? 'chip-warn' : 'chip-accent'
+                              isCrit ? 'chip-crit' : isWarn ? 'chip-warn' : isClosed ? 'chip-neutral' : 'chip-accent'
                             }`}
                           >
-                            {state}
+                            {stateUpper}
                           </span>
                           <span className="text-[11px] font-mono text-muted">{ep.episode_id}</span>
                           <span className="text-faint">·</span>
-                          <span className="text-xs font-medium text-ink-2">{ep.category}</span>
-                        </div>
-                        <h3 className="card-title mt-2">{ep.primary_reason}</h3>
-
-                        {/* Hypothesis Codes */}
-                        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                          <span className="eyebrow text-[11px] mr-1">Hypotheses</span>
-                          {ep.hypothesis_codes.map((code) => (
-                            <span
-                              key={code}
-                              className="px-1.5 py-0.5 rounded font-mono text-[11px] text-ink-2 border border-line bg-surface-2"
-                            >
-                              {code}
+                          <span className="text-xs font-semibold text-ink-2">{ep.category}</span>
+                          {ep.asset_id && (
+                            <>
+                              <span className="text-faint">·</span>
+                              <span className="font-mono text-[11px] text-muted">{ep.asset_id}</span>
+                            </>
+                          )}
+                          {ep.is_monitoring_gap && (
+                            <span className="chip chip-outline text-[10px] text-warn">
+                              Data Gap Frozen
                             </span>
-                          ))}
+                          )}
+                        </div>
+
+                        <h3 className="card-title mt-2 font-medium text-ink">
+                          {ep.primary_reason || 'Anomaly trigger event'}
+                        </h3>
+
+                        {/* Evidence IDs & Hypothesis Codes */}
+                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                          {ep.evidence_ids && ep.evidence_ids.length > 0 && (
+                            <div className="flex items-center gap-1.5 text-muted">
+                              <Layers className="w-3.5 h-3.5 text-faint" />
+                              <span className="font-mono text-[11px]">
+                                {ep.evidence_ids.length} Evidence {ep.evidence_ids.length === 1 ? 'Item' : 'Items'} ({ep.evidence_ids.slice(0, 3).join(', ')}{ep.evidence_ids.length > 3 ? '...' : ''})
+                              </span>
+                            </div>
+                          )}
+
+                          {ep.hypothesis_codes && ep.hypothesis_codes.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="eyebrow text-[10px] mr-0.5">Hypotheses:</span>
+                              {ep.hypothesis_codes.map((code) => (
+                                <span
+                                  key={code}
+                                  className="px-1.5 py-0.5 rounded font-mono text-[10px] text-ink-2 border border-line bg-surface-2"
+                                >
+                                  {code}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     <div className="sm:text-right flex-shrink-0 pl-7 sm:pl-0">
-                      <span className="eyebrow text-[11px]">Severity</span>
-                      <div className="metric-value text-[28px] mt-1.5">
-                        {(ep.severity_score * 100).toFixed(0)}
+                      <span className="eyebrow text-[11px]">Severity Score</span>
+                      <div className="metric-value text-[26px] mt-1 text-ink">
+                        {typeof ep.severity_score === 'number'
+                          ? (ep.severity_score * 100).toFixed(0)
+                          : '—'}
                         <span className="metric-unit ml-0.5">%</span>
                       </div>
-                      <div className="text-[11px] font-mono text-muted mt-1.5">
-                        Seen: {new Date(ep.start_time_utc).toISOString().replace('T', ' ').slice(0, 19)}
+                      <div className="text-[11px] font-mono text-muted mt-1.5 space-y-0.5">
+                        <div>Start: {formatUtcTime(ep.start_time_utc)}</div>
+                        {ep.last_seen_time_utc && ep.last_seen_time_utc !== ep.start_time_utc && (
+                          <div>Last Seen: {formatUtcTime(ep.last_seen_time_utc)}</div>
+                        )}
+                        {ep.closed_time_utc && (
+                          <div className="text-ok">Closed: {formatUtcTime(ep.closed_time_utc)}</div>
+                        )}
                       </div>
                     </div>
                   </div>

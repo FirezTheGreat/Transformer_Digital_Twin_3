@@ -181,3 +181,26 @@ async def submit_operator_feedback(
                 raise ValidationException(message=str(e), details={"review_id": request.review_id})
 
     return recorded_event
+
+
+@router.get(
+    "/feedback",
+    response_model=list[OperatorFeedbackEvent],
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve operator feedback and acknowledgement audit ledger history",
+)
+async def get_operator_feedback(
+    asset_id: str | None = None,
+    recommendation_id: str | None = None,
+    action: str | None = None,
+    ledger: OperatorFeedbackLedger = Depends(get_feedback_ledger),
+) -> list[OperatorFeedbackEvent]:
+    """Retrieve full chronological feedback audit history with optional filtering."""
+    action_enum = None
+    if action:
+        try:
+            action_enum = FeedbackAction(action.upper().strip())
+        except ValueError:
+            pass
+    return ledger.get_history(asset_id=asset_id, recommendation_id=recommendation_id, action=action_enum)
+

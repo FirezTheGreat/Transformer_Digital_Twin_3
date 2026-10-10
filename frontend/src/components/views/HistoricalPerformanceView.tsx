@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   History,
   Download,
@@ -13,17 +13,26 @@ import {
   Database,
   Hash,
   AlertCircle,
+  Layers,
+  Info,
 } from 'lucide-react';
 import { api, CheckpointRunRecord } from '../../services/api';
 import { UIHonestyBadge } from '../common/UIHonestyBadge';
+import { TwinState, ReplayStatusResponse } from '../../types/contracts';
+import { getAssetContext } from '../../utils/assetContext';
 
 interface HistoricalPerformanceViewProps {
   assetId: string;
+  replayStatus?: ReplayStatusResponse | null;
+  twinState?: TwinState | null;
 }
 
 export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps> = ({
   assetId,
+  replayStatus,
+  twinState,
 }) => {
+  const assetCtx = getAssetContext(assetId);
   const [runs, setRuns] = useState<CheckpointRunRecord[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -80,6 +89,38 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
     }
   };
 
+  // Derive historical coverage time range from runs or replay
+  const historicalTimeRange = useMemo(() => {
+    if (runs.length >= 2) {
+      const oldest = runs[runs.length - 1].state_time_utc;
+      const newest = runs[0].state_time_utc;
+      return `${formatUtcTime(oldest)} → ${formatUtcTime(newest)}`;
+    } else if (runs.length === 1) {
+      return `Single snapshot at ${formatUtcTime(runs[0].state_time_utc)}`;
+    }
+    return 'No persisted historical snapshots';
+  }, [runs]);
+
+  // Derive latest available event timestamp
+  const latestEventTime = useMemo(() => {
+    if (selectedRun) {
+      return formatUtcTime(selectedRun.state_time_utc);
+    }
+    if (runs.length > 0) {
+      return formatUtcTime(runs[0].state_time_utc);
+    }
+    if (twinState?.event_time_watermark_utc) {
+      return formatUtcTime(twinState.event_time_watermark_utc);
+    }
+    if (replayStatus?.current_time_utc) {
+      return formatUtcTime(replayStatus.current_time_utc);
+    }
+    return 'Awaiting first telemetry frame';
+  }, [selectedRun, runs, twinState, replayStatus]);
+
+  const processedCount = replayStatus?.processed_events ?? 0;
+  const totalCount = replayStatus?.total_events ?? null;
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -120,6 +161,85 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
         </div>
       </div>
 
+      {/* Dataset & Ingestion Historical Coverage Banner */}
+      <div className="card p-5 bg-surface-2/60 border border-line space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-accent" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink">
+              Dataset Ingestion &amp; Historical Coverage
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="chip chip-neutral font-mono text-[10px]">
+              Asset: {assetId}
+            </span>
+            <span className="chip chip-neutral font-mono text-[10px]">
+              {assetCtx.datasetLabel}
+            </span>
+            <span className={`chip ${replayStatus?.status === 'running' ? 'chip-ok' : 'chip-neutral'} font-mono text-[10px]`}>
+              Replay: {replayStatus?.status ?? 'idle'}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div>
+            <span className="eyebrow text-[10px] block text-muted">Available History Range</span>
+            <span className="font-mono text-ink text-[12px] mt-1 block">
+              {historicalTimeRange}
+            </span>
+          </div>
+
+          <div>
+            <span className="eyebrow text-[10px] block text-muted">Latest Available Event</span>
+            <span className="font-mono text-ink text-[12px] mt-1 block">
+              {latestEventTime}
+            </span>
+          </div>
+
+          <div>
+            <span className="eyebrow text-[10px] block text-muted">Record Count &amp; Progress</span>
+            <span className="font-mono text-ink text-[12px] mt-1 block">
+              {runs.length} checkpoints · {processedCount.toLocaleString()} {totalCount ? `/ ${totalCount.toLocaleString()}` : ''} frames
+            </span>
+          </div>
+
+          <div>
+            <span className="eyebrow text-[10px] block text-muted">Ingestion Status</span>
+            <span className="font-mono text-ink text-[12px] mt-1 block">
+              {replayStatus?.is_completed
+                ? 'Dataset replay completed'
+                : processedCount > 0
+                ? `Partial replay (${processedCount} frames processed)`
+                : 'Awaiting telemetry start'}
+            </span>
+          </div>
+        </div>
+
+        {/* Critical UI-Honesty Distinctions */}
+        <div className="pt-3 border-t border-line grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-muted">
+          <div className="flex items-start gap-1.5">
+            <Info className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+            <p>
+              <strong className="text-ink">Event Timestamp vs Ingestion Timestamp:</strong> Event timestamps reflect device sensor readings, distinct from host database ingestion time.
+            </p>
+          </div>
+          <div className="flex items-start gap-1.5">
+            <Info className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+            <p>
+              <strong className="text-ink">Replay Cursor vs Completeness:</strong> Current playback cursor indicates sequential progress, not guaranteed complete ingestion of future data.
+            </p>
+          </div>
+          <div className="flex items-start gap-1.5">
+            <Info className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+            <p>
+              <strong className="text-ink">Report Coverage Period:</strong> Checkpoint exports cover data strictly up to the frozen snapshot watermark, not the entire historical archive.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Summary KPI Tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-line border border-line rounded-card overflow-hidden">
         <div className="bg-surface p-5">
@@ -127,7 +247,7 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
             <span className="eyebrow">Persisted Checkpoints</span>
             <Database className="w-3.5 h-3.5 text-muted" />
           </div>
-          <div className="metric-value text-[44px] mt-4">
+          <div className="metric-value text-[44px] mt-4 font-mono">
             {runs.length}
           </div>
           <span className="text-[11px] text-muted block mt-2">
@@ -333,13 +453,13 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
                   <span className="font-mono font-medium text-ink">#{selectedRun.state_sequence}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-muted">Snapshot Timestamp:</span>
+                  <span className="text-muted">Report Snapshot Time:</span>
                   <span className="font-mono text-ink">{formatUtcTime(selectedRun.state_time_utc)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-muted">Event Watermark:</span>
-                  <span className="font-mono text-ink truncate max-w-[180px]">
-                    {selectedRun.last_processed_event_id || 'initial'}
+                  <span className="text-muted">Data Range Included:</span>
+                  <span className="font-mono text-ink text-[11px]">
+                    Events up to {selectedRun.last_processed_event_id || 'initial'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">

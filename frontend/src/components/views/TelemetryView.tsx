@@ -99,7 +99,12 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
       </div>
 
       {/* Main Phase Telemetry Grid & Capability Manifest */}
-      <TelemetryPhaseGrid twinState={twinState} capabilities={capabilities} assetId={assetId} />
+      <TelemetryPhaseGrid
+        twinState={twinState}
+        capabilities={capabilities}
+        assetId={assetId}
+        latestEvent={events.length > 0 ? events[events.length - 1] : null}
+      />
 
       {/* Recorded Trends (small multiples, one axis each) */}
       <div>
@@ -197,8 +202,8 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
                 <tbody className="divide-y divide-line font-mono text-[11px]">
                   {events.slice(0, 15).map((ev) => {
                     const otiVal = ev.measurements.find((m) => m.signal_id.includes('top_oil') || m.original_name === 'OTI')?.value;
-                    const vrVal = ev.measurements.find((m) => m.signal_id.includes('voltage_l1') || m.original_name === 'V_R')?.value;
-                    const irVal = ev.measurements.find((m) => m.signal_id.includes('current_l1') || m.original_name === 'I_R')?.value;
+                    const vrVal = ev.measurements.find((m) => m.signal_id.includes('voltage_l1') || m.signal_id.includes('voltage_v1') || m.original_name === 'V_R' || m.original_name === 'VL1')?.value;
+                    const irVal = ev.measurements.find((m) => m.signal_id.includes('current_l1') || m.signal_id.includes('current_i1') || m.original_name === 'I_R' || m.original_name === 'IL1')?.value;
 
                     return (
                       <tr key={ev.event_id} className="hover:bg-surface-2 transition-colors">

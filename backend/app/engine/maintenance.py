@@ -142,11 +142,14 @@ class MaintenanceEngine:
         has_direct_trip = False
         direct_trip_evidence_ids: List[str] = []
         for m in event.measurements:
-            if m.signal_id in ("top_oil_temp_trip", "breaker_trip", "buchholz_trip"):
-                if m.quality.severity != QualitySeverity.BAD:
-                    val = m.value
-                    if val is True or val == 1 or str(val).lower() in ("true", "1", "trip", "tripped"):
-                        has_direct_trip = True
+            if m.signal_id.lower() in ("top_oil_temp_trip", "breaker_trip", "buchholz_trip", "oil_temp_trip_flag", "oti_t", "wti"):
+                val = m.value
+                if val is True or val == 1 or str(val).lower() in ("true", "1", "trip", "tripped"):
+                    has_direct_trip = True
+                    break
+
+        if "PROTECTION_TRIP_ACTIVE" in event.event_quality_flags:
+            has_direct_trip = True
 
         for ev in evidence_list:
             if ev.condition_family in ("DIRECT_PROTECTION_TRIP", "TRIP_DISCRETE") or (

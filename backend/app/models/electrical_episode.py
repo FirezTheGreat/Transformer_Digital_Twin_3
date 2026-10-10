@@ -11,12 +11,13 @@ from app.models.anomaly import AnomalyCategory, AnomalyEpisode, EpisodeState, Ev
 
 
 class ElectricalEpisodeType(str, Enum):
-    """The 5 canonical electrical abnormal conditions tracked as temporal episodes."""
+    """Canonical abnormal conditions tracked as temporal episodes."""
     CURRENT_IMBALANCE = "CURRENT_IMBALANCE"
     VOLTAGE_IMBALANCE = "VOLTAGE_IMBALANCE"
     NEUTRAL_CURRENT_RATIO = "NEUTRAL_CURRENT_RATIO"
     LOW_POWER_FACTOR = "LOW_POWER_FACTOR"
     PQS_INCONSISTENCY = "PQS_INCONSISTENCY"
+    PROTECTION_TRIP = "PROTECTION_TRIP"
 
 
 class EpisodeSeverity(str, Enum):
@@ -106,6 +107,14 @@ DEFAULT_ELECTRICAL_THRESHOLDS: Dict[ElectricalEpisodeType, ElectricalEpisodeThre
         persistence_seconds=900.0,
         recovery_seconds=900.0,
         threshold_provenance="CONFIGURED_ENGINEERING_ASSUMPTION (Measurement Consistency Check — NOT Transformer Fault)",
+    ),
+    ElectricalEpisodeType.PROTECTION_TRIP: ElectricalEpisodeThresholds(
+        warning_threshold=0.5,
+        critical_threshold=1.0,
+        recovery_threshold=0.5,
+        persistence_seconds=0.0,  # Immediate: protection trips are never delayed behind persistence window
+        recovery_seconds=900.0,   # Sustained recovery: single normal frame must not prematurely close
+        threshold_provenance="VERIFIED_PROTECTION_RELAY_CONTACT (Hardware Protection Invariant)",
     ),
 }
 

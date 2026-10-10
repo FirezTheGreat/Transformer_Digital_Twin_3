@@ -119,7 +119,7 @@ class ElectricalEpisodeEngine:
         dt_seconds: float,
     ) -> None:
         """Evaluate a single electrical condition type against its FSM state."""
-        val, is_valid = self._extract_and_validate_feature(ep_type, config, derived)
+        val, is_valid = self._extract_and_validate_feature(ep_type, config, derived, event)
         current_ep = self.active_episodes.get(ep_type)
 
         if not is_valid or val is None:
@@ -385,8 +385,29 @@ class ElectricalEpisodeEngine:
         ep_type: ElectricalEpisodeType,
         config: ElectricalEpisodeThresholds,
         derived: DerivedFeatures,
+        event: Optional[CanonicalEvent] = None,
     ) -> Tuple[Optional[float], bool]:
         """Extract canonical feature and enforce prerequisite validity floors."""
+        if ep_type == ElectricalEpisodeType.PROTECTION_TRIP:
+            if event is None:
+                return 0.0, True
+            is_trip = False
+            has_prot_signal = False
+            for m in event.measurements:
+                s_id = m.signal_id.lower()
+                if s_id in ("oil_temp_trip_flag", "top_oil_temp_trip", "breaker_trip", "buchholz_trip", "wti", "oti_t"):
+                    has_prot_signal = True
+                    val = m.value
+                    if val is True or val == 1 or str(val).lower() in ("true", "1", "trip", "tripped"):
+                        is_trip = True
+                        break
+            if "PROTECTION_TRIP_ACTIVE" in event.event_quality_flags:
+                is_trip = True
+                has_prot_signal = True
+            if not has_prot_signal:
+                return 0.0, True
+            return (1.0 if is_trip else 0.0), True
+
         if ep_type == ElectricalEpisodeType.CURRENT_IMBALANCE:
             val = derived.current_magnitude_imbalance_pct
             if val is None or not math.isfinite(val):
@@ -471,7 +492,9 @@ class ElectricalEpisodeEngine:
 
     def _get_category(self, ep_type: ElectricalEpisodeType) -> AnomalyCategory:
         """Map episode type to canonical operator category."""
-        if ep_type in (ElectricalEpisodeType.CURRENT_IMBALANCE, ElectricalEpisodeType.NEUTRAL_CURRENT_RATIO):
+        if ep_type == ElectricalEpisodeType.PROTECTION_TRIP:
+            return AnomalyCategory.PROTECTION_OR_OIL_STATUS
+        elif ep_type in (ElectricalEpisodeType.CURRENT_IMBALANCE, ElectricalEpisodeType.NEUTRAL_CURRENT_RATIO):
             return AnomalyCategory.PHASE_OR_NEUTRAL
         elif ep_type in (ElectricalEpisodeType.VOLTAGE_IMBALANCE, ElectricalEpisodeType.LOW_POWER_FACTOR):
             return AnomalyCategory.VOLTAGE_PF_FREQUENCY
@@ -494,7 +517,9 @@ class ElectricalEpisodeEngine:
     ) -> str:
         """Generate deterministic human-readable reason string."""
         sev_str = severity.value
-        if ep_type == ElectricalEpisodeType.CURRENT_IMBALANCE:
+        if ep_type == ElectricalEpisodeType.PROTECTION_TRIP:
+            return f"{sev_str}: Direct hardware protection relay trip contact operated."
+        elif ep_type == ElectricalEpisodeType.CURRENT_IMBALANCE:
             return f"{sev_str}: Three-phase current magnitude unbalance reached {val:.1f}% (NEMA limit exceeded)."
         elif ep_type == ElectricalEpisodeType.VOLTAGE_IMBALANCE:
             return f"{sev_str}: Three-phase voltage magnitude unbalance reached {val:.2f}%."
@@ -508,7 +533,9 @@ class ElectricalEpisodeEngine:
 
     def _get_hypotheses(self, ep_type: ElectricalEpisodeType) -> List[str]:
         """Generate non-assertive candidate hypotheses."""
-        if ep_type == ElectricalEpisodeType.CURRENT_IMBALANCE:
+        if ep_type == ElectricalEpisodeType.PROTECTION_TRIP:
+            return ["TRIP_RELAY_CONTACT_CLOSED", "TRANSFORMER_ISOLATED", "DIRECT_PROTECTION_DISCRETE"]
+        elif ep_type == ElectricalEpisodeType.CURRENT_IMBALANCE:
             return ["UNBALANCED_SINGLE_PHASE_LOADS", "LOOSE_TERMINAL_CONNECTION", "ASYMMETRIC_FEEDER_DEMAND"]
         elif ep_type == ElectricalEpisodeType.VOLTAGE_IMBALANCE:
             return ["GRID_SUPPLY_UNBALANCE", "UPSTREAM_PHASE_REGULATION_MISMATCH", "UNBALANCED_LINE_IMPEDANCE"]
@@ -562,6 +589,16 @@ class ElectricalEpisodeEngine:
             reason_codes=[f"{ep_type.value}_{severity_enum.value}"],
             hypothesis_codes=self._get_hypotheses(ep_type),
         )
+
+    def reset(self) -> None:
+        """Reset all stateful episode accumulators to clean initial baseline."""
+        self.active_episodes.clear()
+        self.closed_episodes.clear()
+        self.recurrence_counts.clear()
+        self.persistence_timers.clear()
+        self.recovery_timers.clear()
+        self.evidence_counters.clear()
+        self.last_event_time_utc = None
 
     # -----------------------------------------------------------------------
     # State Inspection & Checkpoint Synchronization

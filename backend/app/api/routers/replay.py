@@ -109,8 +109,7 @@ def _restart_reducer(app_state: AppState, reducer: TwinReducer, target_asset: st
         except TypeError:
             app_state.reducer = app_state.reducer_factory()
         return app_state.reducer
-    if reducer.thermal_gate is not None:
-        reducer.thermal_gate.reset()
+    reducer.reset()
     return reducer
 
 

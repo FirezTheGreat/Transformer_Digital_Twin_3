@@ -76,12 +76,20 @@ async def get_asset_episodes(
     app_state: AppState = Depends(get_app_state),
 ) -> List[AnomalyEpisode]:
     """Fetch active and recovering anomaly episodes for the target asset."""
-    episodes: List[AnomalyEpisode] = []
+    ep_map: dict[str, AnomalyEpisode] = {}
     if (
         app_state.current_state is not None
         and app_state.current_state.asset_id == asset_id
     ):
-        episodes = list(app_state.current_state.open_episodes)
+        for ep in app_state.current_state.open_episodes:
+            ep_map[ep.episode_id] = ep
+
+    if app_state.reducer and app_state.reducer.episode_engine:
+        for c_ep in app_state.reducer.episode_engine.get_closed_episodes():
+            if c_ep.asset_id == asset_id:
+                ep_map[c_ep.episode_id] = c_ep.to_anomaly_episode()
+
+    episodes = list(ep_map.values())
 
     # Apply category filter
     if category is not None:
@@ -90,10 +98,17 @@ async def get_asset_episodes(
     # Apply state filter
     if state_filter is not None:
         clean_state = state_filter.upper().strip()
-        episodes = [
-            ep for ep in episodes
-            if (ep.state.value if hasattr(ep.state, "value") else str(ep.state)).upper() == clean_state
-        ]
+        if clean_state != "ALL":
+            episodes = [
+                ep for ep in episodes
+                if (ep.state.value if hasattr(ep.state, "value") else str(ep.state)).upper() == clean_state
+            ]
+
+    # Chronological sort: newest last_seen or start_time first
+    episodes.sort(
+        key=lambda e: e.last_seen_time_utc if e.last_seen_time_utc is not None else e.start_time_utc,
+        reverse=True,
+    )
 
     return episodes[:limit]
 

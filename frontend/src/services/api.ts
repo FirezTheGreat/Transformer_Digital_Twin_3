@@ -294,6 +294,21 @@ export const api = {
     return handleResponse<OperatorFeedbackEvent>(res);
   },
 
+  // Operator Feedback History
+  async getFeedback(params?: {
+    assetId?: string;
+    recommendationId?: string;
+    action?: string;
+  }): Promise<OperatorFeedbackEvent[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.assetId) searchParams.append('asset_id', params.assetId);
+    if (params?.recommendationId) searchParams.append('recommendation_id', params.recommendationId);
+    if (params?.action) searchParams.append('action', params.action);
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const res = await fetch(`${API_BASE}/v1/feedback${query}`);
+    return handleResponse<OperatorFeedbackEvent[]>(res);
+  },
+
   // Persisted Checkpoint Runs & Reports
   async createCheckpoint(assetId?: string): Promise<CheckpointRunRecord> {
     const searchParams = new URLSearchParams();

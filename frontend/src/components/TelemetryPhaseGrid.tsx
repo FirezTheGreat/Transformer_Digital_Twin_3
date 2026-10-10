@@ -1,17 +1,43 @@
 import React from 'react';
 import { Gauge, Zap, Activity } from 'lucide-react';
-import { TwinState, CapabilityManifest } from '../types/contracts';
+import { TwinState, CapabilityManifest, CanonicalEvent } from '../types/contracts';
 import { getAssetContext } from '../utils/assetContext';
 
 interface TelemetryPhaseGridProps {
   twinState: TwinState | null;
   capabilities: CapabilityManifest | null;
   assetId?: string;
+  latestEvent?: CanonicalEvent | null;
 }
 
-/** Display-only number formatting: fixed decimals per unit; non-numbers pass through unchanged. */
-const fmt = (v: unknown, decimals: number): string =>
-  typeof v === 'number' ? v.toFixed(decimals) : String(v);
+/** Robust signal value extractor: checks current_observations map first, then falls back to event measurements */
+const extractSignal = (
+  obs: Record<string, { value: unknown } | undefined>,
+  signalKeys: string[],
+  fallbackMeas?: Array<{ signal_id: string; value: unknown }>
+): number | null => {
+  for (const k of signalKeys) {
+    const item = obs[k];
+    if (item && item.value !== undefined && item.value !== null) {
+      const num = typeof item.value === 'number' ? item.value : Number(item.value);
+      if (!Number.isNaN(num)) return num;
+    }
+  }
+  if (fallbackMeas && fallbackMeas.length > 0) {
+    for (const k of signalKeys) {
+      const m = fallbackMeas.find((x) => x.signal_id === k);
+      if (m && m.value !== undefined && m.value !== null) {
+        const num = typeof m.value === 'number' ? m.value : Number(m.value);
+        if (!Number.isNaN(num)) return num;
+      }
+    }
+  }
+  return null;
+};
+
+/** Display-only number formatting: fixed decimals for numbers; '—' for missing/unavailable */
+const fmt = (v: number | null | undefined, decimals: number): string =>
+  typeof v === 'number' && !Number.isNaN(v) ? v.toFixed(decimals) : '—';
 
 /** Presentational row: label · value · unit. */
 const ReadingRow: React.FC<{ tag: string; label: string; value: string; unit?: string; tone?: string }> = ({
@@ -27,8 +53,8 @@ const ReadingRow: React.FC<{ tag: string; label: string; value: string; unit?: s
       <span className="truncate">{label}</span>
     </span>
     <span className="flex items-baseline gap-1.5 flex-shrink-0">
-      <span className={`metric-compact text-[23px] ${tone}`}>{value}</span>
-      <span className="metric-unit text-[11.5px] w-9 text-left">{unit ?? ''}</span>
+      <span className={`metric-compact text-[23px] ${value === '—' ? 'text-faint font-normal' : tone}`}>{value}</span>
+      <span className="metric-unit text-[11.5px] w-9 text-left">{value === '—' ? '' : (unit ?? '')}</span>
     </span>
   </div>
 );
@@ -37,25 +63,30 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
   twinState,
   capabilities,
   assetId,
+  latestEvent,
 }) => {
   const currentAsset = assetId || twinState?.asset_id || '';
   const assetCtx = getAssetContext(currentAsset);
   const obs = twinState?.current_observations ?? {};
   const derived = twinState?.derived_electrical;
+  const meas = latestEvent?.measurements;
 
-  const vr = obs['voltage_l1_n']?.value ?? obs['voltage_v1']?.value ?? 231.5;
-  const vy = obs['voltage_l2_n']?.value ?? obs['voltage_v2']?.value ?? 229.8;
-  const vb = obs['voltage_l3_n']?.value ?? obs['voltage_v3']?.value ?? 230.2;
+  // Phase Voltages (L-N): standard keys + raw SCADA aliases
+  const vr = extractSignal(obs, ['voltage_l1_n', 'voltage_v1', 'voltage_v1_L1', 'VL1'], meas);
+  const vy = extractSignal(obs, ['voltage_l2_n', 'voltage_v2', 'voltage_v2_L2', 'VL2'], meas);
+  const vb = extractSignal(obs, ['voltage_l3_n', 'voltage_v3', 'voltage_v3_L3', 'VL3'], meas);
 
-  const ir = obs['current_l1']?.value ?? obs['current_i1']?.value ?? 115.4;
-  const iy = obs['current_l2']?.value ?? 112.1;
-  const ib = obs['current_l3']?.value ?? 110.8;
-  const in_val = obs['neutral_current']?.value ?? 4.6;
+  // Phase Currents: check canonical current_l1/l2/l3 AND current_i1/i2/i3, plus aliases
+  const ir = extractSignal(obs, ['current_l1', 'current_i1', 'current_i1_L1', 'current_a', 'IL1'], meas);
+  const iy = extractSignal(obs, ['current_l2', 'current_i2', 'current_i2_L2', 'current_b', 'IL2'], meas);
+  const ib = extractSignal(obs, ['current_l3', 'current_i3', 'current_i3_L3', 'current_c', 'IL3'], meas);
+  const in_val = extractSignal(obs, ['neutral_current', 'current_in', 'current_n', 'INUT'], meas);
 
-  const p_tot = obs['active_power_total']?.value ?? 74.2;
-  const q_tot = obs['reactive_power_total']?.value ?? 24.1;
-  const freq = obs['frequency']?.value ?? 50.02;
-  const pf = derived?.power_factor_derived ?? 0.951;
+  // Power & Grid Quality
+  const p_tot = extractSignal(obs, ['active_power_total', 'active_power', 'KW'], meas);
+  const q_tot = extractSignal(obs, ['reactive_power_total', 'reactive_power', 'KVAR'], meas);
+  const freq = extractSignal(obs, ['frequency', 'FRQ'], meas);
+  const pf = derived?.power_factor_derived ?? extractSignal(obs, ['power_factor_total', 'power_factor_avg', 'Avg_PF'], meas);
 
   const panelHeader = (title: string, icon: React.ReactNode) => (
     <div className="flex items-center justify-between pb-3 border-b border-line">
@@ -83,7 +114,12 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
             <ReadingRow tag="L2" label="Phase Y" value={fmt(vy, 1)} unit="V" />
             <ReadingRow tag="L3" label="Phase B" value={fmt(vb, 1)} unit="V" />
           </div>
-          {panelFooter('Voltage Imbalance', `${derived?.voltage_magnitude_imbalance_pct?.toFixed(2) ?? '0.43'}%`)}
+          {panelFooter(
+            'Voltage Imbalance',
+            derived?.voltage_magnitude_imbalance_pct !== undefined && derived?.voltage_magnitude_imbalance_pct !== null
+              ? `${derived.voltage_magnitude_imbalance_pct.toFixed(2)}%`
+              : '—'
+          )}
         </div>
 
         {/* Panel 2: Phase Currents */}
@@ -94,7 +130,12 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
             <ReadingRow tag="I_Y" label="Current Y" value={fmt(iy, 1)} unit="A" />
             <ReadingRow tag="I_B" label="Current B" value={fmt(ib, 1)} unit="A" />
           </div>
-          {panelFooter('Current Imbalance', `${derived?.current_magnitude_imbalance_pct?.toFixed(2) ?? '2.33'}%`)}
+          {panelFooter(
+            'Current Imbalance',
+            derived?.current_magnitude_imbalance_pct !== undefined && derived?.current_magnitude_imbalance_pct !== null
+              ? `${derived.current_magnitude_imbalance_pct.toFixed(2)}%`
+              : '—'
+          )}
         </div>
 
         {/* Panel 3: Neutral & Power Factor */}
@@ -102,10 +143,15 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
           {panelHeader('Neutral & Grid Quality', <Activity className="w-3.5 h-3.5" strokeWidth={1.75} />)}
           <div className="py-2">
             <ReadingRow tag="I_N" label="Neutral Current" value={fmt(in_val, 1)} unit="A" />
-            <ReadingRow tag="PF" label="Power Factor" value={Number(pf).toFixed(3)} />
+            <ReadingRow tag="PF" label="Power Factor" value={typeof pf === 'number' ? pf.toFixed(3) : '—'} />
             <ReadingRow tag="f" label="Frequency" value={fmt(freq, 2)} unit="Hz" />
           </div>
-          {panelFooter('Neutral Ratio', `${((derived?.neutral_current_ratio ?? 0.041) * 100).toFixed(1)}%`)}
+          {panelFooter(
+            'Neutral Ratio',
+            derived?.neutral_current_ratio !== undefined && derived?.neutral_current_ratio !== null
+              ? `${(derived.neutral_current_ratio * 100).toFixed(1)}%`
+              : '—'
+          )}
         </div>
 
         {/* Panel 4: Power Summary */}
@@ -114,7 +160,16 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
           <div className="py-2">
             <ReadingRow tag="P" label="Active Power" value={fmt(p_tot, 1)} unit="kW" />
             <ReadingRow tag="Q" label="Reactive Power" value={fmt(q_tot, 1)} unit="kvar" />
-            <ReadingRow tag="u" label="Relative Load" value={Number(derived?.relative_load_index ?? 0.78).toFixed(2)} unit="rel. u" />
+            <ReadingRow
+              tag="u"
+              label="Relative Load"
+              value={
+                typeof derived?.relative_load_index === 'number'
+                  ? derived.relative_load_index.toFixed(2)
+                  : '—'
+              }
+              unit="rel. u"
+            />
           </div>
           {panelFooter('Sampling', `${assetCtx.cadenceSeconds}s (${assetCtx.cadenceLabel})`)}
         </div>

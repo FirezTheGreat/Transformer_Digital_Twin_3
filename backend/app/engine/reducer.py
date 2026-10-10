@@ -102,6 +102,14 @@ class TwinReducer:
         self.review_engine = review_engine
         self.latest_emitted_evidence: list[EvidenceItem] = []
 
+    def reset(self) -> None:
+        """Reset internal stateful sub-engines (episode engine, thermal gate)."""
+        if self.episode_engine is not None and hasattr(self.episode_engine, "reset"):
+            self.episode_engine.reset()
+        if self.thermal_gate is not None and hasattr(self.thermal_gate, "reset"):
+            self.thermal_gate.reset()
+        self.latest_emitted_evidence = []
+
     def reduce(
         self,
         current_state: TwinState | None,

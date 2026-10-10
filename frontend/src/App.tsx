@@ -49,6 +49,7 @@ export default function App(): React.ReactElement {
   const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(null);
 
   const [historyEvents, setHistoryEvents] = useState<CanonicalEvent[]>([]);
+  const [healthHistory, setHealthHistory] = useState<Array<{ health: OTHIBundle; recommendations: MaintenanceRecommendation[] }>>([]);
   const [modelCard, setModelCard] = useState<ModelCardData | null>(null);
   const [resetCount, setResetCount] = useState<number>(0);
 
@@ -93,12 +94,26 @@ export default function App(): React.ReactElement {
     }
     setTwinState(data.twin_state ?? null);
     if (data.fact_bundle) {
-      setHealth(data.fact_bundle.health ?? null);
-      setRecommendations(data.fact_bundle.active_recommendations ?? []);
+      const currentHealth = data.fact_bundle.health ?? null;
+      const recs = data.fact_bundle.active_recommendations ?? [];
+      setHealth(currentHealth);
+      setRecommendations(recs);
       setEpisodes(data.fact_bundle.open_episodes ?? []);
       setActiveReviews(data.fact_bundle.active_reviews ?? data.twin_state?.active_reviews ?? []);
       if (data.fact_bundle.capabilities) {
         setCapabilities(data.fact_bundle.capabilities);
+      }
+      if (currentHealth && typeof currentHealth.othi_score === 'number') {
+        setHealthHistory((prev) => {
+          if (
+            prev.length > 0 &&
+            prev[prev.length - 1].health.timestamp_utc === currentHealth.timestamp_utc &&
+            prev[prev.length - 1].health.othi_score === currentHealth.othi_score
+          ) {
+            return prev;
+          }
+          return [...prev, { health: currentHealth, recommendations: recs }];
+        });
       }
     } else {
       setHealth(null);
@@ -378,6 +393,7 @@ export default function App(): React.ReactElement {
     setActiveReviews([]);
     setCapabilities(null);
     setHistoryEvents([]);
+    setHealthHistory([]);
     try {
       const res = await api.controlReplay({
         action: 'reset',
@@ -403,6 +419,7 @@ export default function App(): React.ReactElement {
     setActiveReviews([]);
     setCapabilities(null);
     setHistoryEvents([]);
+    setHealthHistory([]);
     setModelCard(null);
     setAssetId(newAssetId);
     try {
@@ -554,6 +571,7 @@ export default function App(): React.ReactElement {
           : r
       )
     );
+    loadState(assetId);
     showToast(`Recommendation ${actionChosen} committed to immutable audit ledger.`);
   };
 
@@ -667,6 +685,7 @@ export default function App(): React.ReactElement {
         {/* View 3: Anomaly Timeline */}
         {activeTab === 'anomalies' && (
           <AnomalyTimelineView
+            assetId={assetId}
             episodes={episodes}
             twinState={twinState}
             onSeedTripData={handleSeedTripData}
@@ -677,8 +696,11 @@ export default function App(): React.ReactElement {
         {/* View 4: Maintenance Advisories */}
         {activeTab === 'maintenance' && (
           <MaintenanceView
+            assetId={assetId}
             recommendations={recommendations}
+            episodes={episodes}
             activeReviews={activeReviews}
+            healthHistory={healthHistory}
             onOpenFeedback={(rec) => setSelectedRecForFeedback(rec)}
             onAcknowledgeReview={handleAcknowledgeReview}
             onDismissReview={handleDismissReview}
@@ -697,7 +719,11 @@ export default function App(): React.ReactElement {
 
         {/* View 6: Historical Performance & Run Reports */}
         {activeTab === 'historical' && (
-          <HistoricalPerformanceView assetId={assetId} />
+          <HistoricalPerformanceView
+            assetId={assetId}
+            replayStatus={replayStatus}
+            twinState={twinState}
+          />
         )}
 
         {/* View 7: Data & Model Card */}

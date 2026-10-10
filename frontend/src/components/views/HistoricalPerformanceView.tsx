@@ -449,6 +449,12 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
+                  <span className="text-muted">Target Asset &amp; Dataset:</span>
+                  <span className="font-mono font-medium text-ink">
+                    {selectedRun.asset_id} · {getAssetContext(selectedRun.asset_id).datasetLabel}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
                   <span className="text-muted">Sequence:</span>
                   <span className="font-mono font-medium text-ink">#{selectedRun.state_sequence}</span>
                 </div>
@@ -457,7 +463,7 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
                   <span className="font-mono text-ink">{formatUtcTime(selectedRun.state_time_utc)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-muted">Data Range Included:</span>
+                  <span className="text-muted">Replay Watermark:</span>
                   <span className="font-mono text-ink text-[11px]">
                     Events up to {selectedRun.last_processed_event_id || 'initial'}
                   </span>
@@ -473,8 +479,33 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
                     {selectedRun.state_hash ? `${selectedRun.state_hash.slice(0, 16)}...` : 'Computed'}
                   </span>
                 </div>
+                <div className="mt-2 p-2 rounded bg-surface-2 border border-line text-[11px] text-muted">
+                  <p>
+                    <strong className="text-ink">Provenance Guarantee:</strong> Checkpoints capture immutable state vectors. Checkpoint persistence does not modify or prove model promotion status.
+                  </p>
+                </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="py-4 space-y-2 text-xs border-b border-line">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Current State:</span>
+                  <span className="font-mono text-ink">Live Unpersisted In-Memory State</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Target Asset:</span>
+                  <span className="font-mono text-ink">{assetId} ({assetCtx.datasetLabel})</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted">Replay Watermark:</span>
+                  <span className="font-mono text-ink">
+                    {twinState?.event_time_watermark_utc ? formatUtcTime(twinState.event_time_watermark_utc) : 'Awaiting start'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted mt-1">
+                  Click <em>Save Checkpoint</em> above to persist the current active state to DuckDB.
+                </p>
+              </div>
+            )}
 
             {/* Export Format Actions */}
             <div className="pt-4 space-y-3">

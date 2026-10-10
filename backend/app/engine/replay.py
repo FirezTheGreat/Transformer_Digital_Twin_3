@@ -216,11 +216,14 @@ class ReplayEngine:
         self._is_running = False
         self._is_paused = False
 
-    def reset(self) -> None:
+    def reset(self, clear_time_bounds: bool = False) -> None:
         """Reset replay cursor to the beginning of the selected range."""
         self._cursor = 0
         self._is_running = False
         self._is_paused = False
+        if clear_time_bounds:
+            self.start_time = None
+            self.end_time = None
 
     def seek(self, index: int) -> None:
         """Seek cursor to a specific event index."""
@@ -246,7 +249,7 @@ class ReplayEngine:
             "remaining_events": max(0, len(self._events) - self._cursor),
             "is_running": self._is_running,
             "is_paused": self._is_paused,
-            "is_finished": self._cursor >= len(self._events),
+            "is_finished": len(self._events) > 0 and self._cursor >= len(self._events),
             "current_event_id": current_ev.event_id if current_ev else None,
             "current_event_time": current_ev.event_time_utc.isoformat() if current_ev else None,
             "speed_multiplier": self.speed_multiplier,

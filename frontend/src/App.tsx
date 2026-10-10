@@ -39,6 +39,8 @@ export default function App(): React.ReactElement {
   const [replayStatus, setReplayStatus] = useState<ReplayStatusResponse | null>(null);
   const [speedMultiplier, setSpeedMultiplier] = useState<number>(1);
   const isSteppingRef = useRef<boolean>(false);
+  const activeAssetIdRef = useRef<string>('');
+  const loadReqIdRef = useRef<number>(0);
 
   // Core Twin State (begins unseeded / ready)
   const [twinState, setTwinState] = useState<TwinState | null>(null);
@@ -125,6 +127,8 @@ export default function App(): React.ReactElement {
   }, []);
 
   const loadState = useCallback(async (currentAssetId: string, overrideStatus?: ReplayStatusResponse | null) => {
+    if (!currentAssetId) return;
+    const reqId = ++loadReqIdRef.current;
     setIsRefreshing(true);
     try {
       const [healthRes, stateRes, modelCardRes, replayStatusRes] = await Promise.allSettled([
@@ -133,6 +137,10 @@ export default function App(): React.ReactElement {
         api.getAssetModelCard(currentAssetId),
         api.getReplayStatus(),
       ]);
+
+      if (reqId !== loadReqIdRef.current || currentAssetId !== activeAssetIdRef.current) {
+        return;
+      }
 
       // 1. Process Health
       if (healthRes.status === 'fulfilled') {
@@ -206,6 +214,7 @@ export default function App(): React.ReactElement {
 
   useEffect(() => {
     if (!assetId) return;
+    activeAssetIdRef.current = assetId;
     loadState(assetId);
   }, [assetId, loadState]);
 
@@ -221,7 +230,7 @@ export default function App(): React.ReactElement {
         speed_multiplier: speedMultiplier,
       });
       setReplayStatus(res);
-      if (res.is_completed) {
+      if (res.is_completed && res.total_events > 0) {
         setIsPlaying(false);
         showToast('Dataset replay completed.');
       }
@@ -240,6 +249,7 @@ export default function App(): React.ReactElement {
         }).catch(() => {});
       }
     } catch (err: unknown) {
+      setIsPlaying(false);
       const msg = err instanceof Error ? err.message : 'Replay step failed';
       showToast(msg);
     } finally {
@@ -400,6 +410,7 @@ export default function App(): React.ReactElement {
         asset_id: assetId,
       });
       setReplayStatus(res);
+      await loadState(assetId, res);
       showToast('Digital Twin reset to initial state.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Reset failed';
@@ -410,6 +421,7 @@ export default function App(): React.ReactElement {
   // 7.5. Switch Asset with Complete State Isolation
   const handleAssetChange = async (newAssetId: string) => {
     if (newAssetId === assetId) return;
+    activeAssetIdRef.current = newAssetId;
     setIsPlaying(false);
     setIsTwinStarted(false);
     setTwinState(null);
@@ -451,9 +463,17 @@ export default function App(): React.ReactElement {
   const handleSeedTripData = async () => {
     setIsSeeding(true);
     try {
-      const eventTime = twinState?.event_time_watermark_utc
-        ? new Date(new Date(twinState.event_time_watermark_utc).getTime() + 1000).toISOString()
-        : new Date().toISOString();
+      const assetCtx = getAssetContext(assetId);
+      const cadenceMs = (assetCtx.cadenceSeconds || 1800) * 1000;
+      let eventTime: string;
+      const wm = twinState?.event_time_watermark_utc || replayStatus?.current_time_utc;
+      if (wm && new Date(wm).getTime() > 0) {
+        eventTime = new Date(new Date(wm).getTime() + cadenceMs).toISOString();
+      } else {
+        eventTime = replayStatus?.current_time_utc
+          ? new Date(replayStatus.current_time_utc).toISOString()
+          : new Date().toISOString();
+      }
 
       const tripEvent = {
         schema_version: '1.0.0',
@@ -487,6 +507,36 @@ export default function App(): React.ReactElement {
             original_value: '98.4',
             original_unit: 'degC',
             quality: { severity: 'BAD' as const, flags: ['CRITICAL_LIMIT'] },
+          },
+          {
+            signal_id: 'current_i1',
+            value: 0.0,
+            value_type: 'float' as const,
+            unit_ucum: 'A',
+            original_name: 'I_R',
+            original_value: '0.0',
+            original_unit: 'A',
+            quality: { severity: 'GOOD' as const, flags: [] },
+          },
+          {
+            signal_id: 'current_i2',
+            value: 0.0,
+            value_type: 'float' as const,
+            unit_ucum: 'A',
+            original_name: 'I_Y',
+            original_value: '0.0',
+            original_unit: 'A',
+            quality: { severity: 'GOOD' as const, flags: [] },
+          },
+          {
+            signal_id: 'current_i3',
+            value: 0.0,
+            value_type: 'float' as const,
+            unit_ucum: 'A',
+            original_name: 'I_B',
+            original_value: '0.0',
+            original_unit: 'A',
+            quality: { severity: 'GOOD' as const, flags: [] },
           },
           {
             signal_id: 'current_l1',
@@ -548,6 +598,16 @@ export default function App(): React.ReactElement {
             original_unit: 'kVA',
             quality: { severity: 'GOOD' as const, flags: [] },
           },
+          {
+            signal_id: 'lv_breaker_closed',
+            value: false,
+            value_type: 'bool' as const,
+            unit_ucum: '1',
+            original_name: '52A_STATUS',
+            original_value: '0',
+            original_unit: 'binary',
+            quality: { severity: 'GOOD' as const, flags: ['BREAKER_TRIPPED'] },
+          },
         ],
         event_quality_flags: ['PROTECTION_TRIP_ACTIVE'],
         mapping_version: '1.0.0',
@@ -558,7 +618,7 @@ export default function App(): React.ReactElement {
         events: [tripEvent],
       });
 
-      showToast('Discrete Protection Trip Injected: CRITICAL Escalation triggered!');
+      showToast('Protection Trip Injected: Breaker opened (current = 0 A), OTI_T latched (OTHI = 0 / CRITICAL). Operator clearance required.');
       await loadState(assetId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Trip injection failed';

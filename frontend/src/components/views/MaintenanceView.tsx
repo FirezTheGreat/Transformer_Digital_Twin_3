@@ -733,7 +733,15 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({
                     className="bg-surface border border-line rounded p-3 space-y-2 text-xs"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-text text-xs">{rev.condition_family}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-text text-xs">{rev.condition_family}</span>
+                        <span className="badge badge-neutral text-[10px] font-mono">
+                          {rev.condition}
+                        </span>
+                        <span className="badge badge-neutral text-[10px] font-mono">
+                          Obs: {rev.observability}
+                        </span>
+                      </div>
                       <span className="badge badge-warn text-[10px] font-mono">
                         {rev.workflow_state}
                       </span>
@@ -743,9 +751,19 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({
                       {rev.rationale || `Condition: ${rev.condition} · Target: ${rev.target}`}
                     </p>
 
-                    <div className="flex items-center justify-between pt-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted font-mono pt-0.5">
+                      <span>Event Time: {formatUtcTime(rev.created_event_time_utc)}</span>
+                      {rev.last_updated_event_time_utc && rev.last_updated_event_time_utc !== rev.created_event_time_utc && (
+                        <span>· Updated: {formatUtcTime(rev.last_updated_event_time_utc)}</span>
+                      )}
+                      {rev.supporting_evidence_ids && rev.supporting_evidence_ids.length > 0 && (
+                        <span>· Evidence: {rev.supporting_evidence_ids.join(', ')}</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-line/60">
                       <span className="text-[10px] text-muted font-mono">
-                        Rev #{rev.revision} · {rev.lifecycle_state}
+                        Lifecycle: <strong className="text-text">{rev.lifecycle_state}</strong> · Rev #{rev.revision}
                       </span>
 
                       <div className="flex items-center gap-1.5">

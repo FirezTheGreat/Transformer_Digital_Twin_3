@@ -159,6 +159,12 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
                       <span className="text-[10px] font-mono text-muted">
                         Rule: {rec.rule_id}
                       </span>
+
+                      {rec.created_at_utc && (
+                        <span className="text-[10px] font-mono text-muted">
+                          · Detected: {formatUtcTime(rec.created_at_utc)}
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-right">
@@ -181,6 +187,11 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
 
                     <div className="mt-2 text-[10px] text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span>Ref: <span className="text-ink-2 font-medium">{rec.source_reference}</span></span>
+                      {rec.evidence_ids && rec.evidence_ids.length > 0 && (
+                        <span className="font-mono text-faint">
+                          · Corroborating Evidence: {rec.evidence_ids.join(', ')}
+                        </span>
+                      )}
                     </div>
                   </div>
 

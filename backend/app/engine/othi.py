@@ -82,7 +82,14 @@ DOMAIN_SIGNAL_MAPPING: Dict[str, Set[str]] = {
     "oil_protection": {
         "top_oil_temp_trip",
         "top_oil_temp_alarm",
+        "oil_temp_trip_flag",
+        "oil_temp_alarm_flag",
+        "oti_t",
+        "oti_a",
         "breaker_trip",
+        "buchholz_trip",
+        "buchholz_alarm",
+        "lv_breaker_closed",
         "magnetic_oil_gauge_alarm",
         "oil_level_percent",
         "oil_level_pct",
@@ -262,6 +269,11 @@ class OTHIEngine:
         domain_signals = DOMAIN_SIGNAL_MAPPING.get(domain, set())
         has_current_signals = bool(domain_signals.intersection(present_signals))
 
+        # Direct protection trip makes oil_protection domain active, current, and decisive
+        if domain == "oil_protection" and self.latched_protection_trip:
+            self.last_valid_time_by_domain[domain] = current_time
+            return DomainFreshness.CURRENT, current_time
+
         if has_current_signals:
             self.last_valid_time_by_domain[domain] = current_time
             return DomainFreshness.CURRENT, current_time
@@ -307,19 +319,32 @@ class OTHIEngine:
         # 1. Identify present good/usable signals in this event
         present_signals: Set[str] = set()
         for m in event.measurements:
-            if m.quality.severity != QualitySeverity.BAD:
+            is_direct_trip = "DIRECT_TRIP" in (m.quality.flags if m.quality else [])
+            if m.quality.severity != QualitySeverity.BAD or is_direct_trip:
                 present_signals.add(m.signal_id)
 
         # 2. Check for latched protection trip and lifecycle
         current_trip_active = False
         trip_signals_present = False
         for m in event.measurements:
-            if m.signal_id in ("top_oil_temp_trip", "breaker_trip") and m.quality.severity != QualitySeverity.BAD:
+            s_id = m.signal_id.lower()
+            flags = m.quality.flags if m.quality else []
+            if s_id in (
+                "top_oil_temp_trip",
+                "breaker_trip",
+                "oil_temp_trip_flag",
+                "oti_t",
+                "buchholz_trip",
+            ) or "DIRECT_TRIP" in flags:
                 trip_signals_present = True
                 val = m.value
                 if val is True or val == 1 or str(val).lower() in ("true", "1", "trip", "tripped"):
                     current_trip_active = True
                     self.latched_protection_trip = True
+
+        if "PROTECTION_TRIP_ACTIVE" in (event.event_quality_flags or []):
+            current_trip_active = True
+            self.latched_protection_trip = True
 
         # Unlatch condition:
         # Trip was previously latched, current frame explicitly does NOT have an active trip,

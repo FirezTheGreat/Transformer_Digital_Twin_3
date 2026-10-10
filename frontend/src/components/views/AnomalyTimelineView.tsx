@@ -13,6 +13,7 @@ import {
 
 import { AnomalyEpisode, TwinState } from '../../types/contracts';
 import { api } from '../../services/api';
+import { getAssetContext } from '../../utils/assetContext';
 
 interface AnomalyTimelineViewProps {
   assetId?: string;
@@ -31,7 +32,7 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
 }) => {
   const assetId = propAssetId || twinState?.asset_id || '';
   const [showDetectorMath, setShowDetectorMath] = useState<boolean>(false);
-  const isCusumQualified = twinState?.asset_id === 'TX_1000_COMM';
+  const isCusumQualified = getAssetContext(assetId).promotionStatus === 'PROMOTED';
 
   // API and fetch lifecycle states
   const [remoteEpisodes, setRemoteEpisodes] = useState<AnomalyEpisode[] | null>(null);

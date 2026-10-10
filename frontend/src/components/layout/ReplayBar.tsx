@@ -140,7 +140,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
                   <span>{assetContext.isCandidate ? 'Promoted Candidate' : 'Promoted Baseline'}</span>
                 </>
               ) : (
-                <span>Unpromoted Candidate</span>
+                <span>{assetContext.isCandidate ? 'Unpromoted Candidate' : 'Unpromoted Baseline'}</span>
               )}
             </span>
           </div>

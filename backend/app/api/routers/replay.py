@@ -182,7 +182,7 @@ def _build_status_response(
         speed_multiplier=progress["speed_multiplier"],
         processed_events=progress["cursor"],
         total_events=progress["total_events"],
-        is_completed=progress["is_finished"],
+        is_completed=progress["is_finished"] and progress["total_events"] > 0,
         current_state_sequence=current_state.state_sequence if current_state else None,
         highest_tier=highest_tier,
     )
@@ -233,6 +233,8 @@ async def control_replay(
 
     # If asset changed, reload dataset and reinitialize reducer & capability evaluator
     if payload.asset_id and payload.asset_id != replay_engine.asset_id:
+        replay_engine.start_time = payload.start_time_utc
+        replay_engine.end_time = payload.end_time_utc
         ensure_dataset_loaded(storage, replay_engine, target_asset)
         from app.api.deps import build_runtime_reducer
         from app.core.registry import resolve_asset_profile, resolve_model_artifact
@@ -258,7 +260,7 @@ async def control_replay(
         capability_evaluator = app_state.capability_evaluator
         app_state.current_state = None
         app_state.latest_fact_bundle = None
-        replay_engine.reset()
+        replay_engine.reset(clear_time_bounds=(payload.start_time_utc is None and payload.end_time_utc is None))
     elif not replay_engine._events and storage is not None:
         ensure_dataset_loaded(storage, replay_engine, target_asset)
 
@@ -293,7 +295,7 @@ async def control_replay(
         replay_engine._is_running = True
 
     elif action == "reset":
-        replay_engine.reset()
+        replay_engine.reset(clear_time_bounds=(payload.start_time_utc is None and payload.end_time_utc is None))
         app_state.current_state = None
         app_state.latest_fact_bundle = None
         reducer = _restart_reducer(app_state, reducer, target_asset=target_asset)

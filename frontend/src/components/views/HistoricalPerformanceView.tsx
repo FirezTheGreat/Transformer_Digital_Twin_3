@@ -46,6 +46,24 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
     }
   }, [assetId, selectedRunId]);
 
+  const [isSavingCheckpoint, setIsSavingCheckpoint] = useState<boolean>(false);
+
+  const handleSaveCheckpoint = async () => {
+    setIsSavingCheckpoint(true);
+    try {
+      const newChk = await api.createCheckpoint(assetId);
+      await fetchRuns();
+      if (newChk?.checkpoint_id) {
+        setSelectedRunId(newChk.checkpoint_id);
+      }
+    } catch (err) {
+      console.error('Failed to create checkpoint:', err);
+      setError('Failed to persist point-in-time checkpoint.');
+    } finally {
+      setIsSavingCheckpoint(false);
+    }
+  };
+
   useEffect(() => {
     fetchRuns();
   }, [fetchRuns]);
@@ -81,6 +99,15 @@ export const HistoricalPerformanceView: React.FC<HistoricalPerformanceViewProps>
 
         <div className="flex flex-wrap items-center gap-3">
           <UIHonestyBadge type="DEMO_DEFAULT" customText="Point-in-Time Snapshots" />
+          <button
+            onClick={handleSaveCheckpoint}
+            disabled={isSavingCheckpoint || isLoading}
+            className="btn-primary text-xs flex items-center gap-1.5 py-1.5 px-3"
+            title="Persist authoritative point-in-time state checkpoint"
+          >
+            <Database className={`w-3.5 h-3.5 ${isSavingCheckpoint ? 'animate-pulse text-accent' : ''}`} />
+            <span>{isSavingCheckpoint ? 'Saving...' : 'Save Checkpoint'}</span>
+          </button>
           <button
             onClick={fetchRuns}
             disabled={isLoading}

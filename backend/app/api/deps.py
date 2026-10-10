@@ -108,11 +108,14 @@ def build_default_model_artifact(
 def build_runtime_reducer(
     settings: Settings,
     feedback_ledger: OperatorFeedbackLedger | None = None,
+    asset_id: str | None = None,
+    storage: StorageEngine | None = None,
 ) -> TwinReducer:
     """Build a fully wired reducer for the configured asset (episodes, evidence, OTHI, exposure, maintenance).
 
     Thermal qualification comes from the asset's resolved artifact, so unpromoted models stay gated.
     """
+    from app.core.checkpoint import CheckpointStore
     from app.core.registry import resolve_asset_profile, resolve_model_artifact
     from app.engine.anomaly_detectors import MultiDomainAnomalyEngine
     from app.engine.electrical_episodes import ElectricalEpisodeEngine
@@ -122,20 +125,25 @@ def build_runtime_reducer(
     from app.engine.review import ReviewFlagEngine
     from app.engine.thermal_fallback import ThermalFallbackGate
 
-    asset_id = settings.default_asset_id
-    profile = resolve_asset_profile(asset_id=asset_id)
-    artifact = resolve_model_artifact(asset_id=asset_id)
+    target_asset = asset_id or settings.default_asset_id
+    profile = resolve_asset_profile(asset_id=target_asset)
+    artifact = resolve_model_artifact(asset_id=target_asset)
     thermal_gate = ThermalFallbackGate.from_artifact(artifact, nominal_cadence_s=profile.expected_cadence_s)
     qual = artifact.qualification if thermal_gate.is_model_promoted else None
+    ref_kva = profile.rated_kva if profile.rated_kva is not None else settings.load_reference_kva
+    chk_store = CheckpointStore(storage=storage) if storage is not None else None
+
     return TwinReducer(
         profile=profile,
-        load_reference_kva=settings.load_reference_kva,
-        episode_engine=ElectricalEpisodeEngine(asset_id=asset_id),
+        load_reference_kva=ref_kva,
+        checkpoint_cadence_events=10 if chk_store is not None else 0,
+        checkpoint_store=chk_store,
+        episode_engine=ElectricalEpisodeEngine(asset_id=target_asset),
         anomaly_engine=MultiDomainAnomalyEngine(
-            asset_id=asset_id, qualification=artifact.qualification, profile=profile
+            asset_id=target_asset, qualification=artifact.qualification, profile=profile
         ),
         othi_engine=OTHIEngine(expected_cadence_seconds=profile.expected_cadence_s),
-        exposure_engine=ThermalExposureEngine(asset_id=asset_id),
+        exposure_engine=ThermalExposureEngine(asset_id=target_asset),
         maintenance_engine=MaintenanceEngine(
             feedback_ledger=feedback_ledger,
             is_model_promoted=thermal_gate.is_model_promoted,
@@ -147,7 +155,7 @@ def build_runtime_reducer(
             else "DISABLED",
         ),
         thermal_gate=thermal_gate,
-        review_engine=ReviewFlagEngine(asset_id=asset_id),
+        review_engine=ReviewFlagEngine(asset_id=target_asset),
     )
 
 
@@ -212,22 +220,17 @@ def get_storage(state: AppState = Depends(get_app_state)) -> StorageEngine:
     return state.storage
 
 
-def get_reducer(state: AppState = Depends(get_app_state)) -> TwinReducer:
+def get_reducer(
+    state: AppState = Depends(get_app_state),
+    storage: StorageEngine = Depends(get_storage),
+) -> TwinReducer:
     """Provide TwinReducer dependency."""
     if state.reducer is None:
-        from app.core.registry import resolve_asset_profile, resolve_model_artifact
-        from app.engine.thermal_fallback import ThermalFallbackGate
-        asset_id = state.settings.default_asset_id
-        profile = state.profile or resolve_asset_profile(asset_id=asset_id)
-        artifact = state.model_artifact or resolve_model_artifact(asset_id=asset_id)
-        thermal_gate = ThermalFallbackGate.from_artifact(
-            artifact,
-            nominal_cadence_s=profile.expected_cadence_s,
-        )
-        state.reducer = TwinReducer(
-            profile=profile,
-            load_reference_kva=state.settings.load_reference_kva,
-            thermal_gate=thermal_gate,
+        state.reducer = build_runtime_reducer(
+            settings=state.settings,
+            feedback_ledger=state.feedback_ledger,
+            asset_id=state.settings.default_asset_id,
+            storage=storage,
         )
     return state.reducer
 

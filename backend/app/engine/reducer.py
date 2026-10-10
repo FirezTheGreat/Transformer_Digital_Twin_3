@@ -249,6 +249,7 @@ class TwinReducer:
                 event=event,
                 evidence_items=self.latest_emitted_evidence,
                 health_bundle=health_bundle,
+                previous_recommendations=current_state.active_recommendations if current_state is not None else [],
             )
         else:
             active_recommendations = (
@@ -357,7 +358,7 @@ class TwinReducer:
                 else:
                     new_recs.append(r)
             updated_recs = new_recs
-        elif action_val == "DISMISS":
+        elif action_val in ("DISMISS", "RESOLVE"):
             updated_recs = [
                 r for r in updated_recs
                 if not (

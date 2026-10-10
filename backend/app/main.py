@@ -116,8 +116,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             model_version=artifact.model_version if is_promoted else "uncalibrated",
         )
 
-        def reducer_factory() -> TwinReducer:
-            return build_runtime_reducer(settings, feedback_ledger)
+        def reducer_factory(asset_id: str | None = None) -> TwinReducer:
+            target = asset_id or (app_state.replay_engine.asset_id if app_state and app_state.replay_engine else settings.default_asset_id)
+            return build_runtime_reducer(settings, feedback_ledger, asset_id=target, storage=storage)
 
         reducer = reducer_factory()
         replay_engine = ReplayEngine(storage=storage, asset_id=settings.default_asset_id)

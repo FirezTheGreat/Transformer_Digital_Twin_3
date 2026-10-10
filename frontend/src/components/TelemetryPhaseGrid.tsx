@@ -1,10 +1,12 @@
 import React from 'react';
 import { Gauge, Zap, Activity } from 'lucide-react';
 import { TwinState, CapabilityManifest } from '../types/contracts';
+import { getAssetContext } from '../utils/assetContext';
 
 interface TelemetryPhaseGridProps {
   twinState: TwinState | null;
   capabilities: CapabilityManifest | null;
+  assetId?: string;
 }
 
 /** Display-only number formatting: fixed decimals per unit; non-numbers pass through unchanged. */
@@ -34,7 +36,10 @@ const ReadingRow: React.FC<{ tag: string; label: string; value: string; unit?: s
 export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
   twinState,
   capabilities,
+  assetId,
 }) => {
+  const currentAsset = assetId || twinState?.asset_id || '';
+  const assetCtx = getAssetContext(currentAsset);
   const obs = twinState?.current_observations ?? {};
   const derived = twinState?.derived_electrical;
 
@@ -111,7 +116,7 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
             <ReadingRow tag="Q" label="Reactive Power" value={fmt(q_tot, 1)} unit="kvar" />
             <ReadingRow tag="u" label="Relative Load" value={Number(derived?.relative_load_index ?? 0.78).toFixed(2)} unit="rel. u" />
           </div>
-          {panelFooter('Sampling', '900s (15 min)')}
+          {panelFooter('Sampling', `${assetCtx.cadenceSeconds}s (${assetCtx.cadenceLabel})`)}
         </div>
       </div>
 

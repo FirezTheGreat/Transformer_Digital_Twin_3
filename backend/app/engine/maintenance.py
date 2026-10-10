@@ -113,6 +113,7 @@ class MaintenanceEngine:
         evidence_items: Optional[Sequence[EvidenceItem]] = None,
         health_bundle: Optional[OTHIBundle] = None,
         scenario_projection: Optional[ScenarioProjectionResult] = None,
+        previous_recommendations: Optional[Sequence[MaintenanceRecommendation]] = None,
     ) -> List[MaintenanceRecommendation]:
         """Evaluate active telemetry, evidence, and projections against maintenance rules.
 
@@ -159,7 +160,7 @@ class MaintenanceEngine:
         # --- Rule 1: MNT-PROT-001 (P0 SAFETY / IMMEDIATE) ---
         if has_direct_trip and "MNT-PROT-001" in self.rules:
             r_cfg = self.rules["MNT-PROT-001"]
-            rec_id = f"REC-{event.asset_id}-MNT-PROT-001-{int(current_time.timestamp())}"
+            rec_id = f"REC-{event.asset_id}-MNT-PROT-001"
             fired_recommendations.append(
                 MaintenanceRecommendation(
                     recommendation_id=rec_id,
@@ -201,7 +202,7 @@ class MaintenanceEngine:
             ]
             if therm_evs:
                 r_cfg = self.rules["MNT-THERM-002"]
-                rec_id = f"REC-{event.asset_id}-MNT-THERM-002-{int(current_time.timestamp())}"
+                rec_id = f"REC-{event.asset_id}-MNT-THERM-002"
                 fired_recommendations.append(
                     MaintenanceRecommendation(
                         recommendation_id=rec_id,
@@ -257,7 +258,7 @@ class MaintenanceEngine:
             window = ActionWindow.WITHIN_24H if is_critical_or_early else ActionWindow.MONITOR
 
             r_cfg = self.rules["MNT-FORE-003"]
-            rec_id = f"REC-{event.asset_id}-MNT-FORE-003-{int(current_time.timestamp())}"
+            rec_id = f"REC-{event.asset_id}-MNT-FORE-003"
             fired_recommendations.append(
                 MaintenanceRecommendation(
                     recommendation_id=rec_id,
@@ -294,7 +295,7 @@ class MaintenanceEngine:
             ]
             if phase_evs:
                 r_cfg = self.rules["MNT-PHASE-004"]
-                rec_id = f"REC-{event.asset_id}-MNT-PHASE-004-{int(current_time.timestamp())}"
+                rec_id = f"REC-{event.asset_id}-MNT-PHASE-004"
                 fired_recommendations.append(
                     MaintenanceRecommendation(
                         recommendation_id=rec_id,
@@ -332,7 +333,7 @@ class MaintenanceEngine:
 
             if pf_evs:
                 r_cfg = self.rules["MNT-PF-005"]
-                rec_id = f"REC-{event.asset_id}-MNT-PF-005-{int(current_time.timestamp())}"
+                rec_id = f"REC-{event.asset_id}-MNT-PF-005"
                 fired_recommendations.append(
                     MaintenanceRecommendation(
                         recommendation_id=rec_id,
@@ -366,7 +367,7 @@ class MaintenanceEngine:
         ]
         if sens_evs and "MNT-SENS-006" in self.rules:
             r_cfg = self.rules["MNT-SENS-006"]
-            rec_id = f"REC-{event.asset_id}-MNT-SENS-006-{int(current_time.timestamp())}"
+            rec_id = f"REC-{event.asset_id}-MNT-SENS-006"
             fired_recommendations.append(
                 MaintenanceRecommendation(
                     recommendation_id=rec_id,
@@ -400,7 +401,7 @@ class MaintenanceEngine:
         ]
         if model_evs and "MNT-MODEL-007" in self.rules:
             r_cfg = self.rules["MNT-MODEL-007"]
-            rec_id = f"REC-{event.asset_id}-MNT-MODEL-007-{int(current_time.timestamp())}"
+            rec_id = f"REC-{event.asset_id}-MNT-MODEL-007"
             fired_recommendations.append(
                 MaintenanceRecommendation(
                     recommendation_id=rec_id,
@@ -426,6 +427,31 @@ class MaintenanceEngine:
                 )
             )
 
+        # Retain previously active recommendations that did not refire, or preserve metadata
+        active_dismissals = self.feedback_ledger.get_active_dismissals(asset_id=event.asset_id)
+        current_rule_ids = {r.rule_id for r in fired_recommendations}
+        current_merge_keys = {r.merge_key for r in fired_recommendations}
+        for prev_rec in (previous_recommendations or []):
+            if prev_rec.rule_id not in current_rule_ids and prev_rec.merge_key not in current_merge_keys:
+                dismissal = (
+                    active_dismissals.get(prev_rec.recommendation_id)
+                    or active_dismissals.get(prev_rec.merge_key)
+                    or active_dismissals.get(prev_rec.rule_id)
+                )
+                if dismissal is None:
+                    fired_recommendations.append(prev_rec)
+            else:
+                for idx, r in enumerate(fired_recommendations):
+                    if r.rule_id == prev_rec.rule_id or r.merge_key == prev_rec.merge_key:
+                        fired_recommendations[idx] = r.model_copy(
+                            update={
+                                "created_at_utc": prev_rec.created_at_utc,
+                                "acknowledged": prev_rec.acknowledged if not r.acknowledged else True,
+                                "acknowledged_at_utc": prev_rec.acknowledged_at_utc if not r.acknowledged_at_utc else r.acknowledged_at_utc,
+                                "acknowledged_by": prev_rec.acknowledged_by if not r.acknowledged_by else r.acknowledged_by,
+                            }
+                        )
+
         # 3. Merge compatible recommendations sharing a merge_key
         merged_by_key: Dict[str, List[MaintenanceRecommendation]] = {}
         for rec in fired_recommendations:
@@ -435,7 +461,6 @@ class MaintenanceEngine:
 
         # 4. Apply feedback lifecycle (acknowledgements, dismissals/recurrence, overrides)
         active_acks = self.feedback_ledger.get_active_acknowledgements(asset_id=event.asset_id)
-        active_dismissals = self.feedback_ledger.get_active_dismissals(asset_id=event.asset_id)
         active_overrides = self.feedback_ledger.get_active_overrides(
             asset_id=event.asset_id, current_time=current_time
         )

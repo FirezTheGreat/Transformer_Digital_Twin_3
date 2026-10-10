@@ -280,6 +280,39 @@ export interface OperatorFeedbackEvent {
 }
 
 // ==========================================
+// 7.5. Review Flag Contracts
+// ==========================================
+
+export type ConditionState = 'NORMAL' | 'INSUFFICIENT_EVIDENCE' | 'QUALIFIED_ANOMALY' | 'PROTECTION_EVENT';
+export type ObservabilityState = 'CURRENT' | 'DEGRADED' | 'STALE' | 'CONFLICTING';
+export type ReviewLifecycleState = 'OPEN' | 'CLEARING' | 'CLOSED' | 'SUPERSEDED';
+export type HumanWorkflowState = 'UNACKNOWLEDGED' | 'ACKNOWLEDGED' | 'DISMISSED';
+export type ReviewConditionFamily =
+  | 'SENSOR_INCONSISTENCY'
+  | 'ENGINEERING_PLAUSIBILITY'
+  | 'THERMAL_BEHAVIOUR_UNVERIFIED'
+  | 'ELECTRICAL_UNBALANCE_ADVISORY'
+  | 'OPERATOR_INVESTIGATION';
+
+export interface ReviewFlagRecord {
+  review_id: string;
+  asset_id: string;
+  condition_family: ReviewConditionFamily;
+  target: string;
+  condition: ConditionState;
+  observability: ObservabilityState;
+  lifecycle_state: ReviewLifecycleState;
+  workflow_state: HumanWorkflowState;
+  revision: number;
+  created_event_time_utc: string;
+  last_updated_event_time_utc: string;
+  logical_stream_position: number;
+  supporting_evidence_ids: string[];
+  policy_version: string;
+  rationale?: string | null;
+}
+
+// ==========================================
 // 8. Twin State & FactBundle Contracts
 // ==========================================
 
@@ -321,6 +354,7 @@ export interface TwinState {
   health_bundle?: OTHIBundle | null;
   exposure_state: ExposureState;
   active_recommendations: MaintenanceRecommendation[];
+  active_reviews?: ReviewFlagRecord[];
   versions: Record<string, string>;
   state_hash: string;
 }
@@ -334,6 +368,7 @@ export interface FactBundle {
   health: OTHIBundle;
   open_episodes: AnomalyEpisode[];
   active_recommendations: MaintenanceRecommendation[];
+  active_reviews?: ReviewFlagRecord[];
   provenance_hash: string;
   bundle_version: string;
 }
@@ -402,6 +437,8 @@ export interface OperatorFeedbackRequest {
   timestamp_utc?: string | null;
   recommendation_id?: string | null;
   merge_key?: string | null;
+  review_id?: string | null;
+  expected_revision?: number | null;
   action: string;
   operator_id: string;
   actor_id?: string | null;

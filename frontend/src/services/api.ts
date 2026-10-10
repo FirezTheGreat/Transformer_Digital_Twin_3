@@ -295,6 +295,16 @@ export const api = {
   },
 
   // Persisted Checkpoint Runs & Reports
+  async createCheckpoint(assetId?: string): Promise<CheckpointRunRecord> {
+    const searchParams = new URLSearchParams();
+    if (assetId) searchParams.append('asset_id', assetId);
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    const res = await fetch(`${API_BASE}/v1/reports/checkpoints${query}`, {
+      method: 'POST',
+    });
+    return handleResponse<CheckpointRunRecord>(res);
+  },
+
   async getRuns(assetId?: string, limit?: number): Promise<CheckpointRunRecord[]> {
     const searchParams = new URLSearchParams();
     if (assetId) searchParams.append('asset_id', assetId);

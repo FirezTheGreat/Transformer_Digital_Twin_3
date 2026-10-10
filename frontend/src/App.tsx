@@ -20,6 +20,7 @@ import {
   CapabilityManifest,
   ReplayStatusResponse,
   CanonicalEvent,
+  ReviewFlagRecord,
 } from './types/contracts';
 import { api, ModelCardData } from './services/api';
 import { getAssetContext } from './utils/assetContext';
@@ -44,6 +45,7 @@ export default function App(): React.ReactElement {
   const [health, setHealth] = useState<OTHIBundle | null>(null);
   const [recommendations, setRecommendations] = useState<MaintenanceRecommendation[]>([]);
   const [episodes, setEpisodes] = useState<AnomalyEpisode[]>([]);
+  const [activeReviews, setActiveReviews] = useState<ReviewFlagRecord[]>([]);
   const [capabilities, setCapabilities] = useState<CapabilityManifest | null>(null);
 
   const [historyEvents, setHistoryEvents] = useState<CanonicalEvent[]>([]);
@@ -81,7 +83,32 @@ export default function App(): React.ReactElement {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // 1. Fetch Backend Health, Asset State/FactBundle, History, and Model-Card in parallel
+  // 1. Fetch Backend Health, Asset State/FactBundle, History, and Model-Card
+  const applyAssetState = useCallback((data: any, status?: ReplayStatusResponse | null) => {
+    if (status) {
+      setReplayStatus(status);
+      if (status.processed_events > 0) {
+        setIsTwinStarted(true);
+      }
+    }
+    setTwinState(data.twin_state ?? null);
+    if (data.fact_bundle) {
+      setHealth(data.fact_bundle.health ?? null);
+      setRecommendations(data.fact_bundle.active_recommendations ?? []);
+      setEpisodes(data.fact_bundle.open_episodes ?? []);
+      setActiveReviews(data.fact_bundle.active_reviews ?? data.twin_state?.active_reviews ?? []);
+      if (data.fact_bundle.capabilities) {
+        setCapabilities(data.fact_bundle.capabilities);
+      }
+    } else {
+      setHealth(null);
+      setRecommendations([]);
+      setEpisodes([]);
+      setActiveReviews(data.twin_state?.active_reviews ?? []);
+      setCapabilities(null);
+    }
+  }, []);
+
   const loadState = useCallback(async (currentAssetId: string, overrideStatus?: ReplayStatusResponse | null) => {
     setIsRefreshing(true);
     try {
@@ -100,7 +127,7 @@ export default function App(): React.ReactElement {
       }
 
       // 2. Sync Replay Status
-      let effectiveStatus = overrideStatus !== undefined ? overrideStatus : replayStatus;
+      let effectiveStatus = overrideStatus !== undefined ? overrideStatus : null;
       if (replayStatusRes.status === 'fulfilled' && replayStatusRes.value) {
         effectiveStatus = overrideStatus !== undefined ? overrideStatus : replayStatusRes.value;
         setReplayStatus(effectiveStatus);
@@ -112,22 +139,8 @@ export default function App(): React.ReactElement {
       // 3. Process Asset State & FactBundle
       let currentWatermark: string | null = null;
       if (stateRes.status === 'fulfilled' && stateRes.value) {
-        const data = stateRes.value;
-        setTwinState(data.twin_state ?? null);
-        currentWatermark = data.twin_state?.event_time_watermark_utc || data.twin_state?.state_time_utc || null;
-        if (data.fact_bundle) {
-          setHealth(data.fact_bundle.health ?? null);
-          setRecommendations(data.fact_bundle.active_recommendations ?? []);
-          setEpisodes(data.fact_bundle.open_episodes ?? []);
-          if (data.fact_bundle.capabilities) {
-            setCapabilities(data.fact_bundle.capabilities);
-          }
-        } else {
-          setHealth(null);
-          setRecommendations([]);
-          setEpisodes([]);
-          setCapabilities(null);
-        }
+        applyAssetState(stateRes.value, effectiveStatus);
+        currentWatermark = stateRes.value.twin_state?.event_time_watermark_utc || stateRes.value.twin_state?.state_time_utc || null;
       } else {
         setTwinState(null);
         setHealth(null);
@@ -148,7 +161,6 @@ export default function App(): React.ReactElement {
             orderAsc: false,
           });
           if (historyRes?.events) {
-            // Sort ascending by event_time_utc for strictly chronological X-axis
             const chronoSorted = [...historyRes.events].sort(
               (a, b) => new Date(a.event_time_utc).getTime() - new Date(b.event_time_utc).getTime()
             );
@@ -168,7 +180,7 @@ export default function App(): React.ReactElement {
     } finally {
       setIsRefreshing(false);
     }
-  }, [replayStatus]);
+  }, [applyAssetState]);
 
   useEffect(() => {
     api
@@ -181,6 +193,44 @@ export default function App(): React.ReactElement {
     if (!assetId) return;
     loadState(assetId);
   }, [assetId, loadState]);
+
+  // Advance one frame or batch and update dynamic state swiftly
+  const stepFrame = useCallback(async (batchSize: number = 1) => {
+    if (isSteppingRef.current) return;
+    isSteppingRef.current = true;
+    try {
+      const res = await api.controlReplay({
+        action: 'step',
+        batch_size: batchSize,
+        asset_id: assetId,
+        speed_multiplier: speedMultiplier,
+      });
+      setReplayStatus(res);
+      if (res.is_completed) {
+        setIsPlaying(false);
+        showToast('Dataset replay completed.');
+      }
+      const stateData = await api.getAssetState(assetId);
+      applyAssetState(stateData, res);
+
+      const wm = stateData.twin_state?.event_time_watermark_utc || res.current_time_utc;
+      if (wm && (res.processed_events % 2 === 0 || batchSize > 1)) {
+        api.getAssetHistory(assetId, { endTime: wm, limit: 50, orderAsc: false }).then((h) => {
+          if (h?.events) {
+            const chronoSorted = [...h.events].sort(
+              (a, b) => new Date(a.event_time_utc).getTime() - new Date(b.event_time_utc).getTime()
+            );
+            setHistoryEvents(chronoSorted);
+          }
+        }).catch(() => {});
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Replay step failed';
+      showToast(msg);
+    } finally {
+      isSteppingRef.current = false;
+    }
+  }, [assetId, speedMultiplier, applyAssetState]);
 
   // 2. Start Digital Twin Action
   const handleStartTwin = async () => {
@@ -203,32 +253,29 @@ export default function App(): React.ReactElement {
 
   // 3. Manual Next-Frame Telemetry Stepper (1 frame or batch)
   const handleNext = async (batchSize: number = 1) => {
-    if (isSteppingRef.current) return;
-    isSteppingRef.current = true;
-    try {
-      const res = await api.controlReplay({
-        action: 'step',
-        batch_size: batchSize,
-        asset_id: assetId,
-        speed_multiplier: speedMultiplier,
-      });
-      setReplayStatus(res);
-      if (res.is_completed) {
-        setIsPlaying(false);
-        showToast('Dataset replay completed.');
-      }
-      await loadState(assetId, res);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Replay step failed';
-      showToast(msg);
-    } finally {
-      isSteppingRef.current = false;
-    }
+    await stepFrame(batchSize);
   };
 
   // 4. Play / Pause Automatic Replay
   const handlePlayToggle = async () => {
-    if (!isTwinStarted) return;
+    if (!isTwinStarted) {
+      try {
+        const startRes = await api.controlReplay({
+          action: 'start',
+          asset_id: assetId,
+          speed_multiplier: speedMultiplier,
+        });
+        setReplayStatus(startRes);
+        setIsTwinStarted(true);
+        setIsPlaying(true);
+        showToast('Digital Twin started. Playing telemetry stream.');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to start Digital Twin';
+        showToast(msg);
+      }
+      return;
+    }
+
     if (isPlaying) {
       setIsPlaying(false);
       try {
@@ -255,36 +302,17 @@ export default function App(): React.ReactElement {
     }
   };
 
-  // 5. Automatic Playback Loop (using same path as Next)
+  // 5. Automatic Playback Loop
   useEffect(() => {
     if (!isPlaying) return;
 
-    const delayMs = speedMultiplier === 10 ? 150 : speedMultiplier === 5 ? 300 : 1500;
-    const interval = setInterval(async () => {
-      if (isSteppingRef.current) return;
-      isSteppingRef.current = true;
-      try {
-        const res = await api.controlReplay({
-          action: 'step',
-          batch_size: 1,
-          asset_id: assetId,
-          speed_multiplier: speedMultiplier,
-        });
-        setReplayStatus(res);
-        if (res.is_completed) {
-          setIsPlaying(false);
-          showToast('Replay reached end of dataset.');
-        }
-        await loadState(assetId, res);
-      } catch {
-        setIsPlaying(false);
-      } finally {
-        isSteppingRef.current = false;
-      }
+    const delayMs = speedMultiplier === 10 ? 150 : speedMultiplier === 5 ? 350 : 1200;
+    const interval = setInterval(() => {
+      stepFrame(1);
     }, delayMs);
 
     return () => clearInterval(interval);
-  }, [isPlaying, speedMultiplier, assetId, loadState]);
+  }, [isPlaying, speedMultiplier, stepFrame]);
 
   // 6. Speed Multiplier Change
   const handleSpeedChange = async (speed: number) => {
@@ -317,7 +345,19 @@ export default function App(): React.ReactElement {
         asset_id: assetId,
       });
       setReplayStatus(res);
-      await loadState(assetId, res);
+      const stateData = await api.getAssetState(assetId);
+      applyAssetState(stateData, res);
+      const wm = stateData.twin_state?.event_time_watermark_utc || res.current_time_utc;
+      if (wm) {
+        api.getAssetHistory(assetId, { endTime: wm, limit: 50, orderAsc: false }).then((h) => {
+          if (h?.events) {
+            const chronoSorted = [...h.events].sort(
+              (a, b) => new Date(a.event_time_utc).getTime() - new Date(b.event_time_utc).getTime()
+            );
+            setHistoryEvents(chronoSorted);
+          }
+        }).catch(() => {});
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Previous step failed';
       showToast(msg);
@@ -326,7 +366,7 @@ export default function App(): React.ReactElement {
     }
   };
 
-  // 7. Reset Replay to Frame 0
+  // 7. Reset Replay to Initial State
   const handleReset = async () => {
     setIsPlaying(false);
     setIsTwinStarted(false);
@@ -335,6 +375,7 @@ export default function App(): React.ReactElement {
     setHealth(null);
     setRecommendations([]);
     setEpisodes([]);
+    setActiveReviews([]);
     setCapabilities(null);
     setHistoryEvents([]);
     try {
@@ -343,10 +384,37 @@ export default function App(): React.ReactElement {
         asset_id: assetId,
       });
       setReplayStatus(res);
-      await loadState(assetId, res);
-      showToast('Digital Twin reset to frame 0.');
+      showToast('Digital Twin reset to initial state.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Reset failed';
+      showToast(msg);
+    }
+  };
+
+  // 7.5. Switch Asset with Complete State Isolation
+  const handleAssetChange = async (newAssetId: string) => {
+    if (newAssetId === assetId) return;
+    setIsPlaying(false);
+    setIsTwinStarted(false);
+    setTwinState(null);
+    setHealth(null);
+    setRecommendations([]);
+    setEpisodes([]);
+    setActiveReviews([]);
+    setCapabilities(null);
+    setHistoryEvents([]);
+    setModelCard(null);
+    setAssetId(newAssetId);
+    try {
+      const res = await api.controlReplay({
+        action: 'reset',
+        asset_id: newAssetId,
+      });
+      setReplayStatus(res);
+      await loadState(newAssetId, res);
+      showToast(`Switched to transformer ${newAssetId}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Asset switch failed';
       showToast(msg);
     }
   };
@@ -489,6 +557,42 @@ export default function App(): React.ReactElement {
     showToast(`Recommendation ${actionChosen} committed to immutable audit ledger.`);
   };
 
+  const handleAcknowledgeReview = async (review: ReviewFlagRecord) => {
+    try {
+      await api.submitFeedback({
+        asset_id: assetId,
+        action: 'ACKNOWLEDGE',
+        operator_id: 'OP-SHIVANSH-01',
+        review_id: review.review_id,
+        expected_revision: review.revision,
+        rationale: 'Acknowledged review flag by control engineer',
+      });
+      showToast(`Acknowledged review flag: ${review.condition_family}`);
+      await loadState(assetId);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Acknowledge failed';
+      showToast(msg);
+    }
+  };
+
+  const handleDismissReview = async (review: ReviewFlagRecord) => {
+    try {
+      await api.submitFeedback({
+        asset_id: assetId,
+        action: 'DISMISS',
+        operator_id: 'OP-SHIVANSH-01',
+        review_id: review.review_id,
+        expected_revision: review.revision,
+        rationale: 'Dismissed following operating evaluation',
+      });
+      showToast(`Dismissed review flag: ${review.condition_family}`);
+      await loadState(assetId);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Dismiss failed';
+      showToast(msg);
+    }
+  };
+
   return (
     <div className="min-h-screen text-ink bg-canvas transition-colors">
       {/* Toast Notification */}
@@ -519,6 +623,7 @@ export default function App(): React.ReactElement {
           selectedDataset={selectedDataset}
           onDatasetChange={() => undefined}
           assetId={assetId}
+          onAssetChange={handleAssetChange}
           isTwinStarted={isTwinStarted}
           onStartTwin={handleStartTwin}
           replayStatus={replayStatus}
@@ -573,7 +678,10 @@ export default function App(): React.ReactElement {
         {activeTab === 'maintenance' && (
           <MaintenanceView
             recommendations={recommendations}
+            activeReviews={activeReviews}
             onOpenFeedback={(rec) => setSelectedRecForFeedback(rec)}
+            onAcknowledgeReview={handleAcknowledgeReview}
+            onDismissReview={handleDismissReview}
           />
         )}
 

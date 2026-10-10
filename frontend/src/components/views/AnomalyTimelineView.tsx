@@ -18,11 +18,12 @@ interface AnomalyTimelineViewProps {
 
 export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
   episodes,
-  twinState: _twinState,
+  twinState,
   onSeedTripData,
   isSeeding,
 }) => {
   const [showDetectorMath, setShowDetectorMath] = useState<boolean>(false);
+  const isCusumQualified = twinState?.asset_id === 'TX_1000_COMM';
 
   const critCount = episodes.filter((e) => e.state === 'CRITICAL').length;
   const warnCount = episodes.filter((e) => e.state === 'WARNING').length;
@@ -163,35 +164,55 @@ export const AnomalyTimelineView: React.FC<AnomalyTimelineViewProps> = ({
         )}
       </div>
 
-      {/* CUSUM Statistical Drift Tracker - Disabled / Not Qualified */}
+      {/* CUSUM Statistical Drift Tracker */}
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
           <h2 className="section-title">Statistical drift detector</h2>
-          <span className="chip chip-outline font-mono">Frozen / Disabled</span>
+          <span className={`chip ${isCusumQualified ? 'chip-ok' : 'chip-outline'} font-mono`}>
+            {isCusumQualified ? 'Qualified / Active' : 'Frozen / Disabled'}
+          </span>
         </div>
         <div className="card p-5">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-line">
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-1.5">
                 <span className="eyebrow">Statistical Drift Detector</span>
-                <span className="chip chip-neutral font-mono">DISABLED — NOT QUALIFIED</span>
+                <span className={`chip ${isCusumQualified ? 'chip-ok' : 'chip-neutral'} font-mono`}>
+                  {isCusumQualified ? 'ACTIVE — QUALIFIED' : 'DISABLED — NOT QUALIFIED'}
+                </span>
               </div>
               <h3 className="card-title">Two-Sided Robust CUSUM Accumulator (Thermal Residual)</h3>
               <p className="text-xs text-muted mt-1">
-                Thermal residual anomaly detection is not qualified for the current model artifact.
+                {isCusumQualified
+                  ? 'Two-sided CUSUM tracker operating on calibrated model residuals with decision threshold h=5.0.'
+                  : `Thermal residual anomaly detection is not qualified for asset ${twinState?.asset_id || 'unpromoted'}. Only promoted model artifacts qualify for statistical residual tracking.`}
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-line border border-line rounded-card overflow-hidden mt-4">
             {[
-              { label: 'Positive Accumulator (C⁺)', note: 'Decision threshold: — (Disabled)' },
-              { label: 'Negative Accumulator (C⁻)', note: 'Lower threshold: — (Disabled)' },
-              { label: 'Persistence Window', note: 'Gate status: Inactive' },
+              {
+                label: 'Positive Accumulator (C⁺)',
+                value: isCusumQualified && twinState?.detector_state ? twinState.detector_state.cusum_pos.toFixed(2) : '—',
+                note: isCusumQualified ? 'Decision threshold: h=5.00' : 'Decision threshold: — (Disabled)',
+              },
+              {
+                label: 'Negative Accumulator (C⁻)',
+                value: isCusumQualified && twinState?.detector_state ? Math.abs(twinState.detector_state.cusum_neg).toFixed(2) : '—',
+                note: isCusumQualified ? 'Lower threshold: h=-5.00' : 'Lower threshold: — (Disabled)',
+              },
+              {
+                label: 'Persistence Window',
+                value: isCusumQualified && twinState?.detector_state?.cusum_alarm_active ? 'ALARM' : (isCusumQualified ? 'NOMINAL' : '—'),
+                note: isCusumQualified ? 'Gate status: Active monitoring' : 'Gate status: Inactive',
+              },
             ].map((c) => (
               <div key={c.label} className="bg-surface-2 p-4">
                 <span className="eyebrow text-[11px] block">{c.label}</span>
-                <div className="metric-value text-[28px] font-normal text-faint mt-3">—</div>
+                <div className={`metric-value text-[28px] ${isCusumQualified ? 'font-semibold text-ink' : 'font-normal text-faint'} mt-3`}>
+                  {c.value}
+                </div>
                 <span className="text-[11px] text-muted mt-2 block">{c.note}</span>
               </div>
             ))}

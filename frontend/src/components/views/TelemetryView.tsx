@@ -99,7 +99,7 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
       </div>
 
       {/* Main Phase Telemetry Grid & Capability Manifest */}
-      <TelemetryPhaseGrid twinState={twinState} capabilities={capabilities} />
+      <TelemetryPhaseGrid twinState={twinState} capabilities={capabilities} assetId={assetId} />
 
       {/* Recorded Trends (small multiples, one axis each) */}
       <div>

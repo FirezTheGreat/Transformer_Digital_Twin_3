@@ -167,3 +167,104 @@ def test_thermal_gate_receives_load_in_its_fitted_driver_units(at_repo_root: Non
     assert thermal_load_driver_value(event, None, "apparent_power_kva") == vals["apparent_power_total"]
     rms = (sum(vals[f"current_i{n}"] ** 2 for n in (1, 2, 3)) / 3) ** 0.5
     assert thermal_load_driver_value(event, None, "rms_current_a") == pytest.approx(rms)
+
+
+def test_multi_asset_switching_and_isolation(at_repo_root: None) -> None:
+    """Switching assets during replay must isolate state, reload events, and rebind nameplate rating."""
+    app = create_app(settings=Settings(default_asset_id="TX_1000_COMM"))
+    with TestClient(app) as client:
+        # Step on TX_1000_COMM
+        r1 = client.post("/v1/replay", json={"action": "start", "asset_id": "TX_1000_COMM"})
+        assert r1.status_code == 200
+        client.post("/v1/replay", json={"action": "step", "batch_size": 5, "asset_id": "TX_1000_COMM"})
+        st1 = client.get("/v1/assets/TX_1000_COMM/state").json()
+        assert st1["twin_state"]["asset_id"] == "TX_1000_COMM"
+        assert st1["twin_state"]["state_sequence"] == 5
+
+        # Switch to TX_250_MIX
+        r2 = client.post("/v1/replay", json={"action": "reset", "asset_id": "TX_250_MIX"})
+        assert r2.status_code == 200
+        # Replay queue must have loaded TX_250_MIX events
+        rep_stat = client.get("/v1/replay").json()
+        assert rep_stat["total_events"] == 8757
+        assert rep_stat["processed_events"] == 0
+
+        # Step 3 events on TX_250_MIX
+        client.post("/v1/replay", json={"action": "step", "batch_size": 3, "asset_id": "TX_250_MIX"})
+        st2 = client.get("/v1/assets/TX_250_MIX/state").json()
+        assert st2["twin_state"]["asset_id"] == "TX_250_MIX"
+        assert st2["twin_state"]["state_sequence"] == 3
+        # Capabilities on TX_250_MIX (not promoted) must gate forecasting
+        assert st2["fact_bundle"]["capabilities"]["capabilities"]["C3"]["enabled"] is False
+
+
+def test_maintenance_advisories_persist_across_replay_frames(at_repo_root: None) -> None:
+    """A generated maintenance advisory must persist across subsequent frames until acknowledged/dismissed."""
+    app = create_app(settings=Settings(default_asset_id="TX_1000_COMM"))
+    with TestClient(app) as client:
+        client.post("/v1/replay", json={"action": "start", "asset_id": "TX_1000_COMM"})
+        trip_event = {
+            "schema_version": "1.0.0",
+            "event_id": "test_trip_001",
+            "asset_id": "TX_1000_COMM",
+            "event_time_utc": "2025-01-01T00:00:00Z",
+            "received_time_utc": "2025-01-01T00:00:00Z",
+            "source": {
+                "system": "SCADA",
+                "adapter_id": "test",
+                "source_record_id": "trip_rec_1",
+                "source_uri": "test://trip",
+                "raw_sha256": "0" * 64,
+            },
+            "measurements": [
+                {
+                    "signal_id": "breaker_trip",
+                    "value": 1,
+                    "value_type": "int",
+                    "unit_ucum": "1",
+                    "original_name": "TRIP",
+                    "original_value": "1",
+                    "original_unit": "1",
+                    "quality": {"severity": "GOOD", "flags": []},
+                }
+            ],
+            "event_quality_flags": ["PROTECTION_TRIP_ACTIVE"],
+            "mapping_version": "1.0.0",
+        }
+        ing_resp = client.post("/v1/telemetry", json={"asset_id": "TX_1000_COMM", "events": [trip_event]})
+        assert ing_resp.status_code == 201
+
+        st = client.get("/v1/assets/TX_1000_COMM/state").json()
+        recs = st["fact_bundle"]["active_recommendations"]
+        assert len(recs) >= 1
+        p0_rec = next(r for r in recs if r["rule_id"] == "MNT-PROT-001")
+        assert p0_rec["priority"] == "P0"
+
+        # Advance benign replay frames
+        client.post("/v1/replay", json={"action": "step", "batch_size": 5, "asset_id": "TX_1000_COMM"})
+        st_after = client.get("/v1/assets/TX_1000_COMM/state").json()
+        recs_after = st_after["fact_bundle"]["active_recommendations"]
+        assert any(r["rule_id"] == "MNT-PROT-001" for r in recs_after)
+
+
+def test_on_demand_and_periodic_checkpoints(at_repo_root: None) -> None:
+    """Checkpoints can be created on-demand and retrieved from /v1/reports/runs."""
+    app = create_app(settings=Settings(default_asset_id="TX_1000_COMM"))
+    with TestClient(app) as client:
+        # Step twin to advance sequence
+        client.post("/v1/replay", json={"action": "start", "asset_id": "TX_1000_COMM"})
+        client.post("/v1/replay", json={"action": "step", "batch_size": 10, "asset_id": "TX_1000_COMM"})
+
+        # Create on-demand checkpoint
+        post_chk = client.post("/v1/reports/checkpoints?asset_id=TX_1000_COMM")
+        assert post_chk.status_code == 201
+        chk_data = post_chk.json()
+        assert "chk_TX_1000_COMM" in chk_data["checkpoint_id"]
+        assert chk_data["state_sequence"] == 10
+
+        # Query checkpoints list
+        runs = client.get("/v1/reports/runs?asset_id=TX_1000_COMM").json()
+        assert len(runs) >= 1
+        assert runs[0]["asset_id"] == "TX_1000_COMM"
+        assert runs[0]["state_sequence"] == 10
+

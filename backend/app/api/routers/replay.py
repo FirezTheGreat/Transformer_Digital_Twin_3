@@ -49,8 +49,10 @@ def ensure_dataset_loaded(
     asset_id: str = "DT-TRIPURA-001",
 ) -> int:
     """Ensure canonical events are populated into storage and replay engine."""
-    if len(replay_engine._events) > 0:
+    if len(replay_engine._events) > 0 and replay_engine.asset_id == asset_id:
         return len(replay_engine._events)
+
+    replay_engine.asset_id = asset_id
 
     if storage is None:
         return 0
@@ -98,10 +100,14 @@ def ensure_dataset_loaded(
     return count
 
 
-def _restart_reducer(app_state: AppState, reducer: TwinReducer) -> TwinReducer:
+def _restart_reducer(app_state: AppState, reducer: TwinReducer, target_asset: str | None = None) -> TwinReducer:
     """Give replay a clean reducer: rebuild all stateful engines when possible, else reset the thermal gate."""
+    target = target_asset or (app_state.replay_engine.asset_id if app_state.replay_engine else app_state.settings.default_asset_id)
     if app_state.reducer_factory is not None:
-        app_state.reducer = app_state.reducer_factory()
+        try:
+            app_state.reducer = app_state.reducer_factory(target)
+        except TypeError:
+            app_state.reducer = app_state.reducer_factory()
         return app_state.reducer
     if reducer.thermal_gate is not None:
         reducer.thermal_gate.reset()
@@ -196,9 +202,39 @@ async def control_replay(
     action = payload.action
     target_asset = payload.asset_id or (app_state.settings.default_asset_id if app_state and app_state.settings else "DT-TRIPURA-001")
 
-    # Ensure events are populated from storage if empty
-    if not replay_engine._events and storage is not None:
+    # If asset changed, reload dataset and reinitialize reducer & capability evaluator
+    if payload.asset_id and payload.asset_id != replay_engine.asset_id:
         ensure_dataset_loaded(storage, replay_engine, target_asset)
+        from app.api.deps import build_runtime_reducer
+        from app.core.registry import resolve_asset_profile, resolve_model_artifact
+        profile = resolve_asset_profile(asset_id=target_asset)
+        artifact = resolve_model_artifact(asset_id=target_asset)
+        is_promoted = artifact.parameters is not None and artifact.promotion.status == "PROMOTED"
+        app_state.reducer = build_runtime_reducer(
+            settings=app_state.settings,
+            feedback_ledger=app_state.feedback_ledger,
+            asset_id=target_asset,
+            storage=storage,
+        )
+        reducer = app_state.reducer
+        app_state.capability_evaluator = CapabilityEvaluator(
+            expected_cadence_s=profile.expected_cadence_s,
+            evaluation_window_s=app_state.settings.evaluation_window_s,
+            is_model_promoted=is_promoted,
+            qualification=artifact.qualification if is_promoted else None,
+            model_version=artifact.model_version if is_promoted else "uncalibrated",
+        )
+        capability_evaluator = app_state.capability_evaluator
+        app_state.current_state = None
+        app_state.latest_fact_bundle = None
+        replay_engine.reset()
+    elif not replay_engine._events and storage is not None:
+        ensure_dataset_loaded(storage, replay_engine, target_asset)
+
+    if app_state.reducer is not None:
+        reducer = app_state.reducer
+    if app_state.capability_evaluator is not None:
+        capability_evaluator = app_state.capability_evaluator
 
     # Configure time bounds if requested
     if payload.start_time_utc is not None or payload.end_time_utc is not None:
@@ -216,7 +252,7 @@ async def control_replay(
         replay_engine._is_paused = False
         app_state.current_state = None
         app_state.latest_fact_bundle = None
-        reducer = _restart_reducer(app_state, reducer)
+        reducer = _restart_reducer(app_state, reducer, target_asset=target_asset)
 
     elif action == "pause":
         replay_engine.pause()
@@ -229,7 +265,7 @@ async def control_replay(
         replay_engine.reset()
         app_state.current_state = None
         app_state.latest_fact_bundle = None
-        reducer = _restart_reducer(app_state, reducer)
+        reducer = _restart_reducer(app_state, reducer, target_asset=target_asset)
 
     elif action == "seek":
         if payload.seek_position is not None:

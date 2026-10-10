@@ -7,14 +7,16 @@ import {
   RotateCcw,
   Clock,
   Database,
+  Zap,
 } from 'lucide-react';
 import { ReplayStatusResponse } from '../../types/contracts';
-import { getAssetContext } from '../../utils/assetContext';
+import { getAssetContext, ALL_CPRI_ASSETS, CPRI_ASSET_RATINGS } from '../../utils/assetContext';
 
 interface ReplayBarProps {
   selectedDataset: string;
   onDatasetChange: (dataset: string) => void;
   assetId: string;
+  onAssetChange?: (assetId: string) => void;
   isTwinStarted: boolean;
   onStartTwin: () => void;
   replayStatus: ReplayStatusResponse | null;
@@ -32,6 +34,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
   selectedDataset,
   onDatasetChange,
   assetId,
+  onAssetChange,
   isTwinStarted,
   onStartTwin,
   replayStatus,
@@ -90,12 +93,31 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
             </select>
           </div>
 
-          {/* Contextual Asset Identity */}
-          <div className="hidden md:flex items-center gap-2 pl-5 border-l border-line">
-            <span className="eyebrow">Transformer</span>
-            <span className="font-mono text-[11px] font-medium text-ink">
-              {assetId} · {assetContext.siteLabel}
-            </span>
+          {/* Contextual Asset Identity with interactive Transformer selector */}
+          <div className="flex items-center gap-2 pl-4 border-l border-line">
+            <label htmlFor="replay-asset-select" className="eyebrow flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-accent" strokeWidth={1.75} />
+              Transformer
+            </label>
+            {onAssetChange ? (
+              <select
+                id="replay-asset-select"
+                value={assetId}
+                onChange={(e) => onAssetChange(e.target.value)}
+                className="input w-auto py-1 pr-7 cursor-pointer font-mono text-[12px] font-semibold text-ink"
+                title="Select transformer asset"
+              >
+                {ALL_CPRI_ASSETS.map((id) => (
+                  <option key={id} value={id}>
+                    {id} ({CPRI_ASSET_RATINGS[id]} kVA)
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-mono text-[11px] font-medium text-ink">
+                {assetId} · {assetContext.siteLabel}
+              </span>
+            )}
           </div>
         </div>
 
@@ -104,7 +126,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
           {!isTwinStarted ? (
             <>
               <span className="text-xs text-muted hidden 2xl:inline max-w-sm text-right">
-                Replay telemetry through the digital twin one 15-minute measurement at a time.
+                Replay telemetry through the digital twin one {assetContext.cadenceLabel} measurement at a time.
               </span>
               <span className="chip chip-neutral">Ready to start</span>
               <button onClick={onStartTwin} className="btn btn-primary px-4">
@@ -139,7 +161,6 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={onPlayToggle}
-            disabled={!isTwinStarted}
             title={isPlaying ? 'Pause automatic replay' : 'Play automatic replay'}
             className={`btn min-w-[84px] ${isPlaying ? 'btn-accent' : 'btn-primary'}`}
           >
@@ -205,7 +226,7 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
 
           <button
             onClick={onReset}
-            disabled={!isTwinStarted}
+            disabled={!isTwinStarted && processed === 0}
             title="Reset replay to frame 0 and clear derived state"
             className="icon-btn"
           >

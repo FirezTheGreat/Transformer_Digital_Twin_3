@@ -145,6 +145,51 @@ async def list_runs(
     return storage.get_checkpoints(asset_id=asset_id, limit=limit)
 
 
+@router.post(
+    "/checkpoints",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create on-demand persistent checkpoint for the active or specified asset",
+    response_description="Persisted checkpoint metadata",
+)
+async def create_checkpoint(
+    asset_id: Optional[str] = Query(default=None, description="Asset ID (defaults to active asset)"),
+    app_state: AppState = Depends(get_app_state),
+    storage: StorageEngine = Depends(get_storage),
+) -> dict[str, Any]:
+    """Create an authoritative persistent checkpoint record in storage."""
+    from app.core.checkpoint import CheckpointStore
+
+    target_asset = asset_id or (
+        app_state.current_state.asset_id
+        if app_state.current_state
+        else (app_state.settings.default_asset_id if app_state.settings else "TX_1000_COMM")
+    )
+    state = app_state.current_state
+    if state is None or state.asset_id != target_asset:
+        now = datetime.now(timezone.utc)
+        base_state = TwinState(
+            asset_id=target_asset,
+            state_time_utc=now,
+            last_processed_event_id="initial",
+            event_time_watermark_utc=now,
+            state_sequence=0,
+            state_hash="",
+        )
+        computed_hash = compute_twin_state_hash(base_state.model_dump())
+        state = base_state.model_copy(update={"state_hash": computed_hash})
+
+    store = CheckpointStore(storage=storage)
+    cid = store.save_checkpoint(state)
+    return {
+        "checkpoint_id": cid,
+        "asset_id": state.asset_id,
+        "state_sequence": state.state_sequence,
+        "state_time_utc": state.state_time_utc.isoformat(),
+        "state_hash": state.state_hash,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @router.get(
     "/summary.json",
     status_code=status.HTTP_200_OK,

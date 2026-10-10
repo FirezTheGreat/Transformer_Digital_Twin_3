@@ -237,6 +237,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <span className="text-ink">{getTierTitle(highestTier)}</span>
             <Info className="w-3.5 h-3.5 text-faint group-hover:text-accent" />
           </button>
+          {twinState?.active_reviews && twinState.active_reviews.some((r) => r.lifecycle_state === 'OPEN') && (
+            <button
+              onClick={() => onNavigateTab('maintenance')}
+              className="btn bg-accent/15 text-accent hover:bg-accent/20 border border-accent/30 text-xs font-semibold"
+              title="Review Flag: Observed behaviour warrants human review; evidence does not support automated conclusion"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-accent" />
+              <span>Review Required ({twinState.active_reviews.filter((r) => r.lifecycle_state === 'OPEN').length})</span>
+            </button>
+          )}
           {activeEpisodeCount > 0 && (
             <button
               onClick={() => onNavigateTab('anomalies')}
@@ -360,7 +370,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             footer={
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-mono">{relativeLoad !== null ? `${relativeLoad} rel. u` : '—'}</span>
-                <UIHonestyBadge type="relative_load_index" customText="Ref: 142.9 kVA (non-nameplate)" />
+                <UIHonestyBadge
+                  type="relative_load_index"
+                  customText={
+                    getAssetContext(assetId).isCpri && getAssetContext(assetId).ratedKva
+                      ? `Rated: ${getAssetContext(assetId).ratedKva} kVA (Nameplate)`
+                      : 'Ref: 142.9 kVA (non-nameplate)'
+                  }
+                />
               </div>
             }
           />
@@ -528,32 +545,31 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               const domainData = domains[d.key];
               const rawStatus = domainData?.status ?? 'NORMAL';
               const severity = domainData?.severity ?? 0.0;
-              const evidenceCount = domainData?.evidence_count ?? 0;
               const isCrit = rawStatus === 'CRITICAL' || severity >= 0.7;
               const isWarn = rawStatus === 'WARNING' || (severity >= 0.4 && !isCrit);
               const isWatch = rawStatus === 'WATCH' || (severity > 0.0 && !isWarn && !isCrit);
-              const isUnexcursed = severity === 0 && (evidenceCount === 0 || rawStatus === 'NORMAL');
 
-              const statusLabel = isCrit
+              const hasNoData = !twinState;
+              const statusLabel = hasNoData
+                ? 'NO DATA'
+                : isCrit
                 ? 'CRITICAL'
                 : isWarn
                 ? 'WARNING'
                 : isWatch
                 ? 'WATCH'
-                : isUnexcursed
-                ? 'UNEXCURSED'
-                : 'NORMAL';
+                : 'NOMINAL';
 
-              const chipClass = isCrit
+              const chipClass = hasNoData
+                ? 'chip-neutral'
+                : isCrit
                 ? 'chip-crit'
                 : isWarn
                 ? 'chip-warn'
                 : isWatch
                 ? 'chip-accent'
-                : isUnexcursed
-                ? 'chip-outline'
                 : 'chip-ok';
-              const barClass = isCrit ? 'bg-crit' : isWarn ? 'bg-warn' : isWatch ? 'bg-accent' : 'bg-ok';
+              const barClass = hasNoData ? 'bg-faint' : isCrit ? 'bg-crit' : isWarn ? 'bg-warn' : isWatch ? 'bg-accent' : 'bg-ok';
 
               return (
                 <div key={d.key} className="px-4 py-3.5">

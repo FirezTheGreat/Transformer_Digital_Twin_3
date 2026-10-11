@@ -406,3 +406,61 @@ def test_oil_and_pressure_profile_configuration_consistency():
     det_ids_sealed = [e.detector_id for e in ev_sealed]
     assert "DET_PRESSURE_HIGH_ALARM" in det_ids_sealed
     assert "DET_OIL_LEVEL_INDICATOR" not in det_ids_sealed
+
+
+def test_multi_frame_non_zero_severity_immediately_updates_othi_v2():
+    """Regression test: verify non-zero condition severity immediately lowers OTHI from baseline 100."""
+    t0 = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    t1 = t0 + timedelta(minutes=15)
+    t2 = t0 + timedelta(minutes=30)
+    t3 = t0 + timedelta(minutes=45)
+
+    engine = OTHIEngine(expected_cadence_seconds=900.0, algorithm_version="OTHI_V2")
+
+    # Frame 0: All healthy -> baseline OTHI 100
+    ev0 = _make_event("evt-0", t0)
+    b0 = engine.evaluate(ev0)
+    assert b0.othi_score == 100
+    assert engine.last_valid_othi_score == 100
+
+    # Frame 1: Non-zero condition severity (loading severity 0.60)
+    ev_load = EvidenceItem(
+        evidence_id="ev-load-01",
+        asset_id="DT-01",
+        event_time_utc=t1,
+        category=AnomalyCategory.LOADING,
+        detector_id="DET_LOADING_OVERLOAD",
+        observed_value=1.15,
+        expected_value=1.00,
+        severity=0.60,
+        confidence=1.0,
+    )
+    ev1 = _make_event("evt-1", t1)
+    b1 = engine.evaluate(ev1, evidence_items=[ev_load])
+    # Must immediately reflect condition degradation (raw 40), NEVER remain stuck at baseline 100
+    assert b1.othi_score == 40
+    assert b1.othi_score == b1.raw_othi
+
+    # Frame 2: Severe fault (thermal severity 1.0) -> must yield OTHI 0
+    ev_therm = EvidenceItem(
+        evidence_id="ev-therm-01",
+        asset_id="DT-01",
+        event_time_utc=t2,
+        category=AnomalyCategory.THERMAL_LIMIT,
+        detector_id="DET_THERMAL_LIMIT_ABSOLUTE",
+        observed_value=105.0,
+        expected_value=85.0,
+        severity=1.0,
+        confidence=1.0,
+    )
+    ev2 = _make_event("evt-2", t2)
+    b2 = engine.evaluate(ev2, evidence_items=[ev_therm])
+    assert b2.othi_score == 0
+    assert b2.status == HealthStatus.CRITICAL
+
+    # Frame 3: Normal conditions restored -> recovers cleanly to 100
+    ev3 = _make_event("evt-3", t3)
+    b3 = engine.evaluate(ev3)
+    assert b3.othi_score == 100
+    assert b3.status == HealthStatus.NORMAL
+

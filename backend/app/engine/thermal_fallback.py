@@ -318,7 +318,7 @@ class ThermalFallbackGate:
         else:
             can_display_residual = is_promoted
 
-        if not is_promoted:
+        if not can_display_residual and not is_promoted:
             fallback_reasons.append(ThermalFallbackReason.UNPROMOTED_MODEL)
 
         if not t_oil_ok or t_oil_val is None:

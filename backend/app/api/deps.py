@@ -129,7 +129,7 @@ def build_runtime_reducer(
     profile = resolve_asset_profile(asset_id=target_asset)
     artifact = resolve_model_artifact(asset_id=target_asset)
     thermal_gate = ThermalFallbackGate.from_artifact(artifact, nominal_cadence_s=profile.expected_cadence_s)
-    qual = artifact.qualification if thermal_gate.is_model_promoted else None
+    qual = thermal_gate.qualification
     ref_kva = profile.rated_kva if profile.rated_kva is not None else settings.load_reference_kva
     chk_store = CheckpointStore(storage=storage) if storage is not None else None
 

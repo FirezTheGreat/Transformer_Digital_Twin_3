@@ -140,7 +140,7 @@ def build_runtime_reducer(
         checkpoint_store=chk_store,
         episode_engine=ElectricalEpisodeEngine(asset_id=target_asset),
         anomaly_engine=MultiDomainAnomalyEngine(
-            asset_id=target_asset, qualification=artifact.qualification, profile=profile
+            asset_id=target_asset, qualification=qual, profile=profile
         ),
         othi_engine=OTHIEngine(expected_cadence_seconds=profile.expected_cadence_s),
         exposure_engine=ThermalExposureEngine(asset_id=target_asset),

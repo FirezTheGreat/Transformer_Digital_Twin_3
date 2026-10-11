@@ -86,14 +86,35 @@ DOMAIN_SIGNAL_MAPPING: Dict[str, Set[str]] = {
         "oil_temp_alarm_flag",
         "oti_t",
         "oti_a",
+        "oti_trip",
+        "oti_alarm",
+        "oti_alarm_contact",
+        "oti_trip_contact",
         "breaker_trip",
         "buchholz_trip",
         "buchholz_alarm",
         "lv_breaker_closed",
+        "lv_breaker_trip",
+        "hv_fuse_operated",
         "magnetic_oil_gauge_alarm",
+        "mog_a",
+        "mog_alarm",
         "oil_level_percent",
         "oil_level_pct",
         "oil_level_status",
+        "oil_level_low_alarm",
+        "oil_level_corrected_pct",
+        "oil_level_trend_pct_per_day",
+        "oli",
+        "tank_pressure_kpa_g",
+        "tank_pressure",
+        "pressure_kpa",
+        "pressure_alarm",
+        "tank_pressure_alarm",
+        "prd_operated",
+        "pressure_relief_operated",
+        "pressure_corrected_kpa_g",
+        "pressure_trend_kpa_per_day",
     },
 }
 
@@ -110,33 +131,56 @@ CATEGORY_TO_DOMAIN: Dict[AnomalyCategory, Optional[str]] = {
 }
 
 # Detector to condition family mapping
-DETECTOR_TO_FAMILY: Dict[str, Tuple[str, str]] = {
+DETECTOR_TO_FAMILY: Dict[str, Tuple[Optional[str], str]] = {
     # Thermal
     "DET_THERMAL_LIMIT_OTI": ("thermal", "THERMAL_LIMIT_EXCEEDANCE"),
     "DET_THERMAL_LIMIT_RISE": ("thermal", "THERMAL_LIMIT_EXCEEDANCE"),
-    "DET_THERMAL_SHADOW_DESCRIPTIVE": ("thermal", "THERMAL_DEVIATION_UNEXPECTED"),
+    "DET_THERMAL_LIMIT_ABSOLUTE": ("thermal", "THERMAL_LIMIT_EXCEEDANCE"),
+    "DET_THERMAL_SHADOW_DESCRIPTIVE": (None, "THERMAL_DEVIATION_UNQUALIFIED"),
     "DET_THERMAL_RESIDUAL_POINT": ("thermal", "THERMAL_DEVIATION_UNEXPECTED"),
     "DET_THERMAL_CUSUM_DRIFT": ("thermal", "THERMAL_DEVIATION_UNEXPECTED"),
     # Loading
     "DET_LOADING_OVERLOAD": ("loading", "LOADING_STRESS"),
+    "DET_LOAD_RELATIVE_INDEX": ("loading", "LOADING_STRESS"),
     # Phase & Neutral
     "DET_PHASE_CURRENT_IMBALANCE": ("phase_neutral", "PHASE_CURRENT_IMBALANCE"),
     "DET_NEUTRAL_CURRENT_EXCESS": ("phase_neutral", "NEUTRAL_CURRENT_EXCESS"),
+    "DET_NEUTRAL_CURRENT_RATIO": ("phase_neutral", "NEUTRAL_CURRENT_EXCESS"),
     # Voltage & PF
     "DET_VOLTAGE_IMBALANCE": ("voltage_pf_freq", "VOLTAGE_MAGNITUDE_IMBALANCE"),
     "DET_VOLTAGE_UNDERVOLTAGE": ("voltage_pf_freq", "VOLTAGE_OUT_OF_BOUNDS"),
     "DET_VOLTAGE_OVERVOLTAGE": ("voltage_pf_freq", "VOLTAGE_OUT_OF_BOUNDS"),
+    "DET_VOLTAGE_SAG_OR_UNDERVOLTAGE": ("voltage_pf_freq", "VOLTAGE_OUT_OF_BOUNDS"),
+    "DET_VOLTAGE_SWELL_OR_OVERVOLTAGE": ("voltage_pf_freq", "VOLTAGE_OUT_OF_BOUNDS"),
     "DET_PF_LOW": ("voltage_pf_freq", "LOW_POWER_FACTOR"),
-    # Protection & Oil
+    "DET_LOW_POWER_FACTOR": ("voltage_pf_freq", "LOW_POWER_FACTOR"),
+    # Protection & Contacts
     "DET_PROT_TRIP_DISCRETE": ("oil_protection", "DIRECT_PROTECTION_TRIP"),
     "DET_PROT_ALARM_DISCRETE": ("oil_protection", "PROTECTION_ALARM"),
+    "DET_PROT_WTI_CONTACT": ("oil_protection", "DIRECT_PROTECTION_TRIP"),
+    "DET_PROT_OTI_TRIP": ("oil_protection", "DIRECT_PROTECTION_TRIP"),
+    "DET_PROT_OTI_ALARM": ("oil_protection", "PROTECTION_ALARM"),
+    "DET_PROT_LV_BREAKER_TRIP": ("oil_protection", "DIRECT_PROTECTION_TRIP"),
+    "DET_PROT_HV_FUSE_OPERATED": ("oil_protection", "DIRECT_PROTECTION_TRIP"),
+    # Conservator Oil Level
+    "DET_PROT_MOG_ALARM": ("oil_protection", "OIL_LEVEL_ABNORMAL"),
     "DET_OIL_LEVEL_LOW": ("oil_protection", "OIL_LEVEL_ABNORMAL"),
+    "DET_OIL_LEVEL_INDICATOR": ("oil_protection", "OIL_LEVEL_ABNORMAL"),
+    "DET_OIL_LEVEL_DECLINING_TREND": ("oil_protection", "OIL_LEVEL_ABNORMAL"),
+    "DET_OIL_LEVEL_GAUGE_STUCK": ("oil_protection", "OIL_LEVEL_ABNORMAL"),
+    # Sealed-Tank Pressure
+    "DET_PRESSURE_RELIEF_OPERATED": ("oil_protection", "DIRECT_PROTECTION_TRIP"),
+    "DET_PRESSURE_ALARM_CONTACT": ("oil_protection", "TANK_PRESSURE_ABNORMAL"),
+    "DET_PRESSURE_HIGH_ALARM": ("oil_protection", "TANK_PRESSURE_ABNORMAL"),
+    "DET_PRESSURE_LOW_ALARM": ("oil_protection", "TANK_PRESSURE_ABNORMAL"),
+    "DET_PRESSURE_HIGH_TRANSIENT": ("oil_protection", "TANK_PRESSURE_TRANSIENT"),
+    "DET_PRESSURE_LOW_TRANSIENT": ("oil_protection", "TANK_PRESSURE_TRANSIENT"),
     # Electrical Episode Engine mappings
     "EPISODE_CURRENT_IMBALANCE": ("phase_neutral", "PHASE_CURRENT_IMBALANCE"),
     "EPISODE_VOLTAGE_IMBALANCE": ("voltage_pf_freq", "VOLTAGE_MAGNITUDE_IMBALANCE"),
     "EPISODE_NEUTRAL_CURRENT_RATIO": ("phase_neutral", "NEUTRAL_CURRENT_EXCESS"),
     "EPISODE_LOW_POWER_FACTOR": ("voltage_pf_freq", "LOW_POWER_FACTOR"),
-    "EPISODE_PQS_INCONSISTENCY": ("DATA_QUALITY", "DATA_QUALITY_ANOMALY"),
+    "EPISODE_PQS_INCONSISTENCY": (None, "DATA_QUALITY_ANOMALY"),
 }
 
 
@@ -204,22 +248,80 @@ def aggregate_othi_max_plus_secondary(
     return clamped_score, base_penalty, secondary_penalty, total_penalty, driving_domain
 
 
+def aggregate_othi_v2(
+    domain_severities: Dict[str, float],
+    secondary_coefficient: float = 0.25,
+) -> Tuple[int, float, float, float, Optional[str]]:
+    """Execute literature-grounded OTHI_V2 aggregation algorithm (CIGRE TB 761, Li et al. 2023).
+
+    Formula:
+        base_penalty = max(s_d)
+        probabilistic_secondary = 1.0 - prod_{d != base}(1.0 - s_d)
+        secondary_penalty = secondary_coefficient * (1.0 - base_penalty) * probabilistic_secondary
+        total_penalty = base_penalty + secondary_penalty
+        OTHI = round(100 * (1 - total_penalty))
+
+    Guarantees:
+        1. Monotonicity: Increasing any domain severity cannot improve the score.
+        2. Strict bounding: Total penalty is intrinsically bounded in [0.0, 1.0].
+        3. Worst-domain dominance: If base_penalty == 1.0, total_penalty == 1.0 and OTHI == 0.
+        4. Diminishing returns: Multiple mild anomalies compound without linear cliff over-penalization.
+        5. Deterministic tie-breaking: Alphabetical domain name.
+
+    Args:
+        domain_severities: Dict of available domain severities in [0.0, 1.0].
+        secondary_coefficient: Compounding factor gamma (default 0.25).
+
+    Returns:
+        Tuple of (othi_score, base_penalty, secondary_penalty, total_penalty, driving_domain).
+    """
+    if not domain_severities:
+        return 100, 0.0, 0.0, 0.0, None
+
+    sorted_domains = sorted(
+        domain_severities.items(),
+        key=lambda item: (-item[1], item[0]),
+    )
+    driving_domain, base_penalty = sorted_domains[0]
+
+    # Probabilistic product accumulation for secondary domains
+    prod_complement = 1.0
+    for _, s in sorted_domains[1:]:
+        s_clamped = max(0.0, min(1.0, float(s)))
+        prod_complement *= (1.0 - s_clamped)
+
+    probabilistic_secondary = 1.0 - prod_complement
+    secondary_penalty = float(secondary_coefficient) * (1.0 - base_penalty) * probabilistic_secondary
+    total_penalty = min(1.0, max(0.0, base_penalty + secondary_penalty))
+
+    raw_score = round(100.0 * (1.0 - total_penalty))
+    clamped_score = max(0, min(100, raw_score))
+
+    return clamped_score, base_penalty, secondary_penalty, total_penalty, driving_domain
+
+
 class OTHIEngine:
     """Stateful Multi-Domain OTHI Aggregator and Health Assessment Engine."""
 
     def __init__(
         self,
         expected_cadence_seconds: float = 900.0,  # 15 min default
-        secondary_coefficient: float = 0.20,
+        secondary_coefficient: Optional[float] = None,
+        algorithm_version: str = "MAX_PLUS_SECONDARY_V1",
     ) -> None:
         """Initialize OTHIEngine.
 
         Args:
             expected_cadence_seconds: Expected asset sampling interval in seconds.
             secondary_coefficient: Product policy secondary penalty factor.
+            algorithm_version: Aggregation algorithm ('MAX_PLUS_SECONDARY_V1' or 'OTHI_V2').
         """
         self.expected_cadence_seconds = expected_cadence_seconds
-        self.secondary_coefficient = secondary_coefficient
+        self.algorithm_version = algorithm_version
+        if secondary_coefficient is None:
+            self.secondary_coefficient = 0.25 if algorithm_version == "OTHI_V2" else 0.20
+        else:
+            self.secondary_coefficient = secondary_coefficient
         self.warning_stale_seconds = max(2.0 * expected_cadence_seconds, 600.0)  # max(2*cadence, 10 min)
         self.hard_stale_seconds = max(4.0 * expected_cadence_seconds, 3600.0)    # max(4*cadence, 60 min)
 
@@ -227,23 +329,54 @@ class OTHIEngine:
         self.last_valid_time_by_domain: Dict[str, datetime] = {}
         self.last_valid_severity_by_domain: Dict[str, float] = {}
         self.latched_protection_trip: bool = False
+        self.latched_trip_time_utc: Optional[datetime] = None
         self.last_valid_othi_score: Optional[int] = None
         self.last_valid_status: Optional[HealthStatus] = None
         self.last_valid_timestamp_utc: Optional[datetime] = None
         self.feedback_ledger: Optional[Any] = None
+        self.current_asset_id: Optional[str] = None
+        self.persistence_seconds: float = max(expected_cadence_seconds, 600.0)
+        self.degradation_candidate_start_time: Optional[datetime] = None
+        self.degradation_candidate_score: Optional[int] = None
 
     def reset_protection_trip(self) -> None:
         """Unlatch direct protection trip after authorized resolution."""
         self.latched_protection_trip = False
+        self.latched_trip_time_utc = None
+        self.last_valid_severity_by_domain.pop("oil_protection", None)
+        self.last_valid_time_by_domain.pop("oil_protection", None)
+        self.last_valid_othi_score = None
+        self.last_valid_status = None
+        self.degradation_candidate_start_time = None
+        self.degradation_candidate_score = None
 
     def reset(self) -> None:
         """Reset internal stateful memory and trip latch."""
         self.last_valid_time_by_domain.clear()
         self.last_valid_severity_by_domain.clear()
         self.latched_protection_trip = False
+        self.latched_trip_time_utc = None
         self.last_valid_othi_score = None
         self.last_valid_status = None
         self.last_valid_timestamp_utc = None
+        self.current_asset_id = None
+        self.degradation_candidate_start_time = None
+        self.degradation_candidate_score = None
+
+    def _aggregate(
+        self,
+        domain_severities: Dict[str, float],
+    ) -> Tuple[int, float, float, float, Optional[str]]:
+        """Run configured aggregation algorithm."""
+        if self.algorithm_version == "OTHI_V2":
+            return aggregate_othi_v2(
+                domain_severities=domain_severities,
+                secondary_coefficient=self.secondary_coefficient,
+            )
+        return aggregate_othi_max_plus_secondary(
+            domain_severities=domain_severities,
+            secondary_coefficient=self.secondary_coefficient,
+        )
 
     def _resolve_evidence_family(self, ev: EvidenceItem) -> Tuple[Optional[str], str]:
         """Determine domain and condition_family for an EvidenceItem."""
@@ -316,6 +449,11 @@ class OTHIEngine:
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=timezone.utc)
 
+        # Asset boundary isolation: reset stateful tracking if asset changes
+        if self.current_asset_id is not None and self.current_asset_id != event.asset_id:
+            self.reset()
+        self.current_asset_id = event.asset_id
+
         # 1. Identify present good/usable signals in this event
         present_signals: Set[str] = set()
         for m in event.measurements:
@@ -334,11 +472,23 @@ class OTHIEngine:
                 "breaker_trip",
                 "oil_temp_trip_flag",
                 "oti_t",
+                "oti_trip",
+                "oti_trip_contact",
                 "buchholz_trip",
+                "lv_breaker_trip",
+                "hv_fuse_operated",
+                "prd_operated",
+                "pressure_relief_operated",
             ) or "DIRECT_TRIP" in flags:
                 trip_signals_present = True
                 val = m.value
                 if val is True or val == 1 or str(val).lower() in ("true", "1", "trip", "tripped"):
+                    current_trip_active = True
+                    self.latched_protection_trip = True
+            elif s_id in ("lv_breaker_closed", "52a_status"):
+                val = m.value
+                if val in (0, 0.0, "0", False, "false", "open", "OPEN"):
+                    trip_signals_present = True
                     current_trip_active = True
                     self.latched_protection_trip = True
 
@@ -346,15 +496,35 @@ class OTHIEngine:
             current_trip_active = True
             self.latched_protection_trip = True
 
+        if evidence_items:
+            for ev in evidence_items:
+                if (
+                    ev.condition_family == "DIRECT_PROTECTION_TRIP"
+                    or ev.detector_id in ("DET_PROT_LV_BREAKER_TRIP", "DET_PROT_TRIP_DISCRETE", "DET_PROT_OTI_TRIP")
+                ) and ev.severity >= 0.8:
+                    current_trip_active = True
+                    self.latched_protection_trip = True
+
+        if current_trip_active:
+            if self.latched_trip_time_utc is None:
+                self.latched_trip_time_utc = current_time
+
         # Unlatch condition:
         # Trip was previously latched, current frame explicitly does NOT have an active trip,
-        # AND an authorized resolution / reset feedback event is present in the feedback ledger.
+        # AND an authorized resolution / reset feedback event timestamped after the trip is present in the ledger.
         if self.latched_protection_trip and not current_trip_active:
             ledger = feedback_ledger or self.feedback_ledger
             if ledger is not None:
                 history = ledger.get_history(asset_id=event.asset_id)
                 has_authorized_resolution = any(
                     (r.action.value if hasattr(r.action, "value") else str(r.action)) in ("RESOLVE", "DISMISS")
+                    and (
+                        self.latched_trip_time_utc is None
+                        or (
+                            (r.timestamp_utc if r.timestamp_utc.tzinfo else r.timestamp_utc.replace(tzinfo=timezone.utc))
+                            >= (self.latched_trip_time_utc if self.latched_trip_time_utc.tzinfo else self.latched_trip_time_utc.replace(tzinfo=timezone.utc))
+                        )
+                    )
                     and (
                         getattr(r, "reason_code", None) in (
                             "SITE_CLEARANCE_VERIFIED",
@@ -370,7 +540,7 @@ class OTHIEngine:
                     for r in history
                 )
                 if has_authorized_resolution:
-                    self.latched_protection_trip = False
+                    self.reset_protection_trip()
 
         # 3. Group active evidence by domain and condition family
         evidence_list = list(evidence_items or [])
@@ -493,9 +663,8 @@ class OTHIEngine:
         has_sufficient_current_evidence = len(current_domains) >= 2 or is_direct_trip_decisive
 
         # Calculate raw score from current active domains
-        raw_score, base_pen, sec_pen, tot_pen, driv_domain = aggregate_othi_max_plus_secondary(
+        raw_score, base_pen, sec_pen, tot_pen, driv_domain = self._aggregate(
             domain_severities={d: active_domain_severities[d] for d in current_domains},
-            secondary_coefficient=self.secondary_coefficient,
         )
         driv_fam = driving_family_by_domain.get(driv_domain) if driv_domain else None
         raw_status = status_from_othi(raw_score)
@@ -507,9 +676,8 @@ class OTHIEngine:
             if d not in counterfactual_severities:
                 counterfactual_severities[d] = last_sev
 
-        cf_score, _, _, _, _ = aggregate_othi_max_plus_secondary(
+        cf_score, _, _, _, _ = self._aggregate(
             domain_severities=counterfactual_severities,
-            secondary_coefficient=self.secondary_coefficient,
         )
 
         # Anti-uplift violation: current raw score is healthier than counterfactual due to dropped stale domains
@@ -546,8 +714,57 @@ class OTHIEngine:
         else:
             is_gated = False
             gate_reason = None
-            final_othi = raw_score
-            final_status = raw_status
+
+            # Distinguish slower-moving condition score from instantaneous operating stress:
+            baseline_score = self.last_valid_othi_score
+            has_active_degraded_episode = False
+            if open_episodes:
+                has_active_degraded_episode = any(
+                    ep.state in (EpisodeState.CRITICAL, EpisodeState.WARNING)
+                    for ep in open_episodes
+                )
+
+            if baseline_score is None:
+                # Cold-start initialization without prior baseline
+                final_othi = raw_score
+                final_status = raw_status
+                self.degradation_candidate_start_time = None
+                self.degradation_candidate_score = None
+            elif raw_score < baseline_score:
+                # Operating stress / degradation below existing condition baseline
+                if has_active_degraded_episode:
+                    # Confirmed sustained by active episode engine
+                    final_othi = raw_score
+                    final_status = raw_status
+                    self.degradation_candidate_start_time = None
+                    self.degradation_candidate_score = None
+                else:
+                    # Evaluate temporal persistence across event time
+                    if self.degradation_candidate_start_time is None:
+                        self.degradation_candidate_start_time = current_time
+                        self.degradation_candidate_score = raw_score
+
+                    elapsed = (current_time - self.degradation_candidate_start_time).total_seconds()
+                    if elapsed >= self.persistence_seconds:
+                        # Degradation sustained across persistence window
+                        final_othi = raw_score
+                        final_status = raw_status
+                    else:
+                        # Transient operating stress / isolated 1-frame excursion:
+                        # Preserve condition health score while exposing instantaneous stress in raw_othi
+                        final_othi = baseline_score
+                        final_status = self.last_valid_status or raw_status
+            else:
+                # raw_score >= baseline_score (healthy or recovering)
+                self.degradation_candidate_start_time = None
+                self.degradation_candidate_score = None
+                if has_active_degraded_episode:
+                    # Cannot recover condition score while active degraded episode remains open
+                    final_othi = baseline_score
+                    final_status = self.last_valid_status or raw_status
+                else:
+                    final_othi = raw_score
+                    final_status = raw_status
 
         # 8. Operational Status Band via Episode Persistence & Anti-Uplift
         operational_status = self._evaluate_operational_status(
@@ -588,7 +805,7 @@ class OTHIEngine:
             last_valid_othi=self.last_valid_othi_score,
             last_valid_status=self.last_valid_status,
             last_valid_timestamp_utc=self.last_valid_timestamp_utc,
-            algorithm_version="MAX_PLUS_SECONDARY_V1",
+            algorithm_version=self.algorithm_version,
             secondary_coefficient=self.secondary_coefficient,
         )
 

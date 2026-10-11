@@ -50,6 +50,25 @@ class ElectricalEpisodeEngine:
         self.recovery_timers: Dict[ElectricalEpisodeType, float] = {}
         self.evidence_counters: Dict[ElectricalEpisodeType, int] = {}
         self.last_event_time_utc: Optional[datetime] = None
+        self.latched_episodes: Set[ElectricalEpisodeType] = set()
+        self.cleared_episodes: Set[ElectricalEpisodeType] = set()
+
+    def clear_latched_episode(self, ep_type: ElectricalEpisodeType) -> None:
+        """Mark a latched episode as cleared by authorized resolution."""
+        self.cleared_episodes.add(ep_type)
+        self.latched_episodes.discard(ep_type)
+
+    def reset(self) -> None:
+        """Reset internal stateful accumulators and timers."""
+        self.active_episodes.clear()
+        self.closed_episodes.clear()
+        self.recurrence_counts.clear()
+        self.persistence_timers.clear()
+        self.recovery_timers.clear()
+        self.evidence_counters.clear()
+        self.latched_episodes.clear()
+        self.cleared_episodes.clear()
+        self.last_event_time_utc = None
 
     def evaluate_step(
         self,
@@ -238,6 +257,9 @@ class ElectricalEpisodeEngine:
         elif current_ep.status == EpisodeStatus.ACTIVE:
             # State: ACTIVE -> (continue active, escalate, or enter RECOVERING)
             if is_abnormal:
+                if ep_type == ElectricalEpisodeType.PROTECTION_TRIP:
+                    self.latched_episodes.add(ep_type)
+                    self.cleared_episodes.discard(ep_type)
                 self.recovery_timers[ep_type] = 0.0
                 cur_sev = EpisodeSeverity.CRITICAL if is_critical else current_ep.severity
                 peak_v = self._update_peak_value(ep_type, current_ep.peak_value, val)
@@ -266,34 +288,45 @@ class ElectricalEpisodeEngine:
                 )
 
             elif is_recovery:
-                # Value dropped below recovery threshold T_off -> enter RECOVERING
-                self.recovery_timers[ep_type] = 0.0
-                dur = (ev_time - current_ep.start_time_utc).total_seconds()
-
-                if config.recovery_seconds <= 0.0:
-                    # Immediate closure
-                    closed_ep = current_ep.model_copy(
-                        update={
-                            "status": EpisodeStatus.CLOSED,
-                            "last_active_time_utc": ev_time,
-                            "recovery_start_time_utc": ev_time,
-                            "closed_time_utc": ev_time,
-                            "duration_seconds": dur,
-                            "last_observed_value": val,
-                        }
-                    )
-                    self.closed_episodes.append(closed_ep)
-                    del self.active_episodes[ep_type]
-                else:
+                if ep_type == ElectricalEpisodeType.PROTECTION_TRIP and ep_type not in self.cleared_episodes:
+                    # Protection trip is latched: normal telemetry alone does not recover without authorization
+                    dur = (ev_time - current_ep.start_time_utc).total_seconds()
                     self.active_episodes[ep_type] = current_ep.model_copy(
                         update={
-                            "status": EpisodeStatus.RECOVERING,
                             "last_active_time_utc": ev_time,
-                            "recovery_start_time_utc": ev_time,
                             "duration_seconds": dur,
                             "last_observed_value": val,
                         }
                     )
+                else:
+                    # Value dropped below recovery threshold T_off -> enter RECOVERING
+                    self.recovery_timers[ep_type] = 0.0
+                    dur = (ev_time - current_ep.start_time_utc).total_seconds()
+
+                    if config.recovery_seconds <= 0.0:
+                        # Immediate closure
+                        closed_ep = current_ep.model_copy(
+                            update={
+                                "status": EpisodeStatus.CLOSED,
+                                "last_active_time_utc": ev_time,
+                                "recovery_start_time_utc": ev_time,
+                                "closed_time_utc": ev_time,
+                                "duration_seconds": dur,
+                                "last_observed_value": val,
+                            }
+                        )
+                        self.closed_episodes.append(closed_ep)
+                        del self.active_episodes[ep_type]
+                    else:
+                        self.active_episodes[ep_type] = current_ep.model_copy(
+                            update={
+                                "status": EpisodeStatus.RECOVERING,
+                                "last_active_time_utc": ev_time,
+                                "recovery_start_time_utc": ev_time,
+                                "duration_seconds": dur,
+                                "last_observed_value": val,
+                            }
+                        )
             else:
                 # In hysteresis band (between T_off and T_on): remain ACTIVE
                 dur = (ev_time - current_ep.start_time_utc).total_seconds()
@@ -395,13 +428,33 @@ class ElectricalEpisodeEngine:
             has_prot_signal = False
             for m in event.measurements:
                 s_id = m.signal_id.lower()
-                if s_id in ("oil_temp_trip_flag", "top_oil_temp_trip", "breaker_trip", "buchholz_trip", "wti", "oti_t"):
+                flags = m.quality.flags if m.quality else []
+                if s_id in (
+                    "oil_temp_trip_flag",
+                    "top_oil_temp_trip",
+                    "breaker_trip",
+                    "buchholz_trip",
+                    "wti",
+                    "oti_t",
+                    "oti_trip",
+                    "oti_trip_contact",
+                    "lv_breaker_trip",
+                    "hv_fuse_operated",
+                    "prd_operated",
+                    "pressure_relief_operated",
+                ) or "DIRECT_TRIP" in flags:
                     has_prot_signal = True
                     val = m.value
                     if val is True or val == 1 or str(val).lower() in ("true", "1", "trip", "tripped"):
                         is_trip = True
                         break
-            if "PROTECTION_TRIP_ACTIVE" in event.event_quality_flags:
+                elif s_id in ("lv_breaker_closed", "52a_status"):
+                    has_prot_signal = True
+                    val = m.value
+                    if val in (0, 0.0, "0", False, "false", "open", "OPEN"):
+                        is_trip = True
+                        break
+            if "PROTECTION_TRIP_ACTIVE" in event.event_quality_flags or "DIRECT_PROTECTION_TRIP" in event.event_quality_flags:
                 is_trip = True
                 has_prot_signal = True
             if not has_prot_signal:

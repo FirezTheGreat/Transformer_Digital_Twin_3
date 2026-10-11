@@ -85,6 +85,10 @@ class MaintenanceEngine:
         self.rules_path = Path(rules_path)
         self.rules: Dict[str, Dict[str, Any]] = self._load_rules(self.rules_path)
 
+    def reset(self) -> None:
+        """Reset internal maintenance engine state."""
+        pass
+
     def _load_rules(self, path: Path) -> Dict[str, Dict[str, Any]]:
         """Load and validate rules from YAML file."""
         if not path.exists():
@@ -157,6 +161,14 @@ class MaintenanceEngine:
             ):
                 has_direct_trip = True
                 direct_trip_evidence_ids.append(ev.evidence_id)
+
+        # Include latched protection trip from OTHI health assessment
+        if health_bundle is not None:
+            oil_prot = health_bundle.domains.get("oil_protection")
+            if health_bundle.driving_condition_family == "DIRECT_PROTECTION_TRIP" or (
+                oil_prot is not None and oil_prot.severity >= 1.0
+            ):
+                has_direct_trip = True
 
         fired_recommendations: List[MaintenanceRecommendation] = []
 
@@ -521,30 +533,18 @@ class MaintenanceEngine:
                 )
             )
 
-        # Retain previously active recommendations that did not refire, or preserve metadata
-        active_dismissals = self.feedback_ledger.get_active_dismissals(asset_id=event.asset_id)
-        current_rule_ids = {r.rule_id for r in fired_recommendations}
-        current_merge_keys = {r.merge_key for r in fired_recommendations}
+        # Preserve creation timestamp and acknowledgement metadata from matching prior active recommendations
         for prev_rec in (previous_recommendations or []):
-            if prev_rec.rule_id not in current_rule_ids and prev_rec.merge_key not in current_merge_keys:
-                dismissal = (
-                    active_dismissals.get(prev_rec.recommendation_id)
-                    or active_dismissals.get(prev_rec.merge_key)
-                    or active_dismissals.get(prev_rec.rule_id)
-                )
-                if dismissal is None:
-                    fired_recommendations.append(prev_rec)
-            else:
-                for idx, r in enumerate(fired_recommendations):
-                    if r.rule_id == prev_rec.rule_id or r.merge_key == prev_rec.merge_key:
-                        fired_recommendations[idx] = r.model_copy(
-                            update={
-                                "created_at_utc": prev_rec.created_at_utc,
-                                "acknowledged": prev_rec.acknowledged if not r.acknowledged else True,
-                                "acknowledged_at_utc": prev_rec.acknowledged_at_utc if not r.acknowledged_at_utc else r.acknowledged_at_utc,
-                                "acknowledged_by": prev_rec.acknowledged_by if not r.acknowledged_by else r.acknowledged_by,
-                            }
-                        )
+            for idx, r in enumerate(fired_recommendations):
+                if r.rule_id == prev_rec.rule_id or r.merge_key == prev_rec.merge_key:
+                    fired_recommendations[idx] = r.model_copy(
+                        update={
+                            "created_at_utc": prev_rec.created_at_utc,
+                            "acknowledged": prev_rec.acknowledged if not r.acknowledged else True,
+                            "acknowledged_at_utc": prev_rec.acknowledged_at_utc if not r.acknowledged_at_utc else r.acknowledged_at_utc,
+                            "acknowledged_by": prev_rec.acknowledged_by if not r.acknowledged_by else r.acknowledged_by,
+                        }
+                    )
 
         # 3. Merge compatible recommendations sharing a merge_key
         merged_by_key: Dict[str, List[MaintenanceRecommendation]] = {}
@@ -555,6 +555,7 @@ class MaintenanceEngine:
 
         # 4. Apply feedback lifecycle (acknowledgements, dismissals/recurrence, overrides)
         active_acks = self.feedback_ledger.get_active_acknowledgements(asset_id=event.asset_id)
+        active_dismissals = self.feedback_ledger.get_active_dismissals(asset_id=event.asset_id)
         active_overrides = self.feedback_ledger.get_active_overrides(
             asset_id=event.asset_id, current_time=current_time
         )

@@ -159,6 +159,11 @@ export const ReplayBar: React.FC<ReplayBarProps> = ({
                 <span>Start Digital Twin</span>
               </button>
             </>
+          ) : replayStatus?.is_completed ? (
+            <span className="chip chip-neutral border-ok/30">
+              <span className="dot bg-ok" />
+              <span className="text-ok font-medium">CAL Partition Completed</span>
+            </span>
           ) : (
             <span className={`chip ${isPlaying ? 'chip-ok' : 'chip-neutral'}`}>
               <span className={`dot ${isPlaying ? 'bg-ok animate-pulse' : 'bg-faint'}`} />

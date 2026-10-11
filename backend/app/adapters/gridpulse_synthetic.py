@@ -82,10 +82,6 @@ SYNTHETIC_V1_TAG_MAP: Dict[str, Dict[str, Any]] = {
     "hv_fuse_operated": {"signal_id": "hv_fuse_operated", "phase": None, "unit": "1", "orig_unit": "binary"},
     "oti_alarm": {"signal_id": "oti_alarm_contact", "phase": None, "unit": "1", "orig_unit": "binary"},
     "oti_trip": {"signal_id": "oti_trip_contact", "phase": None, "unit": "1", "orig_unit": "binary"},
-    # Nameplate Ratings
-    "rated_kva": {"signal_id": "rated_kva", "phase": None, "unit": "kVA", "orig_unit": "kVA"},
-    "rated_lv_v_ll": {"signal_id": "rated_lv_v_ll", "phase": None, "unit": "V", "orig_unit": "V"},
-    "impedance_pct": {"signal_id": "impedance_pct", "phase": None, "unit": "%", "orig_unit": "%"},
 }
 
 SYNTHETIC_ASSET_PROFILES: Dict[str, AssetProfile] = {

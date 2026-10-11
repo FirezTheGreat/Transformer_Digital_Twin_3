@@ -38,6 +38,7 @@ interface MaintenanceViewProps {
   activeReviews?: ReviewFlagRecord[];
   healthHistory?: HealthHistoryEntry[];
   onOpenFeedback: (rec: MaintenanceRecommendation) => void;
+  onQuickAcknowledge?: (rec: MaintenanceRecommendation) => void;
   onAcknowledgeReview?: (review: ReviewFlagRecord) => void;
   onDismissReview?: (review: ReviewFlagRecord) => void;
 }
@@ -65,6 +66,7 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({
   activeReviews = [],
   healthHistory = [],
   onOpenFeedback,
+  onQuickAcknowledge,
   onAcknowledgeReview,
   onDismissReview,
 }) => {
@@ -143,7 +145,7 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({
   const p1Count = recommendations.filter((r) => r.priority === 'P1').length;
 
   const openReviews = activeReviews.filter(
-    (r) => r.lifecycle_state === 'OPEN' || r.lifecycle_state === 'CLEARING'
+    (r) => (r.lifecycle_state === 'OPEN' || r.lifecycle_state === 'CLEARING') && r.workflow_state !== 'DISMISSED'
   );
 
   const toggleEpisodeExpand = (id: string) => {
@@ -810,6 +812,7 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({
             <RecommendationsList
               recommendations={recommendations}
               onOpenFeedback={onOpenFeedback}
+              onQuickAcknowledge={onQuickAcknowledge}
             />
           </div>
         </section>

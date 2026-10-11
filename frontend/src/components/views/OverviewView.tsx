@@ -11,6 +11,7 @@ import {
   Info,
   X,
   CheckCircle2,
+  Check,
   ShieldAlert,
   Activity,
 } from 'lucide-react';
@@ -39,6 +40,7 @@ interface OverviewViewProps {
   modelCard?: ModelCardData | null;
   onNavigateTab: (tab: string) => void;
   onOpenFeedback: (rec: MaintenanceRecommendation) => void;
+  onQuickAcknowledge?: (rec: MaintenanceRecommendation) => void;
 }
 
 /** Presentational metric tile (eyebrow label, large value, unit, contextual footer). */
@@ -92,6 +94,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   modelCard = null,
   onNavigateTab,
   onOpenFeedback,
+  onQuickAcknowledge,
 }) => {
   const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
   const [isCapabilityModalOpen, setIsCapabilityModalOpen] = useState<boolean>(false);
@@ -100,7 +103,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   const isGated = health?.is_gated ?? true;
   const othiScore = health?.othi_score ?? null;
+  const rawOthi = health?.raw_othi ?? null;
   const healthStatus = health?.status ?? null;
+  const operationalStatus = health?.operational_status ?? healthStatus;
   const evidenceGrade = health?.evidence_grade ?? 'U';
   const highestTier = capabilities?.highest_tier ?? 'C2';
 
@@ -237,14 +242,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <span className="text-ink">{getTierTitle(highestTier)}</span>
             <Info className="w-3.5 h-3.5 text-faint group-hover:text-accent" />
           </button>
-          {twinState?.active_reviews && twinState.active_reviews.some((r) => r.lifecycle_state === 'OPEN') && (
+          {twinState?.active_reviews && twinState.active_reviews.some((r) => r.lifecycle_state === 'OPEN' && r.workflow_state !== 'DISMISSED') && (
             <button
               onClick={() => onNavigateTab('maintenance')}
               className="btn bg-accent/15 text-accent hover:bg-accent/20 border border-accent/30 text-xs font-semibold"
               title="Review Flag: Observed behaviour warrants human review; evidence does not support automated conclusion"
             >
               <AlertTriangle className="w-3.5 h-3.5 text-accent" />
-              <span>Review Required ({twinState.active_reviews.filter((r) => r.lifecycle_state === 'OPEN').length})</span>
+              <span>Review Required ({twinState.active_reviews.filter((r) => r.lifecycle_state === 'OPEN' && r.workflow_state !== 'DISMISSED').length})</span>
             </button>
           )}
           {activeEpisodeCount > 0 && (
@@ -295,7 +300,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 )}
               </div>
 
-              <div className="mt-5">
+              <div className="mt-5 space-y-1">
                 {healthStatus && isScoreShown ? (
                   <span className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-on-inverse">
                     <span
@@ -307,13 +312,20 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                           : 'bg-crit'
                       }`}
                     />
-                    {healthStatus}
+                    {health?.driving_condition_family === 'DIRECT_PROTECTION_TRIP'
+                      ? 'TRIPPED / OUT OF SERVICE'
+                      : (operationalStatus || healthStatus)}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-on-inverse/80">
                     <span className="dot w-2 h-2 border border-on-inverse/50" />
                     Status: Insufficient evidence
                   </span>
+                )}
+                {rawOthi !== null && isScoreShown && (
+                  <div className="text-[11px] text-on-inverse/75 font-mono">
+                    Instantaneous stress: {Math.round(Number(rawOthi))}/100
+                  </div>
                 )}
               </div>
             </div>
@@ -328,7 +340,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <Info className="w-3 h-3" />
               </button>
               <div>
-                {isScoreShown ? 'Composite health index' : 'Gated (requires ≥2 corroborated domains)'}
+                {isScoreShown ? 'Condition health (temporal) & stress (raw)' : 'Gated (requires ≥2 corroborated domains)'}
               </div>
               {asOf && <div className="font-mono text-[11px] text-on-inverse/65">As of {asOf}</div>}
             </div>
@@ -450,13 +462,24 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                         {rec.advisory_wording}
                       </p>
                     )}
-                    <button
-                      onClick={() => onOpenFeedback(rec)}
-                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-ink-2 hover:text-accent"
-                    >
-                      {rec.acknowledged ? 'View Acknowledged Record' : 'Acknowledge Advisory'}
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                      {!rec.acknowledged && onQuickAcknowledge && (
+                        <button
+                          onClick={() => onQuickAcknowledge(rec)}
+                          className="btn btn-primary text-[11px] py-1 px-2.5 flex items-center gap-1 font-semibold"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Acknowledge</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onOpenFeedback(rec)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-ink-2 hover:text-accent"
+                      >
+                        {rec.acknowledged ? 'View Acknowledged Record' : 'Audit / Details'}
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

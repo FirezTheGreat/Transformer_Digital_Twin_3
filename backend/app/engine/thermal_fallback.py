@@ -203,6 +203,26 @@ class ThermalFallbackGate:
         if artifact.parameters is None or artifact.promotion.status == "UNCALIBRATED":
             is_promoted = False
             qualification = None
+        elif not is_promoted:
+            # An unpromoted model must not emit qualified operational anomaly evidence
+            # solely because its artifact carries qualification flags
+            qualification = ThermalModelQualification(
+                parameter_interpretability=(
+                    artifact.qualification.parameter_interpretability
+                    if artifact.qualification
+                    else QualificationStatus.UNVERIFIED
+                ),
+                forecast_qualification=QualificationStatus.NOT_QUALIFIED,
+                scenario_qualification=QualificationStatus.NOT_QUALIFIED,
+                residual_display_qualification=(
+                    artifact.qualification.residual_display_qualification
+                    if artifact.qualification
+                    else QualificationStatus.NOT_QUALIFIED
+                ),
+                residual_anomaly_qualification=QualificationStatus.NOT_QUALIFIED,
+                cusum_qualification=QualificationStatus.DISABLED,
+                maintenance_inference_qualification=QualificationStatus.DISABLED,
+            )
         elif is_model_promoted_override is True:
             qualification = ThermalModelQualification(
                 parameter_interpretability=artifact.qualification.parameter_interpretability if artifact.qualification else QualificationStatus.QUALIFIED,
@@ -212,16 +232,6 @@ class ThermalFallbackGate:
                 residual_anomaly_qualification=QualificationStatus.QUALIFIED,
                 cusum_qualification=QualificationStatus.QUALIFIED,
                 maintenance_inference_qualification=QualificationStatus.QUALIFIED,
-            )
-        elif is_model_promoted_override is False:
-            qualification = ThermalModelQualification(
-                parameter_interpretability=QualificationStatus.UNVERIFIED,
-                forecast_qualification=QualificationStatus.NOT_QUALIFIED,
-                scenario_qualification=QualificationStatus.NOT_QUALIFIED,
-                residual_display_qualification=QualificationStatus.NOT_QUALIFIED,
-                residual_anomaly_qualification=QualificationStatus.NOT_QUALIFIED,
-                cusum_qualification=QualificationStatus.DISABLED,
-                maintenance_inference_qualification=QualificationStatus.DISABLED,
             )
         else:
             qualification = artifact.qualification
@@ -308,7 +318,7 @@ class ThermalFallbackGate:
         else:
             can_display_residual = is_promoted
 
-        if not can_display_residual and not is_promoted:
+        if not is_promoted:
             fallback_reasons.append(ThermalFallbackReason.UNPROMOTED_MODEL)
 
         if not t_oil_ok or t_oil_val is None:

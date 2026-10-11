@@ -646,7 +646,43 @@ export default function App(): React.ReactElement {
     showToast(`Recommendation ${actionChosen} committed to immutable audit ledger.`);
   };
 
+  const handleQuickAcknowledgeRec = async (rec: MaintenanceRecommendation) => {
+    try {
+      await api.submitFeedback({
+        asset_id: assetId,
+        recommendation_id: rec.recommendation_id,
+        merge_key: rec.merge_key,
+        action: 'ACKNOWLEDGE',
+        operator_id: 'OP-SHIVANSH-01',
+        notes: 'Operator acknowledged advisory.',
+        rationale: 'Operator acknowledged advisory.',
+      });
+      handleFeedbackSuccess(rec.recommendation_id, 'ACKNOWLEDGE');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Acknowledge failed';
+      showToast(msg);
+    }
+  };
+
   const handleAcknowledgeReview = async (review: ReviewFlagRecord) => {
+    setActiveReviews((prev) =>
+      prev.map((r) =>
+        r.review_id === review.review_id
+          ? { ...r, workflow_state: 'ACKNOWLEDGED', revision: r.revision + 1 }
+          : r
+      )
+    );
+    setTwinState((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        active_reviews: (prev.active_reviews || []).map((r) =>
+          r.review_id === review.review_id
+            ? { ...r, workflow_state: 'ACKNOWLEDGED', revision: r.revision + 1 }
+            : r
+        ),
+      };
+    });
     try {
       await api.submitFeedback({
         asset_id: assetId,
@@ -661,10 +697,29 @@ export default function App(): React.ReactElement {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Acknowledge failed';
       showToast(msg);
+      await loadState(assetId);
     }
   };
 
   const handleDismissReview = async (review: ReviewFlagRecord) => {
+    setActiveReviews((prev) =>
+      prev.map((r) =>
+        r.review_id === review.review_id
+          ? { ...r, workflow_state: 'DISMISSED', revision: r.revision + 1 }
+          : r
+      )
+    );
+    setTwinState((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        active_reviews: (prev.active_reviews || []).map((r) =>
+          r.review_id === review.review_id
+            ? { ...r, workflow_state: 'DISMISSED', revision: r.revision + 1 }
+            : r
+        ),
+      };
+    });
     try {
       await api.submitFeedback({
         asset_id: assetId,
@@ -679,6 +734,7 @@ export default function App(): React.ReactElement {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Dismiss failed';
       showToast(msg);
+      await loadState(assetId);
     }
   };
 
@@ -739,6 +795,7 @@ export default function App(): React.ReactElement {
             modelCard={modelCard}
             onNavigateTab={setActiveTab}
             onOpenFeedback={(rec) => setSelectedRecForFeedback(rec)}
+            onQuickAcknowledge={handleQuickAcknowledgeRec}
           />
         )}
 
@@ -773,6 +830,7 @@ export default function App(): React.ReactElement {
             activeReviews={activeReviews}
             healthHistory={healthHistory}
             onOpenFeedback={(rec) => setSelectedRecForFeedback(rec)}
+            onQuickAcknowledge={handleQuickAcknowledgeRec}
             onAcknowledgeReview={handleAcknowledgeReview}
             onDismissReview={handleDismissReview}
           />

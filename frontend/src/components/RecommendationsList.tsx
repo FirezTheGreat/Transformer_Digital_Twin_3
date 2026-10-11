@@ -5,6 +5,7 @@ import { MaintenanceRecommendation } from '../types/contracts';
 interface RecommendationsListProps {
   recommendations: MaintenanceRecommendation[];
   onOpenFeedback: (rec: MaintenanceRecommendation) => void;
+  onQuickAcknowledge?: (rec: MaintenanceRecommendation) => void;
   externalStatusFilter?: 'ACTIVE' | 'ACKNOWLEDGED' | 'ALL';
   onStatusFilterChange?: (filter: 'ACTIVE' | 'ACKNOWLEDGED' | 'ALL') => void;
 }
@@ -12,6 +13,7 @@ interface RecommendationsListProps {
 export const RecommendationsList: React.FC<RecommendationsListProps> = ({
   recommendations,
   onOpenFeedback,
+  onQuickAcknowledge,
   externalStatusFilter,
   onStatusFilterChange,
 }) => {
@@ -209,14 +211,24 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({
 
                   {/* Action Buttons */}
                   <div className="flex items-center justify-end gap-2 pt-1 border-t border-line">
+                    {!rec.acknowledged && onQuickAcknowledge && (
+                      <button
+                        type="button"
+                        onClick={() => onQuickAcknowledge(rec)}
+                        className="btn btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Acknowledge</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onOpenFeedback(rec)}
                       className={`btn text-xs py-1.5 px-3 flex items-center gap-1.5 ${
-                        rec.acknowledged ? 'btn-secondary text-muted hover:text-ink' : 'btn-primary'
+                        rec.acknowledged ? 'btn-secondary text-muted hover:text-ink' : (onQuickAcknowledge ? 'btn-secondary text-muted hover:text-ink' : 'btn-primary')
                       }`}
                     >
-                      <span>{rec.acknowledged ? 'Update / Document Resolution' : 'Acknowledge Advisory'}</span>
+                      <span>{rec.acknowledged ? 'Update / Document Resolution' : 'Audit / Resolution Details'}</span>
                       <ArrowRight className="w-3 h-3" />
                     </button>
                   </div>

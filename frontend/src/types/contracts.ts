@@ -222,17 +222,26 @@ export interface DomainHealth {
 export interface OTHIBundle {
   asset_id: string;
   timestamp_utc: string;
-  othi_score?: number | null; // [0, 100] or null if gated
+  othi_score?: number | null; // [0, 100] condition health index or null if gated
+  raw_othi?: number | null; // [0, 100] instantaneous operating stress index or null
   status?: HealthStatus | null;
+  raw_status?: HealthStatus | null;
+  operational_status?: HealthStatus | null;
   evidence_grade: EvidenceGrade;
   driving_domain?: string | null;
+  driving_condition_family?: string | null;
   base_penalty: number;
   secondary_penalty: number;
   total_penalty: number;
   is_gated: boolean;
   gate_reason?: string | null;
   available_domains: string[];
+  current_domains?: string[];
+  stale_domains?: string[];
   domains: Record<string, DomainHealth>;
+  last_valid_othi?: number | null;
+  last_valid_status?: HealthStatus | null;
+  last_valid_timestamp_utc?: string | null;
 }
 
 // ==========================================
@@ -266,17 +275,30 @@ export interface MaintenanceRecommendation {
   acknowledged_by?: string | null;
 }
 
-export type FeedbackAction = 'ACKNOWLEDGE' | 'DISMISS' | 'INSPECTION_RECORDED' | 'OVERRIDE';
+export type FeedbackAction =
+  | 'ACKNOWLEDGE'
+  | 'DISMISS'
+  | 'RESOLVE'
+  | 'REOPEN'
+  | 'INSPECTION_RECORDED'
+  | 'OVERRIDE';
 
 export interface OperatorFeedbackEvent {
   feedback_id: string;
   asset_id: string;
   timestamp_utc: string;
   recommendation_id?: string | null;
+  merge_key?: string | null;
   action: FeedbackAction;
   operator_id: string;
+  actor_id?: string | null;
+  reason_code?: string | null;
   notes?: string | null;
+  rationale?: string | null;
   inspection_outcome?: Record<string, unknown> | null;
+  authorized_role?: string | null;
+  override_expiry_utc?: string | null;
+  review_id?: string | null;
 }
 
 // ==========================================

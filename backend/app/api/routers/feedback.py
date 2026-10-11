@@ -46,7 +46,12 @@ async def submit_operator_feedback(
 
     # 2. Build canonical OperatorFeedbackEvent
     event_id = request.feedback_id or f"FB-{uuid.uuid4().hex[:12].upper()}"
-    ts = request.timestamp_utc or datetime.now(timezone.utc)
+    if request.timestamp_utc:
+        ts = request.timestamp_utc
+    elif app_state.current_state:
+        ts = app_state.current_state.event_time_watermark_utc or app_state.current_state.state_time_utc
+    else:
+        ts = datetime.now(timezone.utc)
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
 

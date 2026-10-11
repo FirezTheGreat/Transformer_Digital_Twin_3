@@ -260,6 +260,8 @@ async def control_replay(
         capability_evaluator = app_state.capability_evaluator
         app_state.current_state = None
         app_state.latest_fact_bundle = None
+        if app_state.feedback_ledger is not None:
+            app_state.feedback_ledger.clear(target_asset)
         replay_engine.reset(clear_time_bounds=(payload.start_time_utc is None and payload.end_time_utc is None))
     elif not replay_engine._events and storage is not None:
         ensure_dataset_loaded(storage, replay_engine, target_asset)
@@ -285,6 +287,8 @@ async def control_replay(
         replay_engine._is_paused = False
         app_state.current_state = None
         app_state.latest_fact_bundle = None
+        if app_state.feedback_ledger is not None:
+            app_state.feedback_ledger.clear(target_asset)
         reducer = _restart_reducer(app_state, reducer, target_asset=target_asset)
 
     elif action == "pause":
@@ -298,6 +302,8 @@ async def control_replay(
         replay_engine.reset(clear_time_bounds=(payload.start_time_utc is None and payload.end_time_utc is None))
         app_state.current_state = None
         app_state.latest_fact_bundle = None
+        if app_state.feedback_ledger is not None:
+            app_state.feedback_ledger.clear(target_asset)
         reducer = _restart_reducer(app_state, reducer, target_asset=target_asset)
 
     elif action == "seek":

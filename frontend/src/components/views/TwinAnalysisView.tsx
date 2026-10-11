@@ -151,18 +151,35 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
                 </p>
                 <ul className="mt-3 space-y-1 text-[11.5px]">
                   <li>Thermal time constant: <strong className="text-ink font-semibold">τ = {tauHours} hours</strong></li>
-                  <li>Ambient baseline offset: <strong className="text-ink font-semibold">β₀ = 1.09 °C</strong></li>
-                  <li>Load heating coefficient: <strong className="text-ink font-semibold">β₁ = 2.90 °C</strong></li>
+                  <li>State: <strong className="text-ink font-semibold font-mono">{twinState?.thermal_latent?.model_status || 'SHADOW_DESCRIPTIVE'}</strong></li>
                 </ul>
               </div>
 
               <div>
                 <h4 className="eyebrow mb-2.5">Thermal Anomaly Qualification State</h4>
                 <ul className="space-y-1.5 text-[11.5px] leading-relaxed">
-                  <li>CUSUM Anomaly Status: <span className="font-mono font-semibold text-ink">DISABLED — NOT QUALIFIED</span></li>
-                  <li>Accumulators: <span className="font-mono text-ink-2">C⁺ = —, C⁻ = —</span> (Frozen / inactive)</li>
+                  <li>
+                    CUSUM Anomaly Status:{' '}
+                    <span className="font-mono font-semibold text-ink">
+                      {twinState?.thermal_latent?.model_status === 'PROMOTED'
+                        ? 'ACTIVE — QUALIFIED'
+                        : 'DISABLED — NOT QUALIFIED'}
+                    </span>
+                  </li>
+                  <li>
+                    Accumulators:{' '}
+                    <span className="font-mono text-ink-2">
+                      C⁺ = {twinState?.detector_state ? twinState.detector_state.cusum_pos.toFixed(2) : '0.00'},{' '}
+                      C⁻ = {twinState?.detector_state ? twinState.detector_state.cusum_neg.toFixed(2) : '0.00'}
+                    </span>
+                  </li>
                   <li>Residual definition: <span className="font-mono text-ink-2">r_k = T_observed - θ̂_expected</span></li>
-                  <li>Qualification reason: Parameters sit on lower boundary (tau=0.50h). Model qualified as descriptive shadow twin only.</li>
+                  <li>
+                    Qualification reason:{' '}
+                    {twinState?.thermal_latent?.model_status === 'PROMOTED'
+                      ? 'Model qualified and promoted. Autonomous residual tracking active.'
+                      : 'Model operates in descriptive shadow mode. Residual anomaly detection is not qualified for operational action.'}
+                  </li>
                 </ul>
               </div>
             </div>

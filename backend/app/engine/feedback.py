@@ -49,6 +49,18 @@ class OperatorFeedbackLedger:
         self._lock = threading.Lock()
         self._events: List[OperatorFeedbackEvent] = []
 
+    def clear(self, asset_id: Optional[str] = None) -> None:
+        """Clear recorded feedback events, optionally scoped to an asset_id."""
+        with self._lock:
+            if asset_id is None:
+                self._events.clear()
+            else:
+                self._events = [e for e in self._events if e.asset_id != asset_id]
+
+    def reset(self, asset_id: Optional[str] = None) -> None:
+        """Alias for clear()."""
+        self.clear(asset_id=asset_id)
+
     def append(
         self,
         event: OperatorFeedbackEvent,

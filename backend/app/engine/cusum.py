@@ -110,8 +110,9 @@ class TwoSidedCUSUMTracker:
         med = unc.calibration_residual_median if unc.calibration_residual_median is not None else 0.0
         mad = unc.calibration_residual_mad if unc.calibration_residual_mad is not None else 1.0
 
+        is_promoted = getattr(artifact.promotion, "status", None) == "PROMOTED"
         is_qual = False
-        if artifact.qualification is not None:
+        if is_promoted and artifact.qualification is not None:
             is_qual = (artifact.qualification.cusum_qualification == QualificationStatus.QUALIFIED)
 
         return cls(

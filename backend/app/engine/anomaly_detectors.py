@@ -16,7 +16,7 @@ and input lineage while strictly honoring capability qualification gates.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from pydantic import BaseModel, ConfigDict, Field
@@ -143,6 +143,13 @@ def detect_data_quality(
     # 2. Envelope-level Quality Flags
     if event.event_quality_flags:
         for idx, flag in enumerate(event.event_quality_flags):
+            # Partition metadata and operational/validation states are not data-quality faults
+            if flag.startswith("PARTITION_") or flag in (
+                "PROTECTION_TRIP_ACTIVE",
+                "DIRECT_PROTECTION_TRIP",
+                "VALIDATED",
+            ):
+                continue
             ev_id = f"ev_{event.asset_id}_dq_envflag_{flag}_{t_str}_{idx}"
             evidence.append(
                 EvidenceItem(
@@ -404,6 +411,13 @@ def detect_thermal_deviation(
 
         if is_cusum_qual and is_res_qual:
             # Fully qualified operational evidence
+            # Distinguish positive overheating drift from negative undercooling / model bias
+            if direction_str == "POSITIVE_SHIFT":
+                sev = 0.75
+            else:
+                # Negative residual drift: oil cooler than expected is mild model bias / undercooling, capped at 0.30 WATCH
+                sev = min(0.30, 0.20 + 0.10 * min(1.0, max(0.0, (abs(cusum_val) - 4.5) / 4.5)))
+
             evidence.append(
                 EvidenceItem(
                     evidence_id=f"ev_{event.asset_id}_thdev_cusum_{t_str}",
@@ -416,7 +430,7 @@ def detect_thermal_deviation(
                     unit="sigma",
                     threshold_or_band="CUSUM h decision limit",
                     direction=direction_str,
-                    severity=0.75,
+                    severity=sev,
                     confidence=0.85,
                     input_lineage=["oti_degc", "ambient_temperature", "apparent_power"],
                     reason_codes=["PERSISTENT_THERMAL_RESIDUAL_DRIFT"],
@@ -880,6 +894,27 @@ def detect_protection_oil_status(
                         hypothesis_codes=["THROUGH_FAULT_INTERRUPTED", "DOWNSTREAM_SHORT_CIRCUIT"],
                     )
                 )
+        elif s_id in ("lv_breaker_closed", "52a_status"):
+            if val in (0, 0.0, "0", False) or str(val).lower() in ("open", "tripped", "false", "0"):
+                evidence.append(
+                    EvidenceItem(
+                        evidence_id=f"ev_{event.asset_id}_prot_lv_trip_{t_str}",
+                        asset_id=event.asset_id,
+                        event_time_utc=event.event_time_utc,
+                        category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                        detector_id="DET_PROT_LV_BREAKER_TRIP",
+                        observed_value=0,
+                        expected_value=1,
+                        unit="binary",
+                        threshold_or_band="0 (Open/Trip)",
+                        direction="BREAKER_OPEN",
+                        severity=1.0,
+                        confidence=1.0,
+                        input_lineage=[m.signal_id],
+                        reason_codes=["LV_CIRCUIT_BREAKER_OPEN_OR_TRIPPED"],
+                        hypothesis_codes=["THROUGH_FAULT_INTERRUPTED", "DOWNSTREAM_SHORT_CIRCUIT"],
+                    )
+                )
         elif s_id in ("hv_fuse_operated", "hv_fuse_trip"):
             if val in (1, 1.0, "1", True):
                 evidence.append(
@@ -926,7 +961,7 @@ def detect_protection_oil_status(
                 )
 
         # 5. Oil Level Indicator & Trend Monitoring (Extra A)
-        elif s_id in ("oli", "oil_level_pct", "oil_level") and has_oil_gauge:
+        elif s_id in ("oli", "oil_level_pct", "oil_level", "oil_level_percent") and has_oil_gauge:
             if isinstance(val, (int, float)) and not isinstance(val, bool):
                 oli_val = float(val)
                 if oli_val <= thresholds.oil_level_critical_pct:
@@ -971,9 +1006,14 @@ def detect_protection_oil_status(
                     )
 
         elif s_id in ("oil_level_trend_pct_per_day",) and has_oil_gauge:
+            # Suppress trend-based leak conclusions if measurement quality is BAD
+            if m.quality and m.quality.severity == QualitySeverity.BAD:
+                continue
             if isinstance(val, (int, float)) and not isinstance(val, bool):
                 trend_val = float(val)
                 if trend_val <= thresholds.oil_leak_trend_threshold_pct_per_day:
+                    sev = 0.75
+                    conf = 0.85
                     evidence.append(
                         EvidenceItem(
                             evidence_id=f"ev_{event.asset_id}_prot_oil_trend_{t_str}",
@@ -986,8 +1026,8 @@ def detect_protection_oil_status(
                             unit="percent/day",
                             threshold_or_band=f"<= {thresholds.oil_leak_trend_threshold_pct_per_day} %/day",
                             direction="LOW",
-                            severity=0.75,
-                            confidence=0.85,
+                            severity=sev,
+                            confidence=conf,
                             input_lineage=[m.signal_id],
                             reason_codes=["SUSPECTED_OIL_LOSS_TREND", "INSPECTION_REQUIRED"],
                             hypothesis_codes=["SUSPECTED_SLOW_OIL_LEAK", "VALVE_SEEPAGE"],
@@ -1044,46 +1084,104 @@ def detect_protection_oil_status(
                 p_kpa = float(val)
                 if not math.isfinite(p_kpa):
                     continue
+
+                # Check history buffer for analog pressure persistence
+                p_history = (
+                    history_buffer.get("tank_pressure_kpa_g")
+                    or history_buffer.get("tank_pressure")
+                    or []
+                ) if history_buffer else []
+                has_prior = len(p_history) >= 1
+                last_p = p_history[-1][1] if has_prior else None
+
                 if p_kpa >= thresholds.tank_pressure_warning_kpa_g:
-                    evidence.append(
-                        EvidenceItem(
-                            evidence_id=f"ev_{event.asset_id}_prot_p_high_{t_str}",
-                            asset_id=event.asset_id,
-                            event_time_utc=event.event_time_utc,
-                            category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
-                            detector_id="DET_PRESSURE_HIGH_ALARM",
-                            observed_value=round(p_kpa, 1),
-                            expected_value=f"< {thresholds.tank_pressure_warning_kpa_g} kPa(g)",
-                            unit="kPa",
-                            threshold_or_band=f">= {thresholds.tank_pressure_warning_kpa_g} kPa(g)",
-                            direction="HIGH",
-                            severity=0.85,
-                            confidence=0.95,
-                            input_lineage=[m.signal_id],
-                            reason_codes=["SEALED_TANK_HIGH_PRESSURE"],
-                            hypothesis_codes=["HEAVY_THERMAL_EXPANSION", "INTERNAL_GAS_ACCUMULATION"],
+                    is_transient = (last_p is not None and last_p < thresholds.tank_pressure_warning_kpa_g)
+                    if is_transient:
+                        # Isolated / candidate excursion from established normal baseline
+                        evidence.append(
+                            EvidenceItem(
+                                evidence_id=f"ev_{event.asset_id}_prot_p_transient_{t_str}",
+                                asset_id=event.asset_id,
+                                event_time_utc=event.event_time_utc,
+                                category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                                detector_id="DET_PRESSURE_HIGH_TRANSIENT",
+                                observed_value=round(p_kpa, 1),
+                                expected_value=f"< {thresholds.tank_pressure_warning_kpa_g} kPa(g)",
+                                unit="kPa",
+                                threshold_or_band=f"TRANSIENT_EXCURSION (>={thresholds.tank_pressure_warning_kpa_g} kPa(g))",
+                                direction="TRANSIENT_HIGH",
+                                severity=0.25,
+                                confidence=0.70,
+                                input_lineage=[m.signal_id],
+                                reason_codes=["ISOLATED_PRESSURE_EXCURSION"],
+                                hypothesis_codes=["TRANSIENT_PRESSURE_PULSE", "THERMAL_SWITCHING_PEAK"],
+                            )
                         )
-                    )
+                    else:
+                        # Genuine sustained abnormal high pressure (or cold-start threshold violation)
+                        evidence.append(
+                            EvidenceItem(
+                                evidence_id=f"ev_{event.asset_id}_prot_p_high_{t_str}",
+                                asset_id=event.asset_id,
+                                event_time_utc=event.event_time_utc,
+                                category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                                detector_id="DET_PRESSURE_HIGH_ALARM",
+                                observed_value=round(p_kpa, 1),
+                                expected_value=f"< {thresholds.tank_pressure_warning_kpa_g} kPa(g)",
+                                unit="kPa",
+                                threshold_or_band=f">= {thresholds.tank_pressure_warning_kpa_g} kPa(g)",
+                                direction="HIGH",
+                                severity=0.85,
+                                confidence=0.95,
+                                input_lineage=[m.signal_id],
+                                reason_codes=["SEALED_TANK_HIGH_PRESSURE"],
+                                hypothesis_codes=["HEAVY_THERMAL_EXPANSION", "INTERNAL_GAS_ACCUMULATION"],
+                            )
+                        )
                 elif p_kpa <= thresholds.tank_pressure_low_kpa_g:
-                    evidence.append(
-                        EvidenceItem(
-                            evidence_id=f"ev_{event.asset_id}_prot_p_low_{t_str}",
-                            asset_id=event.asset_id,
-                            event_time_utc=event.event_time_utc,
-                            category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
-                            detector_id="DET_PRESSURE_LOW_ALARM",
-                            observed_value=round(p_kpa, 1),
-                            expected_value=f"> {thresholds.tank_pressure_low_kpa_g} kPa(g)",
-                            unit="kPa",
-                            threshold_or_band=f"<= {thresholds.tank_pressure_low_kpa_g} kPa(g)",
-                            direction="LOW",
-                            severity=0.70,
-                            confidence=0.90,
-                            input_lineage=[m.signal_id],
-                            reason_codes=["SEALED_TANK_DEPRESSURIZATION_OR_WEEP"],
-                            hypothesis_codes=["CORRUGATED_TANK_BREACH", "SEAL_WEEP_INVENTORY_LOSS"],
+                    is_low_transient = (last_p is not None and last_p > thresholds.tank_pressure_low_kpa_g)
+                    if is_low_transient:
+                        # Isolated / candidate low excursion from established normal baseline
+                        evidence.append(
+                            EvidenceItem(
+                                evidence_id=f"ev_{event.asset_id}_prot_p_low_transient_{t_str}",
+                                asset_id=event.asset_id,
+                                event_time_utc=event.event_time_utc,
+                                category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                                detector_id="DET_PRESSURE_LOW_TRANSIENT",
+                                observed_value=round(p_kpa, 1),
+                                expected_value=f"> {thresholds.tank_pressure_low_kpa_g} kPa(g)",
+                                unit="kPa",
+                                threshold_or_band=f"TRANSIENT_EXCURSION (<={thresholds.tank_pressure_low_kpa_g} kPa(g))",
+                                direction="TRANSIENT_LOW",
+                                severity=0.20,
+                                confidence=0.70,
+                                input_lineage=[m.signal_id],
+                                reason_codes=["ISOLATED_LOW_PRESSURE_EXCURSION"],
+                                hypothesis_codes=["TRANSIENT_THERMAL_CONTRACTION", "CYCLIC_LOAD_DROP"],
+                            )
                         )
-                    )
+                    else:
+                        # Genuine sustained abnormal low pressure (or cold-start depressurization)
+                        evidence.append(
+                            EvidenceItem(
+                                evidence_id=f"ev_{event.asset_id}_prot_p_low_{t_str}",
+                                asset_id=event.asset_id,
+                                event_time_utc=event.event_time_utc,
+                                category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                                detector_id="DET_PRESSURE_LOW_ALARM",
+                                observed_value=round(p_kpa, 1),
+                                expected_value=f"> {thresholds.tank_pressure_low_kpa_g} kPa(g)",
+                                unit="kPa",
+                                threshold_or_band=f"<= {thresholds.tank_pressure_low_kpa_g} kPa(g)",
+                                direction="LOW",
+                                severity=0.70,
+                                confidence=0.90,
+                                input_lineage=[m.signal_id],
+                                reason_codes=["SEALED_TANK_DEPRESSURIZATION_OR_WEEP"],
+                                hypothesis_codes=["CORRUGATED_TANK_BREACH", "SEAL_WEEP_INVENTORY_LOSS"],
+                            )
+                        )
 
     # 7. Stuck Oil Level Gauge Check (Extra A)
     if has_oil_gauge and history_buffer is not None:
@@ -1124,6 +1222,83 @@ def detect_protection_oil_status(
                                         hypothesis_codes=["MECHANICAL_FLOAT_JAMMED", "LEVEL_TRANSMITTER_FAULT"],
                                     )
                                 )
+
+    # 8. Online Oil Level Trend Fallback (when precomputed trend is absent)
+    has_precomputed_trend = any(m.signal_id == "oil_level_trend_pct_per_day" for m in event.measurements)
+    is_stuck_gauge = any(ev.detector_id == "DET_OIL_LEVEL_GAUGE_STUCK" for ev in evidence)
+
+    if has_oil_gauge and history_buffer is not None and not has_precomputed_trend and not is_stuck_gauge:
+        oil_meas = next(
+            (m for m in event.measurements if m.signal_id in ("oil_level", "oil_level_pct")
+             and isinstance(m.value, (int, float)) and not isinstance(m.value, bool)),
+            None
+        )
+        temp_meas = next(
+            (m for m in event.measurements if m.signal_id in ("top_oil_temperature", "top_oil_temp", "oti", "oil_temperature")
+             and isinstance(m.value, (int, float)) and not isinstance(m.value, bool)),
+            None
+        )
+        if oil_meas is not None and temp_meas is not None:
+            oil_bad = bool(oil_meas.quality and oil_meas.quality.severity == QualitySeverity.BAD)
+            temp_bad = bool(temp_meas.quality and temp_meas.quality.severity == QualitySeverity.BAD)
+            if not oil_bad and not temp_bad:
+                oil_val = float(oil_meas.value)
+                temp_val = float(temp_meas.value)
+                if math.isfinite(oil_val) and math.isfinite(temp_val):
+                    ref_temp = float(getattr(profile, "oil_level_ref_temp_c", 30.0) or 30.0) if profile else 30.0
+                    # Documented bulk-oil temperature correction: level - 0.75 * (top_oil - ref_temp)
+                    corr_level = oil_val - 0.75 * (temp_val - ref_temp)
+
+                    buf_key = f"_online_corr_oil_{event.asset_id}"
+                    c_buf = history_buffer.setdefault(buf_key, [])
+                    if not c_buf or c_buf[-1][0] < event.event_time_utc:
+                        c_buf.append((event.event_time_utc, corr_level))
+
+                    # Retain last 100 entries within 72 hours
+                    cutoff = event.event_time_utc - timedelta(hours=72)
+                    c_buf = [(t, v) for t, v in c_buf if t >= cutoff][-100:]
+                    history_buffer[buf_key] = c_buf
+
+                    # Robust multi-day trend requires at least 6 samples spanning >= 12 hours
+                    if len(c_buf) >= 6:
+                        t_start, t_end = c_buf[0][0], c_buf[-1][0]
+                        span_s = (t_end - t_start).total_seconds()
+                        if span_s >= 43200.0:
+                            t0_ref = t_start
+                            t_days = [(t - t0_ref).total_seconds() / 86400.0 for t, _ in c_buf]
+                            y_vals = [v for _, v in c_buf]
+                            n_pts = len(y_vals)
+                            st = sum(t_days)
+                            sy = sum(y_vals)
+                            stt = sum(t * t for t in t_days)
+                            sty = sum(t * y for t, y in zip(t_days, y_vals))
+                            denom = n_pts * stt - (st ** 2)
+                            if denom > 1e-9:
+                                slope = (n_pts * sty - st * sy) / denom
+                                if slope <= thresholds.oil_leak_trend_threshold_pct_per_day:
+                                    warn_th = thresholds.oil_level_warning_pct
+                                    days_to_warn = max(0.0, (corr_level - warn_th) / abs(slope)) if corr_level > warn_th else 0.0
+                                    span_h = span_s / 3600.0
+                                    conf = min(0.90, max(0.50, 0.50 + 0.40 * (span_h / 48.0)))
+                                    evidence.append(
+                                        EvidenceItem(
+                                            evidence_id=f"ev_{event.asset_id}_prot_oil_trend_est_{t_str}",
+                                            asset_id=event.asset_id,
+                                            event_time_utc=event.event_time_utc,
+                                            category=AnomalyCategory.PROTECTION_OR_OIL_STATUS,
+                                            detector_id="DET_OIL_LEVEL_DECLINING_TREND",
+                                            observed_value=round(slope, 3),
+                                            expected_value=f"> {thresholds.oil_leak_trend_threshold_pct_per_day} %/day (ESTIMATE)",
+                                            unit="percent/day",
+                                            threshold_or_band=f"<= {thresholds.oil_leak_trend_threshold_pct_per_day} %/day (EST_DAYS_TO_WARN={round(days_to_warn, 1)})",
+                                            direction="LOW",
+                                            severity=0.75,
+                                            confidence=round(conf, 2),
+                                            input_lineage=[oil_meas.signal_id, temp_meas.signal_id],
+                                            reason_codes=["OIL_LEAK_TREND_ONLINE_ESTIMATE", "DECLINING_OIL_LEVEL_TREND"],
+                                            hypothesis_codes=["EXTERNAL_TANK_OR_VALVE_LEAK", "CONSERVATOR_MEMBRANE_RUPTURE"],
+                                        )
+                                    )
 
     return evidence
 
@@ -1255,9 +1430,9 @@ class MultiDomainAnomalyEngine:
                 key = m.signal_id if m.phase is None else f"{m.signal_id}_{m.phase}"
                 buf = self._history_buffer.setdefault(key, [])
                 buf.append((ev_time, float(m.value)))
-                # Retain last 20 readings per signal
-                if len(buf) > 20:
-                    self._history_buffer[key] = buf[-20:]
+                # Retain last 100 readings per signal (covers 50h at 30m cadence)
+                if len(buf) > 100:
+                    self._history_buffer[key] = buf[-100:]
 
         return all_evidence
 

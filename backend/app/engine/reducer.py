@@ -101,19 +101,27 @@ class TwinReducer:
         self.thermal_gate = thermal_gate
         self.review_engine = review_engine
         self.latest_emitted_evidence: list[EvidenceItem] = []
+        self._observation_times: dict[str, datetime] = {}
 
         if self.othi_engine is not None and self.maintenance_engine is not None:
             if hasattr(self.maintenance_engine, "feedback_ledger"):
                 self.othi_engine.feedback_ledger = self.maintenance_engine.feedback_ledger
 
     def reset(self) -> None:
-        """Reset internal stateful sub-engines (episode engine, thermal gate, othi engine)."""
+        """Reset internal stateful sub-engines (episode engine, thermal gate, othi engine, etc.)."""
         if self.episode_engine is not None and hasattr(self.episode_engine, "reset"):
             self.episode_engine.reset()
         if self.thermal_gate is not None and hasattr(self.thermal_gate, "reset"):
             self.thermal_gate.reset()
         if self.othi_engine is not None and hasattr(self.othi_engine, "reset"):
             self.othi_engine.reset()
+        if self.anomaly_engine is not None and hasattr(self.anomaly_engine, "reset_history"):
+            self.anomaly_engine.reset_history()
+        if self.review_engine is not None and hasattr(self.review_engine, "reset"):
+            self.review_engine.reset()
+        if self.maintenance_engine is not None and hasattr(self.maintenance_engine, "reset"):
+            self.maintenance_engine.reset()
+        self._observation_times.clear()
         self.latest_emitted_evidence = []
 
     def reduce(
@@ -161,10 +169,58 @@ class TwinReducer:
         observations: dict[str, Measurement] = (
             dict(current_state.current_observations) if current_state is not None else {}
         )
+        current_signal_ids = set()
         for m in event.measurements:
-            observations[m.signal_id] = m
+            s_id = m.signal_id
+            current_signal_ids.add(s_id.lower())
+            observations[s_id] = m
+            self._observation_times[s_id] = ev_time
             if m.phase is not None:
-                observations[f"{m.signal_id}_{m.phase}"] = m
+                p_key = f"{s_id}_{m.phase}"
+                observations[p_key] = m
+                self._observation_times[p_key] = ev_time
+
+        # Evict discrete single-event pulse/trip flags that are not in the current event
+        discrete_event_flags = {
+            "oil_temp_trip_flag",
+            "top_oil_temp_trip",
+            "breaker_trip",
+            "oti_t",
+            "oti_trip",
+            "buchholz_trip",
+            "prd_operated",
+            "pressure_relief_operated",
+        }
+        for flag in discrete_event_flags:
+            if flag not in current_signal_ids:
+                observations.pop(flag, None)
+                self._observation_times.pop(flag, None)
+
+        # Evict stale observations older than hard_stale_seconds
+        cadence_s = self.profile.expected_cadence_s if self.profile and self.profile.expected_cadence_s else 1800.0
+        hard_stale_s = max(4.0 * cadence_s, 7200.0)
+        expired_keys = [
+            k for k, t in self._observation_times.items()
+            if (ev_time - t).total_seconds() > hard_stale_s
+        ]
+        for k in expired_keys:
+            observations.pop(k, None)
+            self._observation_times.pop(k, None)
+
+        # If fresh phase currents are observed, clear stale alias currents and stale zero-current readings
+        has_l_currents = any(k in current_signal_ids for k in ("current_l1", "current_l2", "current_l3"))
+        if has_l_currents:
+            for alias in ("current_i1", "current_i2", "current_i3"):
+                if alias not in current_signal_ids:
+                    observations.pop(alias, None)
+                    self._observation_times.pop(alias, None)
+
+        has_i_currents = any(k in current_signal_ids for k in ("current_i1", "current_i2", "current_i3"))
+        if has_i_currents:
+            for alias in ("current_l1", "current_l2", "current_l3"):
+                if alias not in current_signal_ids:
+                    observations.pop(alias, None)
+                    self._observation_times.pop(alias, None)
 
         # 4. Derive pure electrical features from current event
         derived_electrical: DerivedFeatures = extract_electrical_features(
@@ -216,6 +272,14 @@ class TwinReducer:
         detector_state = (
             current_state.detector_state if current_state is not None else DetectorState()
         )
+        if thermal_output is not None:
+            detector_state = detector_state.model_copy(
+                update={
+                    "cusum_pos": thermal_output.cusum_pos,
+                    "cusum_neg": thermal_output.cusum_neg,
+                    "cusum_alarm_active": thermal_output.cusum_alarm_active,
+                }
+            )
         if self.exposure_engine is not None:
             exp_bundle = self.exposure_engine.step(event=event)
             exposure_state = ExposureState(
@@ -260,7 +324,12 @@ class TwinReducer:
                 evidence_items=self.latest_emitted_evidence,
                 open_episodes=open_episodes,
                 previous_bundle=current_state.health_bundle if current_state is not None else None,
+                feedback_ledger=getattr(self.othi_engine, "feedback_ledger", None),
             )
+            if not self.othi_engine.latched_protection_trip and self.episode_engine is not None:
+                if hasattr(self.episode_engine, "clear_latched_episode"):
+                    from app.models.electrical_episode import ElectricalEpisodeType
+                    self.episode_engine.clear_latched_episode(ElectricalEpisodeType.PROTECTION_TRIP)
         else:
             health_bundle = current_state.health_bundle if current_state is not None else None
 

@@ -101,14 +101,14 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
   if (assetCtx.hasOilGauge) {
     oilDisplay = oilLvl !== null ? fmt(oilLvl, 1) : 'Missing';
   } else {
-    oilDisplay = 'Unsupported (Sealed Tank)';
+    oilDisplay = 'Unavailable / Not Supported';
   }
 
   let pressDisplay = '—';
   if (assetCtx.hasPressureSensor) {
     pressDisplay = tankPress !== null ? fmt(tankPress, 2) : 'Missing';
   } else {
-    pressDisplay = 'Unsupported (Conservator)';
+    pressDisplay = 'Unavailable / Not Supported';
   }
 
   const panelHeader = (title: string, icon: React.ReactNode) => (
@@ -117,6 +117,12 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
       <span className="text-muted">{icon}</span>
     </div>
   );
+
+  // Canonical OTHI domain each physical reading belongs to
+  const domainTag = (domain: string) => (
+    <span className="ml-2 chip chip-outline text-[9px] font-mono align-middle">{domain}</span>
+  );
+  const isUnavailable = (v: string) => v.startsWith('Unavailable') || v.startsWith('Miss') || v === '—';
 
   const panelFooter = (label: string, value: string) => (
     <div className="mt-auto pt-3 border-t border-line flex items-baseline justify-between text-[11px] font-mono">
@@ -212,37 +218,37 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="p-3 bg-surface-2 rounded-lg border border-line">
-            <div className="text-[11px] font-medium text-muted mb-1">Magnetic Oil Level Gauge</div>
-            <div className="text-[20px] font-mono font-bold text-ink">
+            <div className="text-[11px] font-medium text-muted mb-1">Magnetic Oil Level Gauge{domainTag('oil_protection')}</div>
+            <div className={`font-mono font-bold ${isUnavailable(oilDisplay) ? 'text-[14px] text-faint' : 'text-[20px] text-ink'}`}>
               {oilDisplay}
-              {oilDisplay !== '—' && !oilDisplay.startsWith('Unsupp') && !oilDisplay.startsWith('Miss') && (
+              {!isUnavailable(oilDisplay) && (
                 <span className="text-[12px] font-normal text-muted ml-1">%</span>
               )}
             </div>
             <div className="text-[10px] text-muted mt-1">
               {assetCtx.hasOilGauge
                 ? (oilCorrected !== null ? `T-corrected: ${oilCorrected.toFixed(1)}%` : 'Gauge fitted (30°C baseline)')
-                : 'Conservator gauge absent on sealed tank'}
+                : 'No oil gauge on sealed tank · not scored in OTHI'}
             </div>
           </div>
 
           <div className="p-3 bg-surface-2 rounded-lg border border-line">
-            <div className="text-[11px] font-medium text-muted mb-1">Tank Pressure Transducer</div>
-            <div className="text-[20px] font-mono font-bold text-ink">
+            <div className="text-[11px] font-medium text-muted mb-1">Tank Pressure Transducer{domainTag('oil_protection')}</div>
+            <div className={`font-mono font-bold ${isUnavailable(pressDisplay) ? 'text-[14px] text-faint' : 'text-[20px] text-ink'}`}>
               {pressDisplay}
-              {pressDisplay !== '—' && !pressDisplay.startsWith('Unsupp') && !pressDisplay.startsWith('Miss') && (
+              {!isUnavailable(pressDisplay) && (
                 <span className="text-[12px] font-normal text-muted ml-1">kPa(g)</span>
               )}
             </div>
             <div className="text-[10px] text-muted mt-1">
               {assetCtx.hasPressureSensor
                 ? 'Gauge pressure transducer fitted'
-                : 'Free-breathing conservator; pressure transducer unsupported'}
+                : 'No pressure transducer on conservator tank · not scored in OTHI'}
             </div>
           </div>
 
           <div className="p-3 bg-surface-2 rounded-lg border border-line">
-            <div className="text-[11px] font-medium text-muted mb-1">Protection Contact Telemetry</div>
+            <div className="text-[11px] font-medium text-muted mb-1">Protection Contact Telemetry{domainTag('oil_protection')}</div>
             <div className="text-[16px] font-mono font-semibold text-ink">
               {assetCtx.isCandidate ? (
                 lvBreaker === 1 ? (
@@ -253,18 +259,21 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
                   'Contacts Active'
                 )
               ) : (
-                <span className="text-faint text-[12px]">Unsupported in CPRI benchmark</span>
+                <span className="text-faint text-[12px]">Unavailable / Not Supported</span>
               )}
             </div>
             <div className="text-[10px] text-muted mt-1">
               {assetCtx.isCandidate
                 ? (prdOperated === 1 ? 'PRD Operated · Alarm' : otiAlarm === 1 ? 'OTI Contact Alarm' : 'Breaker & fuse monitoring active')
-                : 'Protection contacts not present in CPRI benchmark data'}
+                : 'Protection contacts not present in CPRI benchmark data · not scored in OTHI'}
             </div>
           </div>
 
           <div className="p-3 bg-surface-2 rounded-lg border border-line">
-            <div className="text-[11px] font-medium text-muted mb-1">Prospective Short-Circuit Stress</div>
+            <div className="text-[11px] font-medium text-muted mb-1 flex items-center flex-wrap gap-1">
+              Prospective Short-Circuit Stress
+              <span className="chip chip-outline text-[9px] font-mono">Derived Reference Estimate</span>
+            </div>
             <div className="text-[18px] font-mono font-semibold text-ink">
               {assetCtx.ratedKva ? (
                 <>
@@ -276,7 +285,7 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
               )}
             </div>
             <div className="text-[10px] text-muted mt-1">
-              Derived Reference Calculation (4.5% nameplate Z, IEC 60076 reference assumption; not measured waveform)
+              Derived from nameplate kVA and 4.5% impedance at 433 V; not a measured waveform and not scored in OTHI
             </div>
           </div>
         </div>
@@ -317,7 +326,7 @@ export const TelemetryPhaseGrid: React.FC<TelemetryPhaseGridProps> = ({
                     {t.tier}
                   </span>
                   <span className={`chip ${isEnabled ? 'chip-ok' : 'chip-outline'}`}>
-                    {isEnabled ? 'Available' : 'Gated'}
+                    {isEnabled ? 'Available' : 'Gated / Descriptive Only'}
                   </span>
                 </div>
                 <div className={`text-[13px] font-medium ${isEnabled ? 'text-ink' : 'text-muted'}`}>{t.name}</div>

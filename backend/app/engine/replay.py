@@ -19,6 +19,9 @@ from typing import Any, Callable, Iterator, Sequence
 from app.core.storage import StorageEngine
 from app.models.telemetry import CanonicalEvent
 
+# Envelope flag marking telemetry ingested out-of-band during a dataset replay (e.g. an injected trip)
+OPERATOR_INJECTED_FLAG = "OPERATOR_INJECTED"
+
 
 class ReplayEngine:
     """Deterministic, stateful chronological replay engine for canonical telemetry."""
@@ -71,6 +74,9 @@ class ReplayEngine:
         filtered: list[CanonicalEvent] = []
         for ev in events:
             if ev.asset_id != self.asset_id:
+                continue
+            # Operator-injected events are kept in storage for audit but never re-enter the dataset replay
+            if OPERATOR_INJECTED_FLAG in ev.event_quality_flags:
                 continue
             ev_time = ev.event_time_utc
             if ev_time.tzinfo is None:

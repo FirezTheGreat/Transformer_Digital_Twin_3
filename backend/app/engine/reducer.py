@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Sequence
 
 from app.core.checkpoint import CheckpointStore, compute_twin_state_hash
+from app.engine.othi import is_authorized_trip_resolution
 from app.engine.physics import extract_electrical_features
 from app.models.anomaly import AnomalyEpisode, EvidenceItem
 from app.models.features import DerivedFeatures
@@ -456,20 +457,11 @@ class TwinReducer:
                 )
             ]
             if self.othi_engine is not None and hasattr(self.othi_engine, "reset_protection_trip"):
-                reason = str(getattr(feedback, "reason_code", "") or "").upper()
-                rec_id = str(getattr(feedback, "recommendation_id", "") or "").upper()
-                merge_key = str(getattr(feedback, "merge_key", "") or "").upper()
-                if (
-                    reason in (
-                        "SITE_CLEARANCE_VERIFIED",
-                        "SAFETY_PROCEDURE_COMPLETED",
-                        "TRIP_RESOLVED_AND_RESET",
-                        "DOCUMENTED_RESOLUTION",
-                        "FIELD_INSPECTION_CLEARED",
-                    )
-                    or "PROT" in rec_id
-                    or "TRIP" in reason
-                    or "TRIP" in merge_key
+                if is_authorized_trip_resolution(
+                    action=feedback.action,
+                    reason_code=feedback.reason_code,
+                    recommendation_id=feedback.recommendation_id,
+                    merge_key=feedback.merge_key,
                 ):
                     self.othi_engine.reset_protection_trip()
 

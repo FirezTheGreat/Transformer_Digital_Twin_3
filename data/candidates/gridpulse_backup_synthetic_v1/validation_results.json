@@ -1,0 +1,621 @@
+{
+  "blocked_or_unverified": [
+    "Actual GridPulse adapter/CanonicalEvent enum acceptance: BLOCKED-MISSING-SOURCE.",
+    "Exact current wide CSV, AssetProfile, fault-event and manifest layouts: BLOCKED-MISSING-SOURCE; proposed layouts explicitly identified.",
+    "Current pressure alias/baseline/thresholds and relief-contact semantics: BLOCKED-MISSING-SOURCE.",
+    "Oil bulk-temperature correction and multi-day trend warm-up/segmentation: BLOCKED-MISSING-SOURCE.",
+    "Runtime OTHI scores, detector firing/delay, episode/advisory lifecycle, feedback and replay/UI/report checks: NOT-RUNTIME-VERIFIED.",
+    "Runtime truth-permutation invariance: BLOCKED-MISSING-SOURCE; static no-oracle-field check executed.",
+    "Forecast, CUSUM, residual qualification, RUL and insulation-ageing validation: intentionally not attempted; no promoted new-asset artifacts."
+  ],
+  "checks": [
+    {
+      "check": "exact total frames",
+      "detail": "1,000 frames in each representation, not 1,000 scalar measurements",
+      "status": "PASS"
+    },
+    {
+      "check": "exact two assets",
+      "detail": "['GP-BACKUP-A-CONS-315', 'GP-BACKUP-B-SEAL-250']",
+      "status": "PASS"
+    },
+    {
+      "check": "exact per-asset counts",
+      "detail": "500 frames each",
+      "status": "PASS"
+    },
+    {
+      "check": "unique canonical event IDs",
+      "detail": "UUIDv5 content-context IDs",
+      "status": "PASS"
+    },
+    {
+      "check": "unique frame keys",
+      "detail": "No duplicated asset/time frames",
+      "status": "PASS"
+    },
+    {
+      "check": "global deterministic ordering",
+      "detail": "UTC then asset identity",
+      "status": "PASS"
+    },
+    {
+      "check": "documented envelope field set",
+      "detail": "Nine exact document-derived envelope fields",
+      "status": "PASS"
+    },
+    {
+      "check": "CSV exact envelope columns",
+      "detail": "Nested cells are JSON; no invented wide inference schema",
+      "status": "PASS"
+    },
+    {
+      "check": "measurement field set",
+      "detail": "Documented fields; Boolean type spelling declared assumption",
+      "status": "PASS"
+    },
+    {
+      "check": "mandatory IDs nonblank",
+      "detail": "All identities populated",
+      "status": "PASS"
+    },
+    {
+      "check": "unit/signal allowlist",
+      "detail": "16 signal IDs per asset; 17 union including documented pressure extension",
+      "status": "PASS"
+    },
+    {
+      "check": "phase assignments",
+      "detail": "LV phase identity consistent",
+      "status": "PASS"
+    },
+    {
+      "check": "typed numeric and discrete values",
+      "detail": "No NaN/Infinity/null numeric observations",
+      "status": "PASS"
+    },
+    {
+      "check": "quality vocabulary",
+      "detail": "STALE remains an elapsed-time state, not invented fresh records",
+      "status": "PASS"
+    },
+    {
+      "check": "one instance per signal/frame",
+      "detail": "No duplicated measurements",
+      "status": "PASS"
+    },
+    {
+      "check": "lossless frame CSV round-trip",
+      "detail": "All 1,000 canonical events reproduced exactly",
+      "status": "PASS"
+    },
+    {
+      "check": "raw source record hashes",
+      "detail": "1,000 hashes recomputed from delivered raw bytes excluding newline",
+      "status": "PASS"
+    },
+    {
+      "check": "source/original observation round-trip",
+      "detail": "No cleaning overwrites raw observation values",
+      "status": "PASS"
+    },
+    {
+      "check": "no truth fields in inference",
+      "detail": "Canonical values, source and CSV checked for oracle field leakage; runtime permutation test is blocked",
+      "status": "PASS"
+    },
+    {
+      "check": "no partition-quality metadata",
+      "detail": "No PARTITION_CAL or scenario truth flags",
+      "status": "PASS"
+    },
+    {
+      "check": "static metadata not measurements",
+      "detail": "Nameplate, corrections and models stay outside telemetry",
+      "status": "PASS"
+    },
+    {
+      "check": "metadata two new identities",
+      "detail": "No transferred promotion/model or invented universal thresholds",
+      "status": "PASS"
+    },
+    {
+      "check": "not a qualification holdout",
+      "detail": "No existing FIT/CAL/TEST boundary altered",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 UTC timestamps",
+      "detail": "All parseable and UTC-aware",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 exact cadence",
+      "detail": "499 consecutive 1,800-second intervals; no frame gaps",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 exact endpoint span",
+      "detail": "500 observations span 249.5 hours",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 endpoints match manifest",
+      "detail": "2025-01-01T00:00:00Z through 2025-01-11T09:30:00Z",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 declared receive delay",
+      "detail": "Synthetic two-second transport assumption",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 asset sensor applicability",
+      "detail": "Pressure only sealed B; gauge only conservator A",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 three-phase apparent power",
+      "detail": "Absolute tolerance 0.000003 kVA after 6-decimal rounding; common-angle sinusoidal phase loads",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 compatible power triangle",
+      "detail": "Tolerance 0.000002 kVA; explicitly declared power convention",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 PF semantics",
+      "detail": "PF omitted at zero S; otherwise P/S within 0.000001",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 fundamental neutral phasor",
+      "detail": "Tolerance 0.000003 A; no invented harmonic currents",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 thermal lag equation",
+      "detail": "Generator ODE verified against rounded delivered inputs and offline state; not application model validation",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 slow-temperature continuity",
+      "detail": "Max observed change 1.780401 C/30min; simulation QA bound, not a universal sensor-fault threshold",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 signal ranges",
+      "detail": "Declared simulation QA bounds, not standards or operating limits",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-A-CONS-315 channel quality isolation",
+      "detail": "No unrelated channel made BAD",
+      "status": "PASS"
+    },
+    {
+      "check": "A developing loading vs baseline",
+      "detail": "Window mean difference >0.4 of declared rating",
+      "status": "PASS"
+    },
+    {
+      "check": "A thermal recovery visible",
+      "detail": "Recovery window at least 10 C cooler than developing window",
+      "status": "PASS"
+    },
+    {
+      "check": "A recurring stress distinguishable",
+      "detail": "Separate low-load interval before recurrence",
+      "status": "PASS"
+    },
+    {
+      "check": "A corrected inventory loss",
+      "detail": "More than four gauge percentage points of latent inventory loss; no leak diagnosis",
+      "status": "PASS"
+    },
+    {
+      "check": "A no-leak baseline expansion",
+      "detail": "Raw gauge moves with temperature despite constant reference inventory",
+      "status": "PASS"
+    },
+    {
+      "check": "A bulk-oil correction",
+      "detail": "Residual <0.15 gauge percentage points; own declared bulk-oil model, not top-oil substitution",
+      "status": "PASS"
+    },
+    {
+      "check": "A gradual top-up exactly six points",
+      "detail": "Top-up 301\u2013306, repair assumption keeps reference level constant thereafter",
+      "status": "PASS"
+    },
+    {
+      "check": "A exact oil missing interval",
+      "detail": "16 absent observations; not zero",
+      "status": "PASS"
+    },
+    {
+      "check": "A history before oil missingness",
+      "detail": "360 consecutive observations span 179.5 h; exact runtime trend warm-up unverified",
+      "status": "PASS"
+    },
+    {
+      "check": "A new phase stress",
+      "detail": "Late phase imbalance then restoration",
+      "status": "PASS"
+    },
+    {
+      "check": "A final inventory stable",
+      "detail": "No continuing generator loss after intervention",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 UTC timestamps",
+      "detail": "All parseable and UTC-aware",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 exact cadence",
+      "detail": "499 consecutive 1,800-second intervals; no frame gaps",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 exact endpoint span",
+      "detail": "500 observations span 249.5 hours",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 endpoints match manifest",
+      "detail": "2025-01-01T00:00:00Z through 2025-01-11T09:30:00Z",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 declared receive delay",
+      "detail": "Synthetic two-second transport assumption",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 asset sensor applicability",
+      "detail": "Pressure only sealed B; gauge only conservator A",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 three-phase apparent power",
+      "detail": "Absolute tolerance 0.000003 kVA after 6-decimal rounding; common-angle sinusoidal phase loads",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 compatible power triangle",
+      "detail": "Tolerance 0.000002 kVA; explicitly declared power convention",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 PF semantics",
+      "detail": "PF omitted at zero S; otherwise P/S within 0.000001",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 fundamental neutral phasor",
+      "detail": "Tolerance 0.000003 A; no invented harmonic currents",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 thermal lag equation",
+      "detail": "Generator ODE verified against rounded delivered inputs and offline state; not application model validation",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 slow-temperature continuity",
+      "detail": "Max observed change 3.644242 C/30min; simulation QA bound, not a universal sensor-fault threshold",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 signal ranges",
+      "detail": "Declared simulation QA bounds, not standards or operating limits",
+      "status": "PASS"
+    },
+    {
+      "check": "GP-BACKUP-B-SEAL-250 channel quality isolation",
+      "detail": "No unrelated channel made BAD",
+      "status": "PASS"
+    },
+    {
+      "check": "B phase incident and recovery",
+      "detail": "Phase/neutral story differs from A thermal story",
+      "status": "PASS"
+    },
+    {
+      "check": "B sustained pressure 1",
+      "detail": "Pressure offset persistent then returns near declared baseline",
+      "status": "PASS"
+    },
+    {
+      "check": "B pressure pulse separate",
+      "detail": "Three-frame pulse 224\u2013226; no protective contact operation",
+      "status": "PASS"
+    },
+    {
+      "check": "B sustained pressure 2",
+      "detail": "Distinct later sustained pressure window",
+      "status": "PASS"
+    },
+    {
+      "check": "B exact trip interval",
+      "detail": "23 true frames, physical indication clears at 301",
+      "status": "PASS"
+    },
+    {
+      "check": "B no-load trip consistency",
+      "detail": "Seven downstream current/power channels exactly zero during trip",
+      "status": "PASS"
+    },
+    {
+      "check": "B bus alive during LV trip",
+      "detail": "Upstream voltage/frequency persist; core remains energized",
+      "status": "PASS"
+    },
+    {
+      "check": "B physical contact reset/load return",
+      "detail": "Physical observation only; no backend resolution asserted",
+      "status": "PASS"
+    },
+    {
+      "check": "B BAD range values",
+      "detail": "Exactly four deliberate sensor-invalid values retained, not physical tank pressure",
+      "status": "PASS"
+    },
+    {
+      "check": "B exact pressure missing interval",
+      "detail": "12 absent observations; pressure resumes at 377",
+      "status": "PASS"
+    },
+    {
+      "check": "B late voltage/PF stress",
+      "detail": "Different late supply/reactive-demand story",
+      "status": "PASS"
+    },
+    {
+      "check": "B final pressure stable",
+      "detail": "Final physical pressure near own baseline; backend trip may remain active",
+      "status": "PASS"
+    },
+    {
+      "check": "exact measurement count",
+      "detail": "16,000 nominal minus 16 missing oil, 12 missing pressure, 23 undefined PF = 15,949",
+      "status": "PASS"
+    },
+    {
+      "check": "exact BAD count",
+      "detail": "Four pressure sensor-invalid measurements",
+      "status": "PASS"
+    },
+    {
+      "check": "event ledger IDs unique",
+      "detail": "14 separate event/intervention windows",
+      "status": "PASS"
+    },
+    {
+      "check": "event labels explicitly synthetic",
+      "detail": "No actual transformer faults asserted",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger A-LOAD-1",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger A-OIL-LOSS",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger A-LOAD-2",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger A-TOPUP",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger A-LEVEL-MISSING",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger A-PHASE-2",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger B-PHASE-1",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger B-PRESSURE-1",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger B-PRESSURE-PULSE",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger B-PRESSURE-2",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger B-TRIP",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger B-PRESSURE-BAD",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger B-PRESSURE-MISSING",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "ledger B-SUPPLY-2",
+      "detail": "Start/end match exact frames; end-exclusive follows by 30 minutes",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest DEMO_SCRIPT.md",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest README.md",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest asset_metadata.json",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest canonical_events.jsonl",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest capability_coverage_matrix.md",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest fault_events.csv",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest latent_truth.csv",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest plots/A_story.png",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest plots/B_story.png",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest raw_frames.jsonl",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest requirements.txt",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest scenario_timeline.md",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest schema_and_integration_notes.md",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest scripts/generate.py",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest scripts/package.py",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest scripts/validate.py",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest signal_dictionary.md",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest source_document_register.json",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest telemetry.csv",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "manifest telemetry_flat_view.csv",
+      "detail": "Delivered bytes SHA-256 and byte count match",
+      "status": "PASS"
+    },
+    {
+      "check": "all JSON read-back",
+      "detail": "4 JSON files parse",
+      "status": "PASS"
+    },
+    {
+      "check": "all CSV read-back",
+      "detail": "Four CSV files parse",
+      "status": "PASS"
+    },
+    {
+      "check": "plots have valid PNG signatures",
+      "detail": "Two readable PNG diagnostic plots, not detector outputs",
+      "status": "PASS"
+    },
+    {
+      "check": "fresh regeneration byte equality",
+      "detail": "Independent fresh generation: 21 files, seed 20261011",
+      "status": "PASS"
+    }
+  ],
+  "executed_checks": 116,
+  "failed": 0,
+  "frame_count": 1000,
+  "measurements": 15949,
+  "missing_observation_counts": {
+    "GP-BACKUP-A-CONS-315:oil_level_percent": 16,
+    "GP-BACKUP-B-SEAL-250:power_factor_total": 23,
+    "GP-BACKUP-B-SEAL-250:x_pressure_kpa_g": 12
+  },
+  "passed": 116,
+  "per_asset": {
+    "GP-BACKUP-A-CONS-315": {
+      "baseline_imbalance_mean_pct": 1.0,
+      "final_imbalance_mean_pct": 1.0,
+      "max_top_oil_step_c": 1.780401,
+      "mean_baseline_load_ratio": 0.599566,
+      "mean_final_load_ratio": 0.608149,
+      "peak_top_oil_c": 97.841275
+    },
+    "GP-BACKUP-B-SEAL-250": {
+      "baseline_imbalance_mean_pct": 1.2,
+      "final_imbalance_mean_pct": 1.0,
+      "max_top_oil_step_c": 3.644242,
+      "mean_baseline_load_ratio": 0.545513,
+      "mean_final_load_ratio": 0.551125,
+      "peak_top_oil_c": 60.151914
+    }
+  }
+}

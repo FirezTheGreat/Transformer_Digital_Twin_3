@@ -759,7 +759,14 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({
                         <span>· Updated: {formatUtcTime(rev.last_updated_event_time_utc)}</span>
                       )}
                       {rev.supporting_evidence_ids && rev.supporting_evidence_ids.length > 0 && (
-                        <span>· Evidence: {rev.supporting_evidence_ids.join(', ')}</span>
+                        <details className="mt-1 cursor-pointer basis-full">
+                          <summary className="text-[10px] text-muted hover:text-ink">
+                            · Supporting Evidence ({rev.supporting_evidence_ids.length} events)
+                          </summary>
+                          <div className="max-h-24 overflow-y-auto mt-1 p-1.5 bg-black/20 rounded font-mono text-[9px] text-muted break-all">
+                            {rev.supporting_evidence_ids.join(', ')}
+                          </div>
+                        </details>
                       )}
                     </div>
 

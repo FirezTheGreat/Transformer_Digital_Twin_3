@@ -14,6 +14,7 @@ from app.api.deps import AppState, get_app_state, get_feedback_ledger
 from app.api.errors import ValidationException
 from app.api.schemas import OperatorFeedbackRequest
 from app.engine.feedback import OperatorFeedbackLedger
+from app.engine.othi import is_authorized_trip_resolution
 from app.models.maintenance import (
     FeedbackAction,
     MaintenanceRecommendation,
@@ -164,25 +165,15 @@ async def submit_operator_feedback(
                 update={"active_recommendations": updated_bundle_recs}
             )
 
-    # 5.5 If resolving a protection trip advisory, unlatch trip in othi_engine
-    if action_enum in (FeedbackAction.DISMISS, FeedbackAction.RESOLVE):
-        if app_state.reducer and app_state.reducer.othi_engine:
-            reason = str(request.reason_code or "").upper()
-            rec_id = str(request.recommendation_id or "").upper()
-            merge_key = str(request.merge_key or "").upper()
-            if (
-                reason in (
-                    "SITE_CLEARANCE_VERIFIED",
-                    "SAFETY_PROCEDURE_COMPLETED",
-                    "TRIP_RESOLVED_AND_RESET",
-                    "DOCUMENTED_RESOLUTION",
-                    "FIELD_INSPECTION_CLEARED",
-                )
-                or "PROT" in rec_id
-                or "TRIP" in reason
-                or "TRIP" in merge_key
-            ):
-                app_state.reducer.othi_engine.reset_protection_trip()
+    # 5.5 Only an authorized resolution of the protection advisory unlatches the trip in othi_engine
+    if app_state.reducer and app_state.reducer.othi_engine:
+        if is_authorized_trip_resolution(
+            action=action_enum,
+            reason_code=request.reason_code,
+            recommendation_id=request.recommendation_id,
+            merge_key=request.merge_key,
+        ):
+            app_state.reducer.othi_engine.reset_protection_trip()
 
     # 6. Synchronize active state ReviewFlag workflow metadata if review_id is specified
     if request.review_id and app_state.current_state is not None:

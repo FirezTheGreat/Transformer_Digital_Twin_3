@@ -1,0 +1,100 @@
+{
+  "documents": [
+    {
+      "filename": "CODING_RULES(3).md",
+      "sha256": "4561f17473bad98087c89bc42d1346d2d302ccd10166cf018c4f529fcc38af90",
+      "size_bytes": 14336
+    },
+    {
+      "filename": "CRITICAL_DECISIONS(3).md",
+      "sha256": "6968e99bcb3f6006943b2622439baf19e066e79d72e79cc0d1d217949739b568",
+      "size_bytes": 34962
+    },
+    {
+      "filename": "DT Problem Statement(6).pdf",
+      "sha256": "8a98651b2b89b9dc9fbef1e865a6b8565305d01911b9b16dab3f6058837e9ef1",
+      "size_bytes": 64485
+    },
+    {
+      "filename": "Draft Data for Condition Monitoring(6).xlsx",
+      "sha256": "c532b52dbf6f52c8edbc9111915983fbcae3ae53482a03c8f26123ce87a35a2d",
+      "size_bytes": 12498
+    },
+    {
+      "filename": "FINAL_ARCHITECTURE_DECISIONS(5).md",
+      "sha256": "8cd2cee51d49ddb9ca429c1d4c5855a7c6a6c687efee44804c26d57072917abb",
+      "size_bytes": 113051
+    },
+    {
+      "filename": "GRIDPULSE_DATASET_SYN_ADAPTATION_AND_EXTRA_DOMAIN_SCOPE.md",
+      "sha256": "a4bb24de8d2383319cd42b9ff905718112326e587d9843fb423409ef9d7707de",
+      "size_bytes": 16233
+    },
+    {
+      "filename": "GRIDPULSE_IMPLEMENTATION_INSTRUCTIONS.md",
+      "sha256": "46417c779f43d7066f9f5968edf8a355e1e42ce0011407f254c7fb5ece0d5a90",
+      "size_bytes": 14183
+    },
+    {
+      "filename": "GRIDPULSE_MASTER_EXECUTION_PLAN.md",
+      "sha256": "28b01cc110d2734be7aed5a3d3a1f040bf84d49c5e63e84ab393e2023ede6e55",
+      "size_bytes": 25126
+    },
+    {
+      "filename": "HACKATHON_RUNBOOK(2).md",
+      "sha256": "64cbf38372d6316259cc0fc85e23a3b4c5c6acb1b56c273613a7c81076e0e508",
+      "size_bytes": 15586
+    },
+    {
+      "filename": "IMPLEMENTATION_PLAN(5).md",
+      "sha256": "64c4e7a44a0289ecd03ee80146d23a9076059ef4b46a696820c9f0dc880aebef",
+      "size_bytes": 64331
+    },
+    {
+      "filename": "MVP(5).md",
+      "sha256": "586b1dc46f4d3a7ef3cdd4e8feb8032351222dc653d7a5a79de90326f5c917df",
+      "size_bytes": 40291
+    },
+    {
+      "filename": "PHASE_10_5_FINAL_VERIFICATION_REPORT(2).md",
+      "sha256": "1f09689ac25c36feea2ab608ceeb000e23286154f3b4774f0805b041ad963dc2",
+      "size_bytes": 6770
+    },
+    {
+      "filename": "PHASE_9_4_VERIFICATION_REPORT(2).md",
+      "sha256": "aa3ecb7e2843e97f3970dd31350c6a3ec6034d628c93f017f6bdb3a27e07396b",
+      "size_bytes": 9008
+    },
+    {
+      "filename": "POST_AUDIT_IMPLEMENTATION_BRIEF_CPRI_FINAL.md",
+      "sha256": "0c4e92b657a79b824ae8c73332554d8e91635422a517a907c86432918f9cfc66",
+      "size_bytes": 32270
+    },
+    {
+      "filename": "PRINCIPLES(5).md",
+      "sha256": "f0f4f6137b06bf1c3858ed79899a97510f813e52c74ecb3d7cf266c28f47a3e3",
+      "size_bytes": 13271
+    },
+    {
+      "filename": "Pasted text(20261010-223635).txt",
+      "sha256": "340ff9add18e3b5df66ae5aaaceecbf02951c12fb196860ec456e5e939b23aad",
+      "size_bytes": 32848
+    },
+    {
+      "filename": "README.md",
+      "sha256": "26f80c5088da2c880d0dfd3f202367e7066e11f10d74776df2663fadd0e9868a",
+      "size_bytes": 15684
+    },
+    {
+      "filename": "SRS(5).md",
+      "sha256": "8be8582c57f46a047e5a6c2a0f4cdb8b359c333da681a6a5c976dda84d4f0538",
+      "size_bytes": 42336
+    },
+    {
+      "filename": "TRIPURA_DATASET_AUDIT(3).md",
+      "sha256": "79231b83e62c7b77dbaf17a15d0a68ed6698afe1ddd856fcac933be225e71d58",
+      "size_bytes": 14054
+    }
+  ],
+  "register_role": "Source identities only; no source files redistributed"
+}

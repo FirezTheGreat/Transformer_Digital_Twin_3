@@ -242,16 +242,6 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <span className="text-ink">{getTierTitle(highestTier)}</span>
             <Info className="w-3.5 h-3.5 text-faint group-hover:text-accent" />
           </button>
-          {twinState?.active_reviews && twinState.active_reviews.some((r) => r.lifecycle_state === 'OPEN' && r.workflow_state !== 'DISMISSED') && (
-            <button
-              onClick={() => onNavigateTab('maintenance')}
-              className="btn bg-accent/15 text-accent hover:bg-accent/20 border border-accent/30 text-xs font-semibold"
-              title="Review Flag: Observed behaviour warrants human review; evidence does not support automated conclusion"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 text-accent" />
-              <span>Review Required ({twinState.active_reviews.filter((r) => r.lifecycle_state === 'OPEN' && r.workflow_state !== 'DISMISSED').length})</span>
-            </button>
-          )}
           {activeEpisodeCount > 0 && (
             <button
               onClick={() => onNavigateTab('anomalies')}

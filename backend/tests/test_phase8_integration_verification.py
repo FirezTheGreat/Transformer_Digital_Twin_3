@@ -71,7 +71,8 @@ def test_fault_injection_and_telemetry_propagation(client: TestClient):
         "schema_version": "1.0.0",
         "event_id": "evt-verify-trip-001",
         "asset_id": "DT-01",
-        "event_time_utc": "2026-01-01T12:00:00Z",
+        # Stamped on the DT-01 CAL replay timeline (one cadence after the first frame), as the UI does
+        "event_time_utc": "2025-04-19T00:30:00Z",
         "source": {
             "system": "protection_relay",
             "adapter_id": "trip_adapter",

@@ -19,7 +19,7 @@ from app.core.storage import StorageEngine
 from app.engine.capability import CapabilityEvaluator
 from app.engine.fact_bundle import assemble_fact_bundle
 from app.engine.reducer import TwinReducer
-from app.engine.replay import ReplayEngine
+from app.engine.replay import OPERATOR_INJECTED_FLAG, ReplayEngine
 from app.models.capability import CapabilityTier
 
 import os
@@ -57,7 +57,13 @@ def ensure_dataset_loaded(
     if storage is None:
         return 0
 
-    events_in_storage = storage.get_canonical_events(asset_id=asset_id, limit=1)
+    # Only dataset telemetry counts as "already loaded"; stored operator-injected events must not
+    # stop the dataset from loading (the replay would otherwise consist of the injected event alone).
+    events_in_storage = [
+        ev
+        for ev in storage.get_canonical_events(asset_id=asset_id, limit=64)
+        if OPERATOR_INJECTED_FLAG not in ev.event_quality_flags
+    ]
     if not events_in_storage and asset_id in CPRI_SYNTHETIC_ASSET_RATINGS:
         # CPRI synthetic assets replay their CAL partition only; the TEST partition is reserved
         # for one-shot model evaluation. Oracle y_* labels never enter the runtime stream.

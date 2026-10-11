@@ -1,0 +1,206 @@
+{
+  "asset_ids": [
+    "GP-BACKUP-A-CONS-315",
+    "GP-BACKUP-B-SEAL-250"
+  ],
+  "compatibility": {
+    "actual_adapter_runtime": "NOT-RUNTIME-VERIFIED",
+    "canonical_envelope": "DOCUMENT-VERIFIED",
+    "internal_files": "FILE-VALIDATED after validate.py",
+    "metadata_fault_csv_manifest_layouts": "Proposed; BLOCKED-MISSING-SOURCE"
+  },
+  "dataset_id": "gridpulse_backup_story_v1",
+  "dataset_version": "1.0.0",
+  "elapsed_hours_per_asset": 249.5,
+  "end_timestamp_utc": "2025-01-11T09:30:00Z",
+  "file_inventory": [
+    {
+      "path": "DEMO_SCRIPT.md",
+      "sha256": "d98a89db903c4f7c34455eefba8c04a20d15dfbb54ed2fa404becf6667ef442e",
+      "size_bytes": 3539
+    },
+    {
+      "path": "README.md",
+      "sha256": "077f3168a99062df56a8991c76f3cfc488eabd856ea0f2a05a27d90beb229484",
+      "size_bytes": 4285
+    },
+    {
+      "path": "asset_metadata.json",
+      "sha256": "8709d4fc8eac9c3da7abe711c5b2f2b0a04ab162a33273ffa643d4c5f5d208f7",
+      "size_bytes": 5259
+    },
+    {
+      "path": "canonical_events.jsonl",
+      "sha256": "74758f0b5d01ba2c65ba30dcd8930d040a1b5f40028506c4387574fba5efe02e",
+      "size_bytes": 4493961
+    },
+    {
+      "path": "capability_coverage_matrix.md",
+      "sha256": "96a09be6b7080141f58223333d8a166380c72d79e7f5fe2d41aa1e23b1b8c811",
+      "size_bytes": 2627
+    },
+    {
+      "path": "fault_events.csv",
+      "sha256": "e401993466cc2a491df38d3728f08f1eeebe2c8cddcff2f83793b763e4da0f2d",
+      "size_bytes": 7121
+    },
+    {
+      "path": "latent_truth.csv",
+      "sha256": "15b784c4d0019ef80d3455308df8b947f2885df4dd9652544a383e2b4c53f3f5",
+      "size_bytes": 108506
+    },
+    {
+      "path": "plots/A_story.png",
+      "sha256": "fe0ecf4910f0d4ca2d3bf6ab0128c3a014e657b006dc3172421c19ba5c8f5e39",
+      "size_bytes": 421537
+    },
+    {
+      "path": "plots/B_story.png",
+      "sha256": "27e6debfd974f4884336d9726cd443f2b66f973945b2d18a022337ed36ad1f52",
+      "size_bytes": 361188
+    },
+    {
+      "path": "raw_frames.jsonl",
+      "sha256": "d7416e7043a8b2ff5ec7133ccb60297867060ad1db380eaa83ba2cc7d22c00d8",
+      "size_bytes": 1622250
+    },
+    {
+      "path": "reproducibility_evidence.json",
+      "sha256": "c2182a54ab12ceb538fedff9b3f9ff89a6da2d5c1660f82a94a3edf2082dd9e5",
+      "size_bytes": 370
+    },
+    {
+      "path": "requirements.txt",
+      "sha256": "12a0a7bc6e1b1254c2f593a250e6ccff4dbd3cf0b27d6819696a9db86f4e530d",
+      "size_bytes": 19
+    },
+    {
+      "path": "scenario_timeline.md",
+      "sha256": "3e4880bbe9943ded00ec78e13d22316728b1d7dca3ba41b6c1283965c624102e",
+      "size_bytes": 7678
+    },
+    {
+      "path": "schema_and_integration_notes.md",
+      "sha256": "7fa7920464e4e01d34be01abf10f0a12cd45b0f7e6766e4181a93455b54b15d2",
+      "size_bytes": 8784
+    },
+    {
+      "path": "scripts/generate.py",
+      "sha256": "2890a39ef8cab79c0ac33b3c2d813064e260d9829a7a02b0bf831808a0152043",
+      "size_bytes": 51419
+    },
+    {
+      "path": "scripts/package.py",
+      "sha256": "cfa4e66887004ec1f0975b35d25903141efae1df17d983d60da4cb56649aeba4",
+      "size_bytes": 3000
+    },
+    {
+      "path": "scripts/validate.py",
+      "sha256": "89bb06404f814f377e845aab5182d2f6cf495538aa14d5868516ce37fc33d091",
+      "size_bytes": 22642
+    },
+    {
+      "path": "signal_dictionary.md",
+      "sha256": "868e53b36d28226ee60443f62fa29fc2dddea39b63b9cdbe1d4a939d4ba24870",
+      "size_bytes": 4308
+    },
+    {
+      "path": "source_document_register.json",
+      "sha256": "eb6caca362c0393b078f0195e3013c0bd16385a3040240db261747c040cbdf69",
+      "size_bytes": 3404
+    },
+    {
+      "path": "telemetry.csv",
+      "sha256": "db0eca5e99772f255480a4e7d01e6e0aaa1507f62fffdba4c31a78040fe20085",
+      "size_bytes": 4984161
+    },
+    {
+      "path": "telemetry_flat_view.csv",
+      "sha256": "9d6dce8813dc3d5299cae7cc56b5a3e8dcec3a2c156efe3390aff00b9e3eb950",
+      "size_bytes": 326613
+    },
+    {
+      "path": "validation_report.md",
+      "sha256": "ce698364c33c58f737ba4486aca66fa6cb9cc5cc622daf172f220227227e8fc8",
+      "size_bytes": 15240
+    },
+    {
+      "path": "validation_results.json",
+      "sha256": "7467bd004fde2175a80ead110b56698d5f52a9c14dd73a36f2aea921395a12fb",
+      "size_bytes": 19997
+    }
+  ],
+  "file_validation_status": "FILE-VALIDATED",
+  "frame_count": 1000,
+  "frame_csv": "telemetry.csv",
+  "generator_runtime": {
+    "matplotlib": "3.10.8",
+    "python": "3.12.14"
+  },
+  "generator_version": "1.0.0",
+  "ground_truth_file": "fault_events.csv",
+  "hash_scope": "Every bundle file except this manifest; no self-referential hash",
+  "limitations": [
+    "No source/runtime or original synthetic schema supplied; no adapter/UI/detector verification.",
+    "No exact OTHI, severity, advisory, closure or detection-delay claims.",
+    "New assets have no promoted model; no CUSUM/forecast/RUL/ageing qualification.",
+    "Existing datasets/configuration/model artifacts were not accessed or changed."
+  ],
+  "manifest_schema": "PROPOSED_BACKUP_MANIFEST_1.0.0",
+  "measurement_count": 15949,
+  "partition_assignment": "DEMO_ONLY_NO_FIT_CAL_TEST",
+  "per_asset_counts": {
+    "GP-BACKUP-A-CONS-315": 500,
+    "GP-BACKUP-B-SEAL-250": 500
+  },
+  "primary_telemetry": "canonical_events.jsonl",
+  "purpose": "Isolated backup demo and integration test",
+  "random_seed": 20261011,
+  "raw_observations": "raw_frames.jsonl",
+  "registration_status": "UNREGISTERED",
+  "sampling_interval_seconds": 1800,
+  "signal_availability": {
+    "GP-BACKUP-A-CONS-315": [
+      "voltage_l1_n",
+      "voltage_l2_n",
+      "voltage_l3_n",
+      "current_l1",
+      "current_l2",
+      "current_l3",
+      "neutral_current",
+      "active_power_total",
+      "reactive_power_total",
+      "apparent_power_total",
+      "power_factor_total",
+      "frequency",
+      "ambient_temperature",
+      "top_oil_temperature",
+      "oil_level_percent",
+      "breaker_trip"
+    ],
+    "GP-BACKUP-B-SEAL-250": [
+      "voltage_l1_n",
+      "voltage_l2_n",
+      "voltage_l3_n",
+      "current_l1",
+      "current_l2",
+      "current_l3",
+      "neutral_current",
+      "active_power_total",
+      "reactive_power_total",
+      "apparent_power_total",
+      "power_factor_total",
+      "frequency",
+      "ambient_temperature",
+      "top_oil_temperature",
+      "x_pressure_kpa_g",
+      "breaker_trip"
+    ]
+  },
+  "start_timestamp_utc": "2025-01-01T00:00:00Z",
+  "synthetic": true,
+  "truth_only_files": [
+    "fault_events.csv",
+    "latent_truth.csv"
+  ]
+}

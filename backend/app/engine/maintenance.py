@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set
 import uuid
 import yaml
 
+from app.engine.anomaly_detectors import is_watch_level_evidence
 from app.engine.feedback import OperatorFeedbackLedger, ALLOWED_P0_RESOLUTION_REASON_CODES
 from app.models.anomaly import AnomalyCategory, EvidenceItem
 from app.models.health import OTHIBundle
@@ -134,7 +135,8 @@ class MaintenanceEngine:
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=timezone.utc)
 
-        evidence_list = list(evidence_items or [])
+        # Watch-level evidence scores OTHI only; it is not an alarm and raises no advisory
+        evidence_list = [ev for ev in (evidence_items or []) if not is_watch_level_evidence(ev)]
 
         # 1. Identify bad quality signals to apply selective suppression
         bad_signals: Set[str] = set()

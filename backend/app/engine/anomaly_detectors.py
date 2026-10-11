@@ -89,6 +89,21 @@ class AnomalyDetectorThresholds(BaseModel):
     temp_flatline_min_steps: int = Field(
         default=4, description="Consecutive identical readings required for temperature sensor flatline"
     )
+    # Watch Thresholds (DEMO_DEFAULT): one step inside each warning threshold, so physical stress
+    # approaching a warning limit scores in the WATCH band instead of a flat 100
+    oti_watch_degc: Optional[float] = Field(default=75.0, description="DEMO_DEFAULT top-oil temperature watch threshold in degC")
+    rise_watch_degc: Optional[float] = Field(default=45.0, description="DEMO_DEFAULT top-oil rise over ambient watch threshold in degC")
+    load_u_watch: Optional[float] = Field(default=0.90, description="DEMO_DEFAULT relative load index watch threshold (90% capacity)")
+    # No fixed watch tier for these: on both active datasets normal operation already sits in the
+    # would-be watch range (per-asset phase offsets, triplen neutral current, thermal oil-level swing,
+    # per-asset PF), so a fixed default flags healthy frames. They need asset-specific thresholds
+    # calibrated on normal history before a watch tier can be enabled.
+    current_imbalance_watch_pct: Optional[float] = Field(default=None, description="Current imbalance watch threshold % (disabled)")
+    neutral_ratio_watch: Optional[float] = Field(default=None, description="Neutral current ratio watch threshold (disabled)")
+    voltage_imbalance_watch_pct: Optional[float] = Field(default=None, description="Voltage imbalance watch threshold % (disabled)")
+    pf_watch: Optional[float] = Field(default=None, description="Power factor watch threshold (disabled)")
+    oil_level_watch_pct: Optional[float] = Field(default=None, description="Oil level percentage watch threshold % (disabled)")
+
     threshold_provenance: str = Field(
         default="CONFIGURED_ENGINEERING_DEFAULT",
         description="Explicit provenance label distinguishing configured engineering assumptions/defaults from verified nameplate/standards limits",
@@ -102,6 +117,25 @@ DEFAULT_DETECTOR_THRESHOLDS = AnomalyDetectorThresholds()
 # WARNING domain and lands in the WARNING OTHI band (59..40), never CRITICAL.
 WARNING_BAND_SEVERITY_FLOOR = 0.41
 WARNING_BAND_SEVERITY_CEILING = 0.60
+# Severity band for a reading between the watch and warning thresholds: the WATCH band of
+# status_from_severity ([0.21, 0.41)), i.e. OTHI 79..60.
+WATCH_BAND_SEVERITY_FLOOR = 0.21
+WATCH_BAND_SEVERITY_CEILING = 0.40
+
+# Reason code carried by watch-level evidence. It scores OTHI but is not an alarm: maintenance
+# rules and review flags skip it (see is_watch_level_evidence).
+WATCH_LEVEL_REASON_CODE = "WATCH_LEVEL_DEMO_DEFAULT"
+
+
+def _band_severity(value: float, start: float, end: float, floor: float, ceiling: float) -> float:
+    """Linear severity in [floor, ceiling] for `value` between thresholds `start` and `end`.
+
+    Works for rising (start < end) and falling (start > end) limits.
+    """
+    span = end - start
+    fraction = 0.0 if span == 0 else (value - start) / span
+    fraction = max(0.0, min(1.0, fraction))
+    return round(floor + (ceiling - floor) * fraction, 3)
 
 
 def warning_band_severity(value: float, warning: float, critical: float) -> float:
@@ -109,16 +143,64 @@ def warning_band_severity(value: float, warning: float, critical: float) -> floa
 
     Linear in the documented [warning, critical) interval, mapped onto the WARNING severity band:
     the floor at the warning threshold, approaching the ceiling as the reading nears critical.
-    Works for both rising (warning < critical) and falling (warning > critical) limits. Readings at
-    or past critical are the caller's critical branch and keep their discrete critical severity.
+    Readings at or past critical are the caller's critical branch and keep their discrete severity.
     """
-    span = critical - warning
-    fraction = 0.0 if span == 0 else (value - warning) / span
-    fraction = max(0.0, min(1.0, fraction))
-    severity = WARNING_BAND_SEVERITY_FLOOR + (
-        WARNING_BAND_SEVERITY_CEILING - WARNING_BAND_SEVERITY_FLOOR
-    ) * fraction
-    return round(severity, 3)
+    return _band_severity(value, warning, critical, WARNING_BAND_SEVERITY_FLOOR, WARNING_BAND_SEVERITY_CEILING)
+
+
+def watch_band_severity(value: float, watch: float, warning: float) -> float:
+    """Severity proportional to how far `value` sits between the watch and warning thresholds."""
+    return _band_severity(value, watch, warning, WATCH_BAND_SEVERITY_FLOOR, WATCH_BAND_SEVERITY_CEILING)
+
+
+def is_watch_level_evidence(ev: EvidenceItem) -> bool:
+    """Whether an evidence item is watch-level (scores OTHI, but raises no advisory or review flag)."""
+    return WATCH_LEVEL_REASON_CODE in (ev.reason_codes or [])
+
+
+def _in_watch_band(value: float, watch: Optional[float], warning: float) -> bool:
+    """Whether `value` has crossed the watch threshold but not the warning threshold.
+
+    A detector without a configured watch threshold (None) has no watch tier.
+    """
+    if watch is None:
+        return False
+    if watch <= warning:
+        return watch <= value < warning
+    return warning < value <= watch
+
+
+def _watch_evidence(
+    event: CanonicalEvent,
+    key: str,
+    category: AnomalyCategory,
+    detector_id: str,
+    observed: float,
+    unit: str,
+    watch: float,
+    warning: float,
+    input_lineage: List[str],
+    reason_code: str,
+) -> EvidenceItem:
+    """Watch-level EvidenceItem for a reading between a detector's watch and warning thresholds."""
+    rising = watch <= warning
+    return EvidenceItem(
+        evidence_id=f"ev_{event.asset_id}_{key}_watch_{event.event_time_utc.strftime('%Y%m%d%H%M%S')}",
+        asset_id=event.asset_id,
+        event_time_utc=event.event_time_utc,
+        category=category,
+        detector_id=detector_id,
+        observed_value=observed,
+        expected_value=f"{'<' if rising else '>'} {watch}",
+        unit=unit,
+        threshold_or_band=f"{'>=' if rising else '<='} {watch} (watch, DEMO_DEFAULT)",
+        direction="HIGH" if rising else "LOW",
+        severity=watch_band_severity(observed, watch, warning),
+        confidence=0.90,
+        input_lineage=input_lineage,
+        reason_codes=[reason_code, WATCH_LEVEL_REASON_CODE],
+        hypothesis_codes=["APPROACHING_WARNING_LIMIT"],
+    )
 
 # Declared asset metadata carried in the telemetry stream (constant by definition, not a sensor).
 STATIC_METADATA_SIGNALS: frozenset[str] = frozenset({"rated_kva"})
@@ -358,6 +440,13 @@ def detect_thermal_limits(
                     hypothesis_codes=["HIGH_LOADING", "AMBIENT_HEATWAVE", "RADIATOR_FOULING"],
                 )
             )
+        elif _in_watch_band(t_oil, thresholds.oti_watch_degc, thresholds.oti_warning_degc):
+            evidence.append(
+                _watch_evidence(
+                    event, "thlimit", AnomalyCategory.THERMAL_LIMIT, "DET_THERMAL_LIMIT_ABSOLUTE", round(t_oil, 2), "Cel",
+                    thresholds.oti_watch_degc, thresholds.oti_warning_degc, ["oti_degc"], "TOP_OIL_APPROACHING_WARNING",
+                )
+            )
 
     # 2. Temperature Rise Over Ambient Limits
     if t_oil is not None and t_amb is not None:
@@ -400,6 +489,13 @@ def detect_thermal_limits(
                     input_lineage=["oti_degc", "ambient_temperature"],
                     reason_codes=["TOP_OIL_RISE_WARNING_EXCEEDED"],
                     hypothesis_codes=["COOLING_MARGIN_REDUCTION", "HEAVY_SUSTAINED_LOAD"],
+                )
+            )
+        elif _in_watch_band(rise, thresholds.rise_watch_degc, thresholds.rise_warning_degc):
+            evidence.append(
+                _watch_evidence(
+                    event, "thrise", AnomalyCategory.THERMAL_LIMIT, "DET_THERMAL_LIMIT_RISE", round(rise, 2), "Cel",
+                    thresholds.rise_watch_degc, thresholds.rise_warning_degc, ["oti_degc", "ambient_temperature"], "TOP_OIL_RISE_APPROACHING_WARNING",
                 )
             )
 
@@ -537,6 +633,13 @@ def detect_loading(
                     hypothesis_codes=["HIGH_FEEDER_LOADING"],
                 )
             )
+        elif _in_watch_band(u, thresholds.load_u_watch, thresholds.load_u_warning):
+            evidence.append(
+                _watch_evidence(
+                    event, "load", AnomalyCategory.LOADING, "DET_LOAD_RELATIVE_INDEX", round(u, 4), "ratio",
+                    thresholds.load_u_watch, thresholds.load_u_warning, ["apparent_power_total"], "LOADING_APPROACHING_NAMEPLATE",
+                )
+            )
 
     return evidence
 
@@ -598,6 +701,13 @@ def detect_phase_neutral(
                     hypothesis_codes=["SINGLE_PHASE_LOAD_ASYMMETRY"],
                 )
             )
+        elif _in_watch_band(iub, thresholds.current_imbalance_watch_pct, thresholds.current_imbalance_warning_pct):
+            evidence.append(
+                _watch_evidence(
+                    event, "ph_iub", AnomalyCategory.PHASE_OR_NEUTRAL, "DET_PHASE_CURRENT_IMBALANCE", round(iub, 2), "%",
+                    thresholds.current_imbalance_watch_pct, thresholds.current_imbalance_warning_pct, ["current_l1", "current_l2", "current_l3"], "CURRENT_IMBALANCE_APPROACHING_WARNING",
+                )
+            )
 
     # 2. Neutral Current Ratio
     if derived.neutral_current_ratio is not None:
@@ -640,6 +750,13 @@ def detect_phase_neutral(
                     input_lineage=["neutral_current"],
                     reason_codes=["NEUTRAL_CURRENT_RATIO_ELEVATED"],
                     hypothesis_codes=["PHASE_LOAD_UNBALANCE"],
+                )
+            )
+        elif _in_watch_band(in_ratio, thresholds.neutral_ratio_watch, thresholds.neutral_ratio_warning):
+            evidence.append(
+                _watch_evidence(
+                    event, "ph_neutral", AnomalyCategory.PHASE_OR_NEUTRAL, "DET_NEUTRAL_CURRENT_RATIO", round(in_ratio, 3), "ratio",
+                    thresholds.neutral_ratio_watch, thresholds.neutral_ratio_warning, ["neutral_current"], "NEUTRAL_CURRENT_RATIO_APPROACHING_WARNING",
                 )
             )
 
@@ -701,6 +818,13 @@ def detect_voltage_pf_frequency(
                     hypothesis_codes=["GRID_SUPPLY_UNBALANCE"],
                 )
             )
+        elif _in_watch_band(vub, thresholds.voltage_imbalance_watch_pct, thresholds.voltage_imbalance_warning_pct):
+            evidence.append(
+                _watch_evidence(
+                    event, "vpf_vub", AnomalyCategory.VOLTAGE_PF_FREQUENCY, "DET_VOLTAGE_IMBALANCE", round(vub, 2), "%",
+                    thresholds.voltage_imbalance_watch_pct, thresholds.voltage_imbalance_warning_pct, ["voltage_v1", "voltage_v2", "voltage_v3"], "VOLTAGE_IMBALANCE_APPROACHING_WARNING",
+                )
+            )
 
     # 2. Power Factor (lower is worse)
     if derived is not None and derived.power_factor_derived is not None:
@@ -743,6 +867,13 @@ def detect_voltage_pf_frequency(
                     input_lineage=["active_power_total", "apparent_power_total"],
                     reason_codes=["LOW_POWER_FACTOR_WARNING"],
                     hypothesis_codes=["INDUCTIVE_LOADS_ONLINE"],
+                )
+            )
+        elif _in_watch_band(pf, thresholds.pf_watch, thresholds.pf_warning):
+            evidence.append(
+                _watch_evidence(
+                    event, "vpf_pf", AnomalyCategory.VOLTAGE_PF_FREQUENCY, "DET_LOW_POWER_FACTOR", round(pf, 3), "dimensionless",
+                    thresholds.pf_watch, thresholds.pf_warning, ["active_power_total", "apparent_power_total"], "POWER_FACTOR_APPROACHING_WARNING",
                 )
             )
 
@@ -1031,6 +1162,13 @@ def detect_protection_oil_status(
                             input_lineage=[m.signal_id],
                             reason_codes=["LOW_OIL_LEVEL_WARNING"],
                             hypothesis_codes=["OIL_SEEPAGE", "TEMPERATURE_CONTRACTION"],
+                        )
+                    )
+                elif _in_watch_band(oli_val, thresholds.oil_level_watch_pct, thresholds.oil_level_warning_pct):
+                    evidence.append(
+                        _watch_evidence(
+                            event, "prot_oli", AnomalyCategory.PROTECTION_OR_OIL_STATUS, "DET_OIL_LEVEL_INDICATOR", round(oli_val, 1), "%",
+                            thresholds.oil_level_watch_pct, thresholds.oil_level_warning_pct, [m.signal_id], "OIL_LEVEL_APPROACHING_WARNING",
                         )
                     )
 

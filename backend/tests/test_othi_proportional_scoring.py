@@ -4,6 +4,8 @@ Root cause covered: analog detectors emitted one constant severity per band, so 
 excursion produced the same OTHI (e.g. 40 or 30) regardless of magnitude, and several "warning"
 constants (0.65 / 0.70) sat in the CRITICAL severity band. Warning-band severity is now linear
 between each detector's documented warning and critical thresholds, mapped onto [0.41, 0.60].
+A DEMO_DEFAULT watch tier (linear onto [0.21, 0.40]) covers readings approaching a warning limit,
+as the architecture's normal/watch/warning/critical piecewise-linear severity rule requires.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -13,8 +15,11 @@ import pytest
 from app.engine.anomaly_detectors import (
     detect_loading,
     detect_thermal_limits,
+    is_watch_level_evidence,
     warning_band_severity,
+    watch_band_severity,
 )
+from app.engine.maintenance import MaintenanceEngine
 from app.engine.othi import OTHIEngine, aggregate_othi_v2, status_from_severity
 from app.models.anomaly import AnomalyCategory, EvidenceItem
 from app.models.features import DerivedFeatures
@@ -113,12 +118,14 @@ def test_single_moderate_penalty_follows_documented_formula():
 
 
 def test_increasing_severity_is_proportional_and_never_improves_score():
-    temps = [85.0, 87.0, 89.0, 91.0, 93.0, 94.5, 95.0, 97.0]
+    temps = [74.0, 75.0, 78.0, 81.0, 84.9, 85.0, 87.0, 89.0, 91.0, 93.0, 94.5, 95.0, 97.0]
     scores = [_score(_engine(), 0, t).othi_score for t in temps]
     assert scores == sorted(scores, reverse=True)
-    # Within the warning band the score tracks magnitude instead of one constant value
-    assert len(set(scores[:6])) == 6
-    assert scores[0] == 59 and scores[-1] == 5  # warning onset vs. critical top-oil (0.95)
+    # Watch and warning bands track magnitude instead of one constant value
+    assert len(set(scores[1:11])) == 10
+    assert scores[0] == 100  # below the watch threshold: no detection
+    assert scores[1] == 79 and scores[4] == 60  # watch band spans 79..60
+    assert scores[5] == 59 and scores[-1] == 5  # warning onset vs. critical top-oil (0.95)
 
 
 def test_independent_secondary_domain_never_improves_and_compounds_per_formula():
@@ -210,3 +217,40 @@ def test_replay_of_same_ordered_input_is_deterministic():
         runs.append([_score(engine, i, t).othi_score for i, t in enumerate(temps)])
     assert runs[0] == runs[1]
     assert runs[0] == [100, 57, 48, 5, 53, 100]
+
+
+def test_watch_band_scores_between_60_and_79():
+    assert watch_band_severity(75.0, 75.0, 85.0) == 0.21
+    assert watch_band_severity(0.95, 0.90, 1.00) == pytest.approx(0.305)
+    assert watch_band_severity(0.875, 0.90, 0.85) == pytest.approx(0.305)  # falling limit (PF)
+    bundle = _score(_engine(), 0, 79.0)
+    # 79 degC: 0.21 + 0.19 * (79 - 75) / 10 = 0.286 -> OTHI round(71.4) = 71
+    assert bundle.domains["thermal"].severity == 0.286
+    assert bundle.othi_score == 71
+    assert bundle.status == HealthStatus.WATCH
+
+
+def test_watch_level_evidence_raises_no_maintenance_advisory():
+    ev = _event(0, 79.0)
+    watch = detect_thermal_limits(ev)
+    assert len(watch) == 1 and is_watch_level_evidence(watch[0])
+    assert not [r for r in MaintenanceEngine().evaluate(event=ev, evidence_items=watch) if r.rule_id == "MNT-THERM-002"]
+    warn = detect_thermal_limits(_event(1, 91.0))
+    assert not is_watch_level_evidence(warn[0])
+    assert [r for r in MaintenanceEngine().evaluate(event=_event(1, 91.0), evidence_items=warn) if r.rule_id == "MNT-THERM-002"]
+
+
+def test_uncalibrated_watch_tiers_stay_disabled():
+    # Normal operation on both datasets sits in these would-be watch ranges, so no watch evidence
+    from app.engine.anomaly_detectors import detect_phase_neutral, detect_voltage_pf_frequency
+
+    derived = DerivedFeatures(
+        timestamp_utc=T0,
+        current_magnitude_imbalance_pct=7.0,
+        neutral_current_ratio=0.15,
+        voltage_magnitude_imbalance_pct=1.5,
+        power_factor_derived=0.87,
+    )
+    ev = _event(0)
+    assert detect_phase_neutral(ev, derived=derived) == []
+    assert detect_voltage_pf_frequency(ev, derived=derived) == []

@@ -196,7 +196,13 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
                     <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Timestamp (UTC)</th>
                     <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Source</th>
                     <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Primary Signals</th>
-                    <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Quality Status</th>
+                    <th className="py-3 px-4 eyebrow text-[11px] font-semibold">Sensor Quality</th>
+                    <th
+                      className="py-3 px-4 eyebrow text-[11px] font-semibold"
+                      title="Dataset partition the frame belongs to (model provenance), not a sensor condition"
+                    >
+                      Dataset Partition
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line font-mono text-[11px]">
@@ -204,6 +210,17 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
                     const otiVal = ev.measurements.find((m) => m.signal_id.includes('top_oil') || m.original_name === 'OTI')?.value;
                     const vrVal = ev.measurements.find((m) => m.signal_id.includes('voltage_l1') || m.signal_id.includes('voltage_v1') || m.original_name === 'V_R' || m.original_name === 'VL1')?.value;
                     const irVal = ev.measurements.find((m) => m.signal_id.includes('current_l1') || m.signal_id.includes('current_i1') || m.original_name === 'I_R' || m.original_name === 'IL1')?.value;
+                    // Partition labels (PARTITION_FIT/CAL/TEST) are provenance metadata, never sensor quality
+                    const partition = ev.event_quality_flags
+                      .find((f) => f.startsWith('PARTITION_'))
+                      ?.replace('PARTITION_', '');
+                    const envelopeFlags = ev.event_quality_flags.filter((f) => !f.startsWith('PARTITION_'));
+                    const severities = ev.measurements.map((m) => m.quality?.severity);
+                    const sensorQuality = severities.includes('BAD')
+                      ? 'BAD'
+                      : severities.includes('UNCERTAIN')
+                        ? 'UNCERTAIN'
+                        : 'GOOD';
 
                     return (
                       <tr key={ev.event_id} className="hover:bg-surface-2 transition-colors">
@@ -222,15 +239,18 @@ export const TelemetryView: React.FC<TelemetryViewProps> = ({
                           </span>
                         </td>
                         <td className="py-2.5 px-4">
-                          {ev.event_quality_flags.length === 0 ? (
+                          {sensorQuality === 'GOOD' && envelopeFlags.length === 0 ? (
                             <span className="inline-flex items-center gap-1.5 text-muted font-sans font-medium text-[11px]">
-                              <CheckCircle2 className="w-3 h-3 text-ok" /> Normal
+                              <CheckCircle2 className="w-3 h-3 text-ok" /> GOOD
                             </span>
                           ) : (
                             <span className="chip chip-warn font-sans">
-                              {ev.event_quality_flags.join(', ')}
+                              {[sensorQuality, ...envelopeFlags].join(', ')}
                             </span>
                           )}
+                        </td>
+                        <td className="py-2.5 px-4 text-muted font-sans whitespace-nowrap">
+                          {partition ?? '—'}
                         </td>
                       </tr>
                     );

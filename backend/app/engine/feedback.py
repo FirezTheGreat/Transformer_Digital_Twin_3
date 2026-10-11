@@ -105,7 +105,9 @@ class OperatorFeedbackLedger:
             if target_recommendation is not None:
                 if target_recommendation.priority == MaintenancePriority.P0_SAFETY or target_recommendation.rule_id == "MNT-PROT-001":
                     is_p0 = True
-            elif event.merge_key == "PROTECTION_TRIP_FOLLOWUP" or (event.recommendation_id and "MNT-PROT-001" in event.recommendation_id):
+            elif event.merge_key in ("PROTECTION_TRIP_FOLLOWUP", "SAFETY_PROTECTION_TRIP") or (
+                event.recommendation_id and "MNT-PROT-001" in event.recommendation_id
+            ):
                 is_p0 = True
 
             if is_p0:

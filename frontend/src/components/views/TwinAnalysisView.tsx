@@ -120,7 +120,7 @@ export const TwinAnalysisView: React.FC<TwinAnalysisViewProps> = ({
             <span className="chip chip-neutral font-mono">Disabled — Not Qualified</span>
           </div>
           <span className="text-[11px] text-muted mt-4 block">
-            Descriptive shadow mode only (CUSUM frozen)
+            CUSUM: Gated / Descriptive Only
           </span>
         </div>
       </div>

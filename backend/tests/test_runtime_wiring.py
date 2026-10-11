@@ -203,6 +203,8 @@ def test_maintenance_advisories_persist_across_replay_frames(at_repo_root: None)
     app = create_app(settings=Settings(default_asset_id="TX_1000_COMM"))
     with TestClient(app) as client:
         client.post("/v1/replay", json={"action": "start", "asset_id": "TX_1000_COMM"})
+        # Injection is anchored to a running replay (the twin must have processed a frame)
+        client.post("/v1/replay", json={"action": "step", "asset_id": "TX_1000_COMM", "batch_size": 1})
         trip_event = {
             "schema_version": "1.0.0",
             "event_id": "test_trip_001",

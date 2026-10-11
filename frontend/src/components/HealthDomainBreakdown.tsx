@@ -27,7 +27,7 @@ export const HealthDomainBreakdown: React.FC<HealthDomainBreakdownProps> = ({
     thermal: {
       label: 'Thermal Dynamics',
       icon: <Flame className="w-4 h-4 text-rose-500" />,
-      subtitle: 'Top-oil, ambient & CUSUM residual',
+      subtitle: 'Top-oil & ambient (CUSUM residual: Gated / Descriptive Only)',
     },
     loading: {
       label: 'Electrical Loading',

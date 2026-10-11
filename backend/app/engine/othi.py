@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 import math
 from typing import Any, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
+from app.engine.feedback import ALLOWED_P0_RESOLUTION_REASON_CODES
 from app.models.anomaly import AnomalyCategory, AnomalyEpisode, EpisodeState, EvidenceItem
 from app.models.features import DerivedFeatures
 from app.models.health import (
@@ -184,6 +185,44 @@ DETECTOR_TO_FAMILY: Dict[str, Tuple[Optional[str], str]] = {
 }
 
 
+# Detectors whose evidence is shadow / descriptive only and never penalizes OTHI:
+# - thermal CUSUM runs on an autocorrelated free-running residual (lag-1 ~0.95), violating its iid
+#   assumption, so it alarms on most normal frames;
+# - the oil-leak trend uses short-window slopes with an uncalibrated threshold that the normal
+#   thermal-expansion cycle crosses on about half of all frames.
+# They stay visible as evidence and advisories until requalified.
+SHADOW_ONLY_DETECTORS: frozenset[str] = frozenset({
+    "DET_THERMAL_CUSUM_DRIFT",
+    "DET_THERMAL_SHADOW_DESCRIPTIVE",
+    "DET_OIL_LEVEL_DECLINING_TREND",
+})
+
+# Protection advisory identity (rules.yaml MNT-PROT-001) used to scope authorized trip resolutions
+PROTECTION_TRIP_RULE_ID = "MNT-PROT-001"
+PROTECTION_TRIP_MERGE_KEYS: frozenset[str] = frozenset({"SAFETY_PROTECTION_TRIP", "PROTECTION_TRIP_FOLLOWUP"})
+
+
+def is_authorized_trip_resolution(
+    action: Any,
+    reason_code: Optional[str],
+    recommendation_id: Optional[str] = None,
+    merge_key: Optional[str] = None,
+) -> bool:
+    """Whether a feedback action is an authorized resolution of a latched protection trip.
+
+    Only a RESOLVE/DISMISS that targets the protection advisory (MNT-PROT-001) with a documented
+    P0 resolution reason code qualifies. ACKNOWLEDGE never qualifies, and resolving an unrelated
+    advisory never clears a genuine trip, whatever its reason code.
+    """
+    action_val = str(action.value if hasattr(action, "value") else action or "").upper()
+    if action_val not in ("RESOLVE", "DISMISS"):
+        return False
+    if reason_code not in ALLOWED_P0_RESOLUTION_REASON_CODES:
+        return False
+    targets_protection = PROTECTION_TRIP_RULE_ID in (recommendation_id or "").upper()
+    return targets_protection or (merge_key or "").upper() in PROTECTION_TRIP_MERGE_KEYS
+
+
 def status_from_severity(severity: float) -> HealthStatus:
     """Map normalized domain penalty severity in [0.0, 1.0] to health status."""
     if severity >= 0.61:
@@ -330,6 +369,8 @@ class OTHIEngine:
         self.last_valid_severity_by_domain: Dict[str, float] = {}
         self.latched_protection_trip: bool = False
         self.latched_trip_time_utc: Optional[datetime] = None
+        # Ledger length when the trip latched: only resolutions appended after it may unlatch
+        self.latched_ledger_index: Optional[int] = None
         self.last_valid_othi_score: Optional[int] = None
         self.last_valid_status: Optional[HealthStatus] = None
         self.last_valid_timestamp_utc: Optional[datetime] = None
@@ -343,6 +384,7 @@ class OTHIEngine:
         """Unlatch direct protection trip after authorized resolution."""
         self.latched_protection_trip = False
         self.latched_trip_time_utc = None
+        self.latched_ledger_index = None
         self.last_valid_severity_by_domain.pop("oil_protection", None)
         self.last_valid_time_by_domain.pop("oil_protection", None)
         self.last_valid_othi_score = None
@@ -356,6 +398,7 @@ class OTHIEngine:
         self.last_valid_severity_by_domain.clear()
         self.latched_protection_trip = False
         self.latched_trip_time_utc = None
+        self.latched_ledger_index = None
         self.last_valid_othi_score = None
         self.last_valid_status = None
         self.last_valid_timestamp_utc = None
@@ -467,6 +510,10 @@ class OTHIEngine:
         for m in event.measurements:
             s_id = m.signal_id.lower()
             flags = m.quality.flags if m.quality else []
+            # A contact read from a bad-quality frame (e.g. comm loss) is not trip evidence,
+            # unless the source explicitly marks it as a direct trip
+            if m.quality and m.quality.severity == QualitySeverity.BAD and "DIRECT_TRIP" not in flags:
+                continue
             if s_id in (
                 "top_oil_temp_trip",
                 "breaker_trip",
@@ -505,42 +552,32 @@ class OTHIEngine:
                     current_trip_active = True
                     self.latched_protection_trip = True
 
+        ledger = feedback_ledger or self.feedback_ledger
         if current_trip_active:
             if self.latched_trip_time_utc is None:
                 self.latched_trip_time_utc = current_time
+                if ledger is not None:
+                    self.latched_ledger_index = len(ledger.get_history(asset_id=event.asset_id))
 
         # Unlatch condition:
         # Trip was previously latched, current frame explicitly does NOT have an active trip,
-        # AND an authorized resolution / reset feedback event timestamped after the trip is present in the ledger.
-        if self.latched_protection_trip and not current_trip_active:
-            ledger = feedback_ledger or self.feedback_ledger
-            if ledger is not None:
-                history = ledger.get_history(asset_id=event.asset_id)
-                has_authorized_resolution = any(
-                    (r.action.value if hasattr(r.action, "value") else str(r.action)) in ("RESOLVE", "DISMISS")
-                    and (
-                        self.latched_trip_time_utc is None
-                        or (
-                            (r.timestamp_utc if r.timestamp_utc.tzinfo else r.timestamp_utc.replace(tzinfo=timezone.utc))
-                            >= (self.latched_trip_time_utc if self.latched_trip_time_utc.tzinfo else self.latched_trip_time_utc.replace(tzinfo=timezone.utc))
-                        )
-                    )
-                    and (
-                        getattr(r, "reason_code", None) in (
-                            "SITE_CLEARANCE_VERIFIED",
-                            "SAFETY_PROCEDURE_COMPLETED",
-                            "TRIP_RESOLVED_AND_RESET",
-                            "DOCUMENTED_RESOLUTION",
-                            "FIELD_INSPECTION_CLEARED",
-                        )
-                        or "PROT" in (getattr(r, "recommendation_id", "") or "")
-                        or "TRIP" in (getattr(r, "reason_code", "") or "").upper()
-                        or "TRIP" in (getattr(r, "merge_key", "") or "").upper()
-                    )
-                    for r in history
+        # AND an authorized resolution of the protection advisory was recorded after the trip latched.
+        # "After" is ledger order, not timestamp: feedback is stamped with the twin watermark, which
+        # trails the trip frame's event time, so a timestamp comparison can reject a genuine resolution.
+        if self.latched_protection_trip and not current_trip_active and ledger is not None:
+            history = ledger.get_history(asset_id=event.asset_id)
+            start = self.latched_ledger_index or 0
+            has_authorized_resolution = any(
+                is_authorized_trip_resolution(
+                    action=r.action,
+                    reason_code=r.reason_code,
+                    recommendation_id=r.recommendation_id,
+                    merge_key=r.merge_key,
                 )
-                if has_authorized_resolution:
-                    self.reset_protection_trip()
+                for r in history[start:]
+            )
+            if has_authorized_resolution:
+                self.reset_protection_trip()
 
         # 3. Group active evidence by domain and condition family
         evidence_list = list(evidence_items or [])
@@ -552,6 +589,8 @@ class OTHIEngine:
         for ev in evidence_list:
             if ev.category in (AnomalyCategory.DATA_QUALITY, AnomalyCategory.SENSOR_PLAUSIBILITY):
                 has_data_quality_issue = True
+                continue
+            if ev.detector_id in SHADOW_ONLY_DETECTORS:
                 continue
 
             domain, family = self._resolve_evidence_family(ev)

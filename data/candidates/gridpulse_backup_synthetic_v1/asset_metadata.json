@@ -1,0 +1,154 @@
+{
+  "assets": [
+    {
+      "asset_id": "GP-BACKUP-A-CONS-315",
+      "cooling_class": "ONAN",
+      "current_power_meter_location": "LV_LOAD_DOWNSTREAM_OF_LV_BREAKER",
+      "electrical_side": "LV",
+      "frequency_hz": 50,
+      "generator_assumptions": {
+        "bulk_oil": {
+          "beta_0_c": 6,
+          "beta_1_c": 28,
+          "tau_hours": 5.0
+        },
+        "gauge_sensitivity_pct_per_c": 0.23,
+        "oil_gauge_type": "MAGNETIC_PERCENT_SCALE",
+        "oil_reference_level_pct": 67.0,
+        "oil_reference_temperature_c": 40.0,
+        "rated_kva": 315,
+        "tank_construction": "CONSERVATOR",
+        "thermal": {
+          "beta_0_c": 8,
+          "beta_1_c": 37,
+          "tau_hours": 3.6
+        }
+      },
+      "hotspot_sensor_fitted": false,
+      "impedance_percent": null,
+      "insulation_profile": "UNKNOWN",
+      "oil_gauge_type": "MAGNETIC_PERCENT_SCALE",
+      "oil_level_sensor_fitted": true,
+      "operating_thresholds": null,
+      "pressure_sensor_fitted": false,
+      "profile_version": "backup-assumed-1.0.0",
+      "provenance": "DECLARED_SYNTHETIC_DESIGN_NOT_MANUFACTURER_VERIFIED",
+      "qualification_status": "NOT_QUALIFIED_FOR_NEW_BACKUP_ASSET",
+      "rated_hv_line_line_v": 11000,
+      "rated_kva": 315,
+      "rated_lv_current_a": 420.0123205421065,
+      "rated_lv_line_line_v": 433,
+      "rated_lv_phase_neutral_v": 249.99266655910796,
+      "runtime_model_artifact": null,
+      "sensor_inventory": [
+        "voltage_l1_n",
+        "voltage_l2_n",
+        "voltage_l3_n",
+        "current_l1",
+        "current_l2",
+        "current_l3",
+        "neutral_current",
+        "active_power_total",
+        "reactive_power_total",
+        "apparent_power_total",
+        "power_factor_total",
+        "frequency",
+        "ambient_temperature",
+        "top_oil_temperature",
+        "oil_level_percent",
+        "breaker_trip"
+      ],
+      "signal_temporal_support": "SYNCHRONIZED_SNAPSHOT_OF_QUASI_STEADY_RMS_STATE",
+      "synthetic": true,
+      "tank_construction": "CONSERVATOR",
+      "voltage_meter_location": "LV_BUS_UPSTREAM_OF_LV_BREAKER"
+    },
+    {
+      "asset_id": "GP-BACKUP-B-SEAL-250",
+      "cooling_class": "ONAN",
+      "current_power_meter_location": "LV_LOAD_DOWNSTREAM_OF_LV_BREAKER",
+      "electrical_side": "LV",
+      "frequency_hz": 50,
+      "generator_assumptions": {
+        "bulk_oil": {
+          "beta_0_c": 5,
+          "beta_1_c": 24,
+          "tau_hours": 4.2
+        },
+        "oil_gauge_type": "NOT_FITTED",
+        "pressure_baseline_kpa_at_40c": 4.0,
+        "pressure_reference_temperature_c": 40.0,
+        "pressure_sensitivity_kpa_per_c": 0.35,
+        "pressure_sensor_range_kpa_g": [
+          -20,
+          80
+        ],
+        "rated_kva": 250,
+        "tank_construction": "SEALED_CORRUGATED",
+        "thermal": {
+          "beta_0_c": 7,
+          "beta_1_c": 32,
+          "tau_hours": 3.0
+        }
+      },
+      "hotspot_sensor_fitted": false,
+      "impedance_percent": null,
+      "insulation_profile": "UNKNOWN",
+      "oil_gauge_type": "NOT_FITTED",
+      "oil_level_sensor_fitted": false,
+      "operating_thresholds": null,
+      "pressure_sensor_fitted": true,
+      "profile_version": "backup-assumed-1.0.0",
+      "provenance": "DECLARED_SYNTHETIC_DESIGN_NOT_MANUFACTURER_VERIFIED",
+      "qualification_status": "NOT_QUALIFIED_FOR_NEW_BACKUP_ASSET",
+      "rated_hv_line_line_v": 11000,
+      "rated_kva": 250,
+      "rated_lv_current_a": 333.3431115413544,
+      "rated_lv_line_line_v": 433,
+      "rated_lv_phase_neutral_v": 249.99266655910796,
+      "runtime_model_artifact": null,
+      "sensor_inventory": [
+        "voltage_l1_n",
+        "voltage_l2_n",
+        "voltage_l3_n",
+        "current_l1",
+        "current_l2",
+        "current_l3",
+        "neutral_current",
+        "active_power_total",
+        "reactive_power_total",
+        "apparent_power_total",
+        "power_factor_total",
+        "frequency",
+        "ambient_temperature",
+        "top_oil_temperature",
+        "x_pressure_kpa_g",
+        "breaker_trip"
+      ],
+      "signal_temporal_support": "SYNCHRONIZED_SNAPSHOT_OF_QUASI_STEADY_RMS_STATE",
+      "synthetic": true,
+      "tank_construction": "SEALED_CORRUGATED",
+      "voltage_meter_location": "LV_BUS_UPSTREAM_OF_LV_BREAKER"
+    }
+  ],
+  "assumptions": [
+    "All ratings/designs/sensor ranges are declared synthetic equipment assumptions.",
+    "Thermal coefficients are generator constants, not calibrated application parameters.",
+    "Bulk oil is an offline latent state, not equated with top oil.",
+    "Gauge sensitivity is 0.23 gauge percentage points/C, not a universal oil expansion coefficient.",
+    "Pressure uses a simplified linear compliant-tank reference plus scenario offsets; not a universal gas law.",
+    "No actual manufacturer limits, trip thresholds, fluid data or verified impedance were provided."
+  ],
+  "electrical_assumptions": {
+    "common_lagging_pf": true,
+    "harmonics": "Negligible by simulation assumption",
+    "power_sign": "Import positive; inductive Q positive",
+    "voltage_phase_angles_deg": [
+      0,
+      -120,
+      120
+    ]
+  },
+  "metadata_schema": "PROPOSED_BACKUP_METADATA_1.0.0",
+  "not_actual_assetprofile_schema": true
+}

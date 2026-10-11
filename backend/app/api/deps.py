@@ -142,7 +142,8 @@ def build_runtime_reducer(
         anomaly_engine=MultiDomainAnomalyEngine(
             asset_id=target_asset, qualification=qual, profile=profile
         ),
-        othi_engine=OTHIEngine(expected_cadence_seconds=profile.expected_cadence_s),
+        # OTHI_V2 is the active aggregation; MAX_PLUS_SECONDARY_V1 remains available via algorithm_version
+        othi_engine=OTHIEngine(expected_cadence_seconds=profile.expected_cadence_s, algorithm_version="OTHI_V2"),
         exposure_engine=ThermalExposureEngine(asset_id=target_asset),
         maintenance_engine=MaintenanceEngine(
             feedback_ledger=feedback_ledger,

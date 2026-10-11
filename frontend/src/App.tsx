@@ -461,19 +461,18 @@ export default function App(): React.ReactElement {
 
   // 8. Seed Trip Fault Fixture (for discrete protection trip demo)
   const handleSeedTripData = async () => {
+    // The trip must be stamped on the replay timeline. A wall-clock timestamp would push the twin
+    // watermark past every remaining replay frame and freeze OTHI at 0, so require a running twin.
+    const wm = twinState?.event_time_watermark_utc;
+    if (!wm || !(new Date(wm).getTime() > 0)) {
+      showToast('Start the replay and step at least one frame before injecting a protection trip.');
+      return;
+    }
     setIsSeeding(true);
     try {
       const assetCtx = getAssetContext(assetId);
       const cadenceMs = (assetCtx.cadenceSeconds || 1800) * 1000;
-      let eventTime: string;
-      const wm = twinState?.event_time_watermark_utc || replayStatus?.current_time_utc;
-      if (wm && new Date(wm).getTime() > 0) {
-        eventTime = new Date(new Date(wm).getTime() + cadenceMs).toISOString();
-      } else {
-        eventTime = replayStatus?.current_time_utc
-          ? new Date(replayStatus.current_time_utc).toISOString()
-          : new Date().toISOString();
-      }
+      const eventTime = new Date(new Date(wm).getTime() + cadenceMs).toISOString();
 
       const tripEvent = {
         schema_version: '1.0.0',

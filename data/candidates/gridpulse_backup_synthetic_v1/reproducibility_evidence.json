@@ -1,0 +1,10 @@
+{
+  "all_identical": true,
+  "files_compared": 21,
+  "method": "Two independent fresh generator executions; all files including initial manifest compared byte-for-byte",
+  "mismatches": [],
+  "scope": "Generator outputs; reports and packaging metadata are produced afterward",
+  "seed": 20261011,
+  "source_documents_checked": 19,
+  "source_documents_unchanged": true
+}

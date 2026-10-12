@@ -254,3 +254,47 @@ def test_uncalibrated_watch_tiers_stay_disabled():
     ev = _event(0)
     assert detect_phase_neutral(ev, derived=derived) == []
     assert detect_voltage_pf_frequency(ev, derived=derived) == []
+
+
+def _thermal_evidence(engine, i, top_oil, ambient=40.0):
+    ev = _event(i, top_oil)
+    ev = ev.model_copy(update={"measurements": [
+        m if m.signal_id != "ambient_temperature" else _meas("ambient_temperature", ambient, "Cel")
+        for m in ev.measurements
+    ]})
+    return [e for e in engine.evaluate_event(ev) if e.category == AnomalyCategory.THERMAL_LIMIT]
+
+
+def test_frozen_top_oil_produces_no_thermal_penalty_once_flagged():
+    # DT-01 SC-...-TOPOIL_FROZEN ground truth: "frozen-sensor check should flag it, no thermal alarm"
+    from app.engine.anomaly_detectors import MultiDomainAnomalyEngine
+
+    engine = MultiDomainAnomalyEngine(asset_id="DT-PROP")
+    results = [_thermal_evidence(engine, i, 72.2, ambient=a) for i, a in enumerate([30.0, 28.0, 26.0, 24.0, 22.0])]
+    assert results[0] == []  # rise 42.2: below watch
+    assert results[1] == [] or results[1][0].detector_id == "DET_THERMAL_LIMIT_RISE"
+    assert results[3] == [] and results[4] == []  # 4+ identical readings: frozen, suppressed
+
+
+def test_constant_reference_and_contact_signals_are_not_flagged_frozen():
+    from app.engine.anomaly_detectors import detect_sensor_plausibility
+
+    history = {}
+    flagged = []
+    for i in range(6):
+        ev = _event(i, extra=[
+            _meas("oil_level_ref_pct", 30.0, "%"),
+            _meas("oil_level_ref_temp_c", 30.0, "Cel"),
+            _meas("lv_breaker_closed", 1.0, "1"),
+        ])
+        flagged += [s for e in detect_sensor_plausibility(ev, history) for s in e.input_lineage]
+        for m in ev.measurements:
+            history.setdefault(m.signal_id if m.phase is None else f"{m.signal_id}_{m.phase}", []).append((ev.event_time_utc, m.value))
+    assert not {"oil_level_ref_pct", "oil_level_ref_temp_c", "lv_breaker_closed"} & set(flagged)
+
+
+def test_shadow_only_cusum_does_not_raise_p1_thermal_inspection():
+    cusum = _item("DET_THERMAL_CUSUM_DRIFT", AnomalyCategory.THERMAL_DEVIATION, 0.75)
+    engine = MaintenanceEngine(is_thermal_qualified=True, cusum_qualification="ENABLED")
+    recs = engine.evaluate(event=_event(0), evidence_items=[cusum])
+    assert not [r for r in recs if r.rule_id == "MNT-THERM-002"]

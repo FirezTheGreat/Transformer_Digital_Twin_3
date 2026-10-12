@@ -158,6 +158,40 @@ def is_watch_level_evidence(ev: EvidenceItem) -> bool:
     return WATCH_LEVEL_REASON_CODE in (ev.reason_codes or [])
 
 
+# Aliases of the same physical temperature signals across adapters and detector lineages
+_TEMPERATURE_SIGNAL_ALIASES: Dict[str, str] = {
+    "oti_degc": "top_oil_temperature",
+    "top_oil_temperature": "top_oil_temperature",
+    "ambient_temperature": "ambient_temperature",
+}
+
+
+def _drop_thermal_evidence_from_implausible_signals(evidence: List[EvidenceItem]) -> List[EvidenceItem]:
+    """Drop thermal evidence computed from a temperature reading flagged as frozen this frame.
+
+    A frozen top-oil transmitter is a sensor fault, not a thermal condition: it stays visible as
+    SENSOR_PLAUSIBILITY evidence but must not manufacture a thermal-limit or thermal-deviation penalty.
+    Rate-of-change flags are not used: on the frame itself a one-sample spike is indistinguishable
+    from a genuine step (e.g. a temperature rise ending in a trip) without a jump-and-revert look-ahead.
+    """
+    flagged = {
+        _TEMPERATURE_SIGNAL_ALIASES[s]
+        for ev in evidence
+        if ev.detector_id == "DET_PLAUS_FROZEN_SENSOR"
+        for s in ev.input_lineage
+        if s in _TEMPERATURE_SIGNAL_ALIASES
+    }
+    if not flagged:
+        return evidence
+    thermal = (AnomalyCategory.THERMAL_LIMIT, AnomalyCategory.THERMAL_DEVIATION)
+    return [
+        ev
+        for ev in evidence
+        if ev.category not in thermal
+        or not flagged.intersection(_TEMPERATURE_SIGNAL_ALIASES.get(s) for s in ev.input_lineage)
+    ]
+
+
 def _in_watch_band(value: float, watch: Optional[float], warning: float) -> bool:
     """Whether `value` has crossed the watch threshold but not the warning threshold.
 
@@ -203,7 +237,18 @@ def _watch_evidence(
     )
 
 # Declared asset metadata carried in the telemetry stream (constant by definition, not a sensor).
-STATIC_METADATA_SIGNALS: frozenset[str] = frozenset({"rated_kva"})
+# The oil-gauge reference (e.g. "30 % at 30 degC") is a fixed calibration point, not a measurement.
+STATIC_METADATA_SIGNALS: frozenset[str] = frozenset({"rated_kva", "oil_level_ref_pct", "oil_level_ref_temp_c"})
+
+# Discrete 0/1 contact and breaker states legitimately hold one value for days; a repeated value is
+# their normal state, not a frozen transmitter, so the flatline check does not apply to them.
+DISCRETE_STATE_SIGNALS: frozenset[str] = frozenset({
+    "lv_breaker_closed", "52a_status", "lv_breaker_trip", "breaker_trip", "hv_fuse_operated",
+    "buchholz_trip", "buchholz_alarm", "oti_trip", "oti_alarm", "oti_t", "oti_a",
+    "oti_trip_contact", "oti_alarm_contact", "oil_temp_trip_flag", "oil_temp_alarm_flag",
+    "top_oil_temp_trip", "top_oil_temp_alarm", "mog_alarm", "mog_a", "magnetic_oil_gauge_alarm",
+    "oil_level_low_alarm", "pressure_alarm", "tank_pressure_alarm", "prd_operated", "pressure_relief_operated",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +397,8 @@ def detect_sensor_plausibility(
                 )
 
         # 2. Frozen / Flatline Sensor
+        if m.signal_id in DISCRETE_STATE_SIGNALS:
+            continue
         req_steps = thresholds.stuck_consecutive_steps
         if m.signal_id in ("oti_degc", "top_oil_temperature", "ambient_temperature"):
             req_steps = max(thresholds.stuck_consecutive_steps, getattr(thresholds, "temp_flatline_min_steps", 4))
@@ -1590,6 +1637,8 @@ class MultiDomainAnomalyEngine:
                 thresholds=self.thresholds,
             )
         )
+
+        all_evidence = _drop_thermal_evidence_from_implausible_signals(all_evidence)
 
         # Update history buffer with current numeric readings
         for m in event.measurements:
